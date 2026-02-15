@@ -1,0 +1,25 @@
+<button 
+  mat-fab 
+  class="agent-circle"
+  [class.selected]="isSelected()"
+  [class]="getStatusClass()"
+  [style.--agent-color]="agent().color || '#7C3AED'"
+  [matTooltip]="agent().name"
+  matTooltipPosition="right"
+  [matBadge]="agent().unreadCount"
+  [matBadgeHidden]="!hasUnread()"
+  matBadgeColor="accent"
+  matBadgeSize="small"
+  (click)="onSelect()">
+  
+  @if (agent().icon) {
+    <span class="agent-icon">{{ agent().icon }}</span>
+  } @else {
+    <mat-icon>smart_toy</mat-icon>
+  }
+  
+  <!-- Status indicator dot -->
+  @if (agent().session) {
+    <span class="status-dot" [class]="'dot-' + agent().session!.status"></span>
+  }
+</button>

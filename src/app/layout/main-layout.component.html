@@ -1,0 +1,92 @@
+<div class="app-container">
+  <!-- Sidebar with agent circles -->
+  <aside class="agent-sidebar">
+    <app-sidebar (addAgentClicked)="addAgent()" />
+  </aside>
+
+  <!-- Main content area -->
+  <main class="main-content">
+    <!-- Toolbar -->
+    <mat-toolbar class="app-toolbar">
+      <div class="toolbar-left">
+        @if (selectedAgent(); as agent) {
+          <span class="agent-icon">{{ agent.icon || '🤖' }}</span>
+          <span class="agent-name">{{ agent.name }}</span>
+          @if (agent.session) {
+            <span class="session-status" [class]="'status-' + agent.session.status">
+              {{ agent.session.status }}
+            </span>
+          }
+        } @else {
+          <span class="no-agent">Select an agent to start</span>
+        }
+      </div>
+      
+      <div class="toolbar-right">
+        <button mat-icon-button matTooltip="Settings" [matMenuTriggerFor]="settingsMenu">
+          <mat-icon>settings</mat-icon>
+        </button>
+        
+        <mat-menu #settingsMenu="matMenu">
+          <button mat-menu-item [matMenuTriggerFor]="themeMenu">
+            <mat-icon>palette</mat-icon>
+            <span>Theme</span>
+          </button>
+          <button mat-menu-item (click)="openDirectory()">
+            <mat-icon>folder_open</mat-icon>
+            <span>Open Directory</span>
+          </button>
+          <mat-divider></mat-divider>
+          <button mat-menu-item (click)="openAboutDialog()">
+            <mat-icon>info</mat-icon>
+            <span>About Castle</span>
+          </button>
+        </mat-menu>
+        
+        <mat-menu #themeMenu="matMenu">
+          @for (theme of availableThemes; track theme.id) {
+            <button mat-menu-item (click)="setTheme(theme.id)">
+              <mat-icon>{{ currentTheme().id === theme.id ? 'check' : '' }}</mat-icon>
+              <span>{{ theme.name }}</span>
+            </button>
+          }
+        </mat-menu>
+
+        <!-- Window controls (for frameless window) -->
+        <div class="window-controls">
+          <button mat-icon-button matTooltip="Minimize" (click)="minimizeWindow()">
+            <mat-icon>remove</mat-icon>
+          </button>
+          <button mat-icon-button matTooltip="Maximize" (click)="maximizeWindow()">
+            <mat-icon>crop_square</mat-icon>
+          </button>
+          <button mat-icon-button matTooltip="Close" class="close-btn" (click)="closeWindow()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+    </mat-toolbar>
+
+    <!-- Chat area -->
+    <div class="chat-container">
+      @if (selectedAgent()) {
+        <app-chat [agent]="selectedAgent()!" />
+      } @else {
+        <div class="no-agent-selected">
+          <mat-icon class="large-icon">smart_toy</mat-icon>
+          <h2>Welcome to Castle</h2>
+          <p>Select an agent from the sidebar to start chatting</p>
+          @if (!currentDirectory) {
+            <button mat-raised-button color="primary" (click)="openDirectory()">
+              <mat-icon>folder_open</mat-icon>
+              Open a Project
+            </button>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Status bar -->
+    <app-status-bar />
+  </main>
+</div>

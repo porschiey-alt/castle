@@ -1,0 +1,47 @@
+<div class="sidebar-container">
+  <!-- Logo/Home button -->
+  <div class="sidebar-header">
+    <button mat-fab class="home-button" matTooltip="Castle" matTooltipPosition="right">
+      <span class="castle-logo">🏰</span>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <!-- Agent list -->
+  <div class="agent-list">
+    @if (loading()) {
+      <div class="loading-indicator">
+        <mat-icon>hourglass_empty</mat-icon>
+      </div>
+    } @else {
+      @for (agent of agents(); track trackByAgentId($index, agent)) {
+        <app-agent-circle
+          [agent]="agent"
+          [isSelected]="selectedAgentId() === agent.id"
+          (selected)="selectAgent($event)"
+        />
+      } @empty {
+        <div class="no-agents" matTooltip="No agents found" matTooltipPosition="right">
+          <mat-icon>smart_toy</mat-icon>
+        </div>
+      }
+    }
+  </div>
+
+  <div class="sidebar-spacer"></div>
+
+  <mat-divider></mat-divider>
+
+  <!-- Add agent button -->
+  <div class="sidebar-footer">
+    <button 
+      mat-mini-fab 
+      class="add-agent-button"
+      matTooltip="Add Agent" 
+      matTooltipPosition="right"
+      (click)="onAddAgent()">
+      <mat-icon>add</mat-icon>
+    </button>
+  </div>
+</div>

@@ -1,0 +1,287 @@
+/**
+ * Castle - Global Styles
+ */
+
+// Import Angular Material theming
+@use '@angular/material' as mat;
+
+// Include core styles
+@include mat.core();
+
+// ============ CSS Variables (Theme) ============
+
+:root {
+  // Default to dark theme - very dark, minimal colors
+  --theme-primary: #6366f1;
+  --theme-accent: #22c55e;
+  --theme-warn: #ef4444;
+
+  // Dark theme colors - much darker
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1a1a1a;
+  --bg-hover: #222222;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --border-color: #262626;
+  --user-bubble: #6366f1;
+  --agent-bubble: #1a1a1a;
+  --code-bg: #0d0d0d;
+
+  // Fonts
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+// ============ Base Styles ============
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+// ============ Scrollbar Styles ============
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 4px;
+
+  &:hover {
+    background-color: var(--text-muted);
+  }
+}
+
+// ============ Selection ============
+
+::selection {
+  background-color: var(--theme-primary);
+  color: white;
+}
+
+// ============ Links ============
+
+a {
+  color: var(--theme-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// ============ Angular Material Overrides ============
+
+// Dark theme for Material components
+.castle-dark,
+.midnight,
+.amoled {
+  @include mat.all-component-colors(mat.define-dark-theme((
+    color: (
+      primary: mat.define-palette(mat.$indigo-palette),
+      accent: mat.define-palette(mat.$green-palette),
+      warn: mat.define-palette(mat.$red-palette),
+    )
+  )));
+
+  // Form field overrides
+  .mat-mdc-form-field {
+    --mdc-filled-text-field-container-color: var(--bg-secondary);
+    --mdc-outlined-text-field-outline-color: var(--border-color);
+    --mdc-outlined-text-field-focus-outline-color: var(--theme-primary);
+    --mdc-outlined-text-field-hover-outline-color: var(--text-muted);
+  }
+
+  // Button overrides
+  .mat-mdc-button,
+  .mat-mdc-icon-button,
+  .mat-mdc-fab,
+  .mat-mdc-mini-fab {
+    --mdc-icon-button-icon-color: var(--text-secondary);
+
+    &:hover {
+      --mdc-icon-button-icon-color: var(--text-primary);
+    }
+  }
+
+  // Menu overrides
+  .mat-mdc-menu-panel {
+    background-color: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color);
+  }
+
+  .mat-mdc-menu-item {
+    color: var(--text-primary);
+
+    &:hover {
+      background-color: var(--bg-hover);
+    }
+
+    .mat-icon {
+      color: var(--text-secondary);
+    }
+  }
+
+  // Tooltip overrides
+  .mat-mdc-tooltip {
+    --mdc-plain-tooltip-container-color: var(--bg-tertiary);
+    --mdc-plain-tooltip-supporting-text-color: var(--text-primary);
+  }
+
+  // Divider overrides
+  .mat-divider {
+    border-color: var(--border-color);
+  }
+
+  // Snackbar overrides
+  .mat-mdc-snack-bar-container {
+    --mdc-snackbar-container-color: var(--bg-tertiary);
+    --mdc-snackbar-supporting-text-color: var(--text-primary);
+    --mat-snack-bar-button-color: var(--theme-primary);
+  }
+
+  // Dialog overrides
+  .mat-mdc-dialog-container {
+    --mdc-dialog-container-color: var(--bg-secondary);
+  }
+
+  .mat-mdc-dialog-surface {
+    background-color: var(--bg-secondary) !important;
+  }
+
+  // Toolbar overrides
+  .mat-toolbar {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary);
+  }
+
+  // Badge overrides
+  .mat-badge-content {
+    background-color: var(--theme-accent);
+    color: white;
+  }
+
+  // Progress spinner
+  .mat-mdc-progress-spinner {
+    --mdc-circular-progress-active-indicator-color: var(--theme-primary);
+  }
+
+  // Select dropdown
+  .mat-mdc-select-panel {
+    background-color: var(--bg-secondary) !important;
+  }
+
+  .mat-mdc-option {
+    color: var(--text-primary);
+
+    &:hover {
+      background-color: var(--bg-hover);
+    }
+
+    &.mdc-list-item--selected {
+      background-color: var(--bg-tertiary);
+    }
+  }
+}
+
+// Light theme
+.castle-light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7fafc;
+  --bg-tertiary: #edf2f7;
+  --bg-hover: #e2e8f0;
+  --text-primary: #1a202c;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --border-color: #e2e8f0;
+  --agent-bubble: #edf2f7;
+  --code-bg: #f7fafc;
+
+  @include mat.all-component-colors(mat.define-light-theme((
+    color: (
+      primary: mat.define-palette(mat.$indigo-palette),
+      accent: mat.define-palette(mat.$teal-palette),
+      warn: mat.define-palette(mat.$orange-palette),
+    )
+  )));
+}
+
+// ============ Utility Classes ============
+
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.bg-primary {
+  background-color: var(--bg-primary);
+}
+
+.bg-secondary {
+  background-color: var(--bg-secondary);
+}
+
+.bg-tertiary {
+  background-color: var(--bg-tertiary);
+}
+
+// ============ Typography ============
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1rem; }
+h5 { font-size: 0.875rem; }
+h6 { font-size: 0.75rem; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 2px 6px;
+  background-color: var(--code-bg);
+  border-radius: 4px;
+}
+
+pre {
+  font-family: var(--font-mono);
+  margin: 0;
+}

@@ -1,0 +1,27 @@
+<div class="status-bar">
+  <div class="status-left">
+    <span class="status-item">
+      <mat-icon class="status-icon connected">cloud_done</mat-icon>
+      {{ connectionStatus }}
+    </span>
+    <span class="status-divider">•</span>
+    <span class="status-item model-selector">
+      <mat-icon class="status-icon">smart_toy</mat-icon>
+      <select 
+        class="model-select"
+        [ngModel]="selectedModel()"
+        (ngModelChange)="onModelChange($event)">
+        @for (model of models; track model.id) {
+          <option [value]="model.id">{{ model.name }}</option>
+        }
+      </select>
+    </span>
+  </div>
+
+  <div class="status-right">
+    <span class="status-item">
+      <mat-icon class="status-icon">folder</mat-icon>
+      {{ directoryName }}
+    </span>
+  </div>
+</div>

@@ -1,0 +1,101 @@
+.code-block {
+  margin: 8px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--code-bg);
+  border: 1px solid var(--border-color);
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px 4px 12px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.language-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.code-content {
+  margin: 0;
+  padding: 16px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+
+  code {
+    font-family: inherit;
+  }
+
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+  }
+}
+
+// Highlight.js theme overrides for dark mode
+:host ::ng-deep {
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: #c678dd;
+  }
+
+  .hljs-string,
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-addition,
+  .hljs-variable,
+  .hljs-template-tag,
+  .hljs-template-variable {
+    color: #98c379;
+  }
+
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-deletion,
+  .hljs-meta {
+    color: #5c6370;
+  }
+
+  .hljs-number,
+  .hljs-regexp,
+  .hljs-literal,
+  .hljs-link {
+    color: #d19a66;
+  }
+
+  .hljs-built_in,
+  .hljs-builtin-name {
+    color: #e6c07b;
+  }
+
+  .hljs-function {
+    color: #61afef;
+  }
+
+  .hljs-class .hljs-title {
+    color: #e6c07b;
+  }
+}

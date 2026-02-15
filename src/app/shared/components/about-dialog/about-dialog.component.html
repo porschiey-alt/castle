@@ -1,0 +1,29 @@
+<div class="about-dialog">
+  <div class="about-header">
+    <span class="app-logo">🏰</span>
+    <h2>{{ appName }}</h2>
+  </div>
+
+  <div class="about-content">
+    <p class="version">Version {{ appVersion }}</p>
+    <p class="description">
+      A Discord-like desktop app for GitHub Copilot CLI agents.
+      Manage multiple AI agents, each with their own personality and capabilities.
+    </p>
+
+    <div class="features">
+      <h4>Features</h4>
+      <ul>
+        <li>Multiple AI agents with custom configurations</li>
+        <li>AGENTS.md file discovery</li>
+        <li>Persistent chat history</li>
+        <li>Customizable themes</li>
+        <li>Permission management</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="about-footer">
+    <button mat-button (click)="close()">Close</button>
+  </div>
+</div>

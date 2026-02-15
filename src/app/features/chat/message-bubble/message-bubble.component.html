@@ -1,0 +1,61 @@
+<div class="message-bubble" [class.user]="isUser" [class.agent]="!isUser" [class.streaming]="isStreaming()">
+  <!-- Avatar -->
+  <div class="avatar">
+    @if (isUser) {
+      <mat-icon>person</mat-icon>
+    } @else if (agentIcon()) {
+      <span class="agent-icon">{{ agentIcon() }}</span>
+    } @else {
+      <mat-icon>smart_toy</mat-icon>
+    }
+  </div>
+
+  <!-- Message content -->
+  <div class="message-content">
+    <div class="message-header">
+      <span class="sender-name">{{ isUser ? 'You' : agentName() }}</span>
+      @if (timestamp) {
+        <span class="timestamp">{{ timestamp | date:'shortTime' }}</span>
+      }
+    </div>
+
+    <div class="message-body">
+      @for (part of parsedContent; track $index) {
+        @if (part.type === 'text') {
+          <p class="text-content">{{ part.content }}</p>
+        } @else {
+          <app-code-block 
+            [code]="part.content" 
+            [language]="part.language || 'plaintext'" 
+          />
+        }
+      }
+
+      @if (isStreaming()) {
+        <span class="cursor">▊</span>
+      }
+    </div>
+
+    <!-- Tool calls -->
+    @if (message()?.metadata?.toolCalls; as toolCalls) {
+      <div class="tool-calls">
+        @for (tool of toolCalls; track tool.id) {
+          <div class="tool-call" [class]="'tool-' + tool.status">
+            <mat-icon>
+              @switch (tool.status) {
+                @case ('pending') { hourglass_empty }
+                @case ('running') { sync }
+                @case ('success') { check_circle }
+                @case ('error') { error }
+              }
+            </mat-icon>
+            <span class="tool-name">{{ tool.name }}</span>
+            @if (tool.status === 'running') {
+              <span class="tool-spinner"></span>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

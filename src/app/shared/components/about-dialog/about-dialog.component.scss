@@ -1,0 +1,77 @@
+.about-dialog {
+  padding: 24px;
+  color: var(--text-primary);
+}
+
+.about-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+
+  .app-logo {
+    font-size: 48px;
+    margin-bottom: 8px;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+  }
+}
+
+.about-content {
+  text-align: center;
+
+  .version {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+
+  .description {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+
+  .features {
+    text-align: left;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 16px;
+
+    h4 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--text-secondary);
+      font-size: 13px;
+
+      li {
+        margin-bottom: 6px;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+    }
+  }
+}
+
+.about-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+
+  button {
+    color: var(--theme-primary);
+  }
+}

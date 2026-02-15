@@ -1,0 +1,25 @@
+<div class="message-list-container" #scrollContainer (scroll)="onScroll($event)">
+  <div class="messages-wrapper">
+    @for (message of messages(); track trackByMessageId($index, message)) {
+      <app-message-bubble
+        [message]="message"
+        [agentName]="agentName()"
+        [agentIcon]="agentIcon()"
+      />
+    } @empty {
+      <div class="empty-state">
+        <p>No messages yet. Start a conversation!</p>
+      </div>
+    }
+
+    <!-- Streaming message -->
+    @if (streamingMessage(); as streaming) {
+      <app-message-bubble
+        [streamingContent]="streaming.content"
+        [isStreaming]="true"
+        [agentName]="agentName()"
+        [agentIcon]="agentIcon()"
+      />
+    }
+  </div>
+</div>

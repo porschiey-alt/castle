@@ -1,0 +1,17 @@
+<div class="chat-wrapper">
+  <!-- Message list -->
+  <app-message-list 
+    [messages]="messages()"
+    [streamingMessage]="streamingMessage()"
+    [agentName]="agent().name"
+    [agentIcon]="agent().icon"
+  />
+
+  <!-- Chat input -->
+  <app-chat-input
+    [agentName]="agent().name"
+    [isLoading]="isLoading()"
+    [disabled]="agent().session?.status === 'error'"
+    (messageSent)="onSendMessage($event)"
+  />
+</div>

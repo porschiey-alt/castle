@@ -1,0 +1,92 @@
+.agent-circle {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  background-color: var(--bg-secondary);
+  transition: all 0.2s ease;
+  position: relative;
+  box-shadow: none;
+
+  &:hover {
+    border-radius: 16px;
+    background-color: var(--agent-color);
+  }
+
+  &.selected {
+    border-radius: 16px;
+    background-color: var(--agent-color);
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px;
+      height: 40px;
+      background-color: var(--text-primary);
+      border-radius: 0 4px 4px 0;
+    }
+  }
+
+  .agent-icon {
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  mat-icon {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+  }
+}
+
+// Status indicator dot
+.status-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-tertiary);
+
+  &.dot-ready {
+    background-color: #10b981; // Green
+  }
+
+  &.dot-busy {
+    background-color: #f59e0b; // Amber
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  &.dot-starting {
+    background-color: #3b82f6; // Blue
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  &.dot-error {
+    background-color: #ef4444; // Red
+  }
+
+  &.dot-stopped {
+    background-color: #6b7280; // Gray
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+// Badge positioning adjustment
+:host ::ng-deep .mat-badge-content {
+  top: -4px !important;
+  right: -4px !important;
+}

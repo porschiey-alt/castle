@@ -1,0 +1,9 @@
+<div class="code-block">
+  <div class="code-header">
+    <span class="language-label">{{ language() }}</span>
+    <button mat-icon-button matTooltip="Copy code" (click)="copyCode()">
+      <mat-icon>content_copy</mat-icon>
+    </button>
+  </div>
+  <pre class="code-content"><code [innerHTML]="highlightedCode"></code></pre>
+</div>

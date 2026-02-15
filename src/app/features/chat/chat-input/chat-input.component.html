@@ -1,0 +1,28 @@
+<div class="chat-input-container">
+  <mat-form-field appearance="outline" class="chat-input-field">
+    <mat-label>Message {{ agentName() }}</mat-label>
+    <textarea 
+      matInput
+      [(ngModel)]="message"
+      (keydown)="onKeydown($event)"
+      [disabled]="isLoading() || disabled()"
+      cdkTextareaAutosize
+      cdkAutosizeMinRows="1"
+      cdkAutosizeMaxRows="6"
+      placeholder="Type a message or use / for commands...">
+    </textarea>
+    
+    <div matSuffix class="input-actions">
+      @if (isLoading()) {
+        <mat-spinner diameter="24"></mat-spinner>
+      } @else {
+        <button 
+          mat-icon-button 
+          (click)="onSend()"
+          [disabled]="!message.trim() || disabled()">
+          <mat-icon>send</mat-icon>
+        </button>
+      }
+    </div>
+  </mat-form-field>
+</div>

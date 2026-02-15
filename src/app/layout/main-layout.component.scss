@@ -1,0 +1,139 @@
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.agent-sidebar {
+  width: 72px;
+  min-width: 72px;
+  background-color: var(--bg-tertiary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.app-toolbar {
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  height: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
+  padding: 0 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  -webkit-app-region: drag;
+}
+
+.app-toolbar button {
+  -webkit-app-region: no-drag;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-icon {
+  font-size: 20px;
+}
+
+.agent-name {
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.session-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: capitalize;
+}
+
+.status-ready {
+  background-color: var(--theme-accent);
+  color: white;
+}
+
+.status-busy {
+  background-color: var(--theme-warn);
+  color: white;
+}
+
+.status-starting {
+  background-color: var(--theme-primary);
+  color: white;
+}
+
+.status-error,
+.status-stopped {
+  background-color: #ef4444;
+  color: white;
+}
+
+.no-agent {
+  color: var(--text-muted);
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.window-controls {
+  display: flex;
+  margin-left: 8px;
+  border-left: 1px solid var(--border-color);
+  padding-left: 8px;
+}
+
+.close-btn:hover {
+  background-color: #ef4444 !important;
+}
+
+.chat-container {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.no-agent-selected {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-secondary);
+
+  .large-icon {
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    color: var(--text-muted);
+  }
+
+  h2 {
+    margin: 0;
+    color: var(--text-primary);
+  }
+
+  p {
+    margin: 0;
+  }
+}
