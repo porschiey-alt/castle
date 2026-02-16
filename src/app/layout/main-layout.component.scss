@@ -240,6 +240,81 @@
   white-space: nowrap;
 }
 
+// ---- Landing Page (no folder selected) ----
+.landing-container {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100vw;
+  background: var(--bg-gradient, var(--bg-primary));
+  color: var(--text-primary);
+}
+
+.landing-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 16px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  -webkit-app-region: drag;
+}
+
+.landing-toolbar button {
+  -webkit-app-region: no-drag;
+}
+
+.landing-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.landing-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.landing-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+}
+
+.landing-logo {
+  font-size: 80px;
+  line-height: 1;
+}
+
+.landing-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.landing-subtitle {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.landing-open-btn {
+  margin-top: 8px;
+}
+
+.landing-settings-wrapper {
+  flex: 1;
+  overflow-y: auto;
+}
+
 // ---- Mobile Responsive ----
 .sidebar-toggle {
   display: none;

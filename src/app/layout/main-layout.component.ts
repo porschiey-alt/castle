@@ -133,14 +133,16 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     const directory = await this.electronService.selectDirectory();
     if (directory) {
       this.currentDirectory = directory;
+      this.activeView = 'chat';
       await this.agentService.discoverAgents(directory);
+      // Load conversations for the auto-selected agent
+      const agentId = this.agentService.selectedAgentId();
+      if (agentId) {
+        await this.conversationService.loadConversations(agentId);
+      }
       // Update status bar
       if (this.statusBar) {
         this.statusBar.updateDirectory(directory);
-      }
-      // Reload tasks scoped to the new project
-      if (this.activeView === 'tasks') {
-        this.taskService.loadTasks();
       }
     }
   }
@@ -148,12 +150,15 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   async openRecentDirectory(dirPath: string): Promise<void> {
     await this.electronService.setCurrentDirectory(dirPath);
     this.currentDirectory = dirPath;
+    this.activeView = 'chat';
     await this.agentService.discoverAgents(dirPath);
+    // Load conversations for the auto-selected agent
+    const agentId = this.agentService.selectedAgentId();
+    if (agentId) {
+      await this.conversationService.loadConversations(agentId);
+    }
     if (this.statusBar) {
       this.statusBar.updateDirectory(dirPath);
-    }
-    if (this.activeView === 'tasks') {
-      this.taskService.loadTasks();
     }
   }
 
@@ -165,6 +170,10 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   showSettings(): void {
     this.activeView = 'settings';
     this.closeSidebar();
+  }
+
+  backToLanding(): void {
+    this.activeView = 'chat';
   }
 
   addAgent(): void {
