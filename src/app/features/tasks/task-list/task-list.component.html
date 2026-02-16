@@ -1,0 +1,126 @@
+<div class="tasks-container">
+  @if (creating) {
+    <!-- Full-screen create view -->
+    <app-task-detail
+      [labels]="labels()"
+      [startEditing]="true"
+      (saved)="onSave(null, $event)"
+      (closed)="deselectTask()"
+    />
+  } @else {
+    @if (selectedTask(); as task) {
+      <!-- Detail / inline-edit view -->
+      <app-task-detail
+        [task]="task"
+        [labels]="labels()"
+        [agents]="agents()"
+        [researchRunning]="isResearchRunning(task.id)"
+        [implementRunning]="isImplementRunning(task.id)"
+        (saved)="onSave(task.id, $event)"
+        (deleteRequested)="deleteTask($event)"
+        (stateChanged)="onStateChange($event)"
+        (researchRequested)="onResearchRequested($event)"
+        (implementRequested)="onImplementRequested($event)"
+        (goToResearcher)="goToAgent.emit($event)"
+        (goToImplementer)="goToAgent.emit($event)"
+        (closed)="deselectTask()"
+      />
+    } @else {
+    <!-- List view -->
+    <div class="tasks-header">
+      <h2 class="tasks-title">
+        <mat-icon>assignment</mat-icon>
+        Tasks
+      </h2>
+      <button mat-flat-button color="primary" (click)="startCreating()">
+        <mat-icon>add</mat-icon>
+        New Task
+      </button>
+    </div>
+
+    <!-- State filter chips -->
+    <div class="filter-bar">
+      <button mat-stroked-button
+              [class.active]="filterState() === null"
+              (click)="setFilter(null)">
+        All
+      </button>
+      @for (s of states; track s.id) {
+        <button mat-stroked-button
+                [class.active]="filterState() === s.id"
+                [style.--chip-color]="s.color"
+                (click)="setFilter(s.id)">
+          <mat-icon [style.color]="s.color">{{ s.icon }}</mat-icon>
+          {{ s.label }}
+        </button>
+      }
+    </div>
+
+    <!-- Kind filter chips -->
+    <div class="filter-bar">
+      <button mat-stroked-button
+              [class.active]="filterKind() === null"
+              (click)="setKindFilter(null)">
+        All Kinds
+      </button>
+      @for (k of kinds; track k.id) {
+        <button mat-stroked-button
+                [class.active]="filterKind() === k.id"
+                [style.--chip-color]="k.color"
+                (click)="setKindFilter(k.id)">
+          <mat-icon [style.color]="k.color">{{ k.icon }}</mat-icon>
+          {{ k.label }}
+        </button>
+      }
+    </div>
+
+    <!-- Task list -->
+    <div class="task-items">
+      @if (loading()) {
+        <div class="loading-state">
+          <mat-icon class="spin">hourglass_empty</mat-icon>
+          <span>Loading tasks...</span>
+        </div>
+      } @else if (tasks().length === 0) {
+        <div class="empty-state">
+          <mat-icon class="empty-icon">task_alt</mat-icon>
+          <h3>No tasks yet</h3>
+          <p>Create a task to get started</p>
+        </div>
+      } @else {
+        @for (task of tasks(); track task.id) {
+          <div class="task-card" (click)="selectTask(task)">
+            <div class="task-card-left">
+              <mat-icon class="kind-icon" [style.color]="getKindInfo(task.kind).color"
+                        [matTooltip]="getKindInfo(task.kind).label">
+                {{ getKindInfo(task.kind).icon }}
+              </mat-icon>
+              <mat-icon class="state-icon" [style.color]="getStateInfo(task.state).color">
+                {{ getStateInfo(task.state).icon }}
+              </mat-icon>
+            </div>
+            <div class="task-card-body">
+              <div class="task-card-title">{{ task.title }}</div>
+              @if (task.labels.length > 0) {
+                <div class="task-card-labels">
+                  @for (label of task.labels; track label.id) {
+                    <span class="mini-label" [style.background-color]="label.color + '22'" [style.color]="label.color"
+                          [style.border-color]="label.color + '44'">
+                      {{ label.name }}
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+            <div class="task-card-meta">
+              <span class="task-card-state" [style.color]="getStateInfo(task.state).color">
+                {{ getStateInfo(task.state).label }}
+              </span>
+            </div>
+          </div>
+        }
+      }
+    </div>
+    }
+  }
+</div>

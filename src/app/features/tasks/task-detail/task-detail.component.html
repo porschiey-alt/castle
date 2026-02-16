@@ -1,0 +1,278 @@
+<div class="task-detail">
+  <!-- Header -->
+  <div class="detail-header">
+    <button mat-icon-button (click)="editing ? cancelEdit() : closed.emit()" matTooltip="Back">
+      <mat-icon>arrow_back</mat-icon>
+    </button>
+
+    @if (editing) {
+      <mat-form-field appearance="outline" class="title-field">
+        <input matInput [(ngModel)]="editTitle" placeholder="Task title" autofocus />
+      </mat-form-field>
+    } @else {
+      <h2 class="task-title">{{ task()!.title }}</h2>
+    }
+
+    <div class="detail-actions">
+      @if (editing) {
+        <button mat-flat-button color="primary" [disabled]="!editTitle.trim()" (click)="save()">
+          <mat-icon>check</mat-icon>
+          {{ isCreating ? 'Create' : 'Save' }}
+        </button>
+        <button mat-button (click)="cancelEdit()">Cancel</button>
+      } @else {
+        <button mat-icon-button (click)="enterEditMode()" matTooltip="Edit">
+          <mat-icon>edit</mat-icon>
+        </button>
+        <button mat-icon-button (click)="deleteRequested.emit(task()!)" matTooltip="Delete" class="delete-btn">
+          <mat-icon>delete</mat-icon>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Meta bar -->
+  <div class="detail-meta">
+    @if (editing) {
+      <mat-form-field appearance="outline" class="state-field">
+        <mat-label>State</mat-label>
+        <mat-select [(ngModel)]="editState">
+          @for (s of states; track s.id) {
+            <mat-option [value]="s.id">
+              <mat-icon [style.color]="s.color">{{ s.icon }}</mat-icon>
+              {{ s.label }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="kind-field">
+        <mat-label>Kind</mat-label>
+        <mat-select [(ngModel)]="editKind">
+          @for (k of kinds; track k.id) {
+            <mat-option [value]="k.id">
+              <mat-icon [style.color]="k.color">{{ k.icon }}</mat-icon>
+              {{ k.label }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      @if (labels().length > 0) {
+        <mat-form-field appearance="outline" class="labels-field">
+          <mat-label>Labels</mat-label>
+          <mat-select [(ngModel)]="editLabelIds" multiple>
+            @for (label of labels(); track label.id) {
+              <mat-option [value]="label.id">
+                <span class="label-dot" [style.background-color]="label.color"></span>
+                {{ label.name }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    } @else {
+      <!-- State selector -->
+      <button mat-stroked-button [matMenuTriggerFor]="stateMenu" class="state-chip"
+              [style.border-color]="getStateInfo(task()!.state).color"
+              [style.color]="getStateInfo(task()!.state).color">
+        <mat-icon [style.color]="getStateInfo(task()!.state).color">{{ getStateInfo(task()!.state).icon }}</mat-icon>
+        {{ getStateInfo(task()!.state).label }}
+      </button>
+      <mat-menu #stateMenu="matMenu">
+        @for (s of states; track s.id) {
+          <button mat-menu-item (click)="onStateChange(s.id)">
+            <mat-icon [style.color]="s.color">{{ s.icon }}</mat-icon>
+            <span>{{ s.label }}</span>
+          </button>
+        }
+      </mat-menu>
+
+      <!-- Kind badge -->
+      <span class="kind-badge"
+            [style.border-color]="getKindInfo(task()!.kind).color"
+            [style.color]="getKindInfo(task()!.kind).color">
+        <mat-icon [style.color]="getKindInfo(task()!.kind).color">{{ getKindInfo(task()!.kind).icon }}</mat-icon>
+        {{ getKindInfo(task()!.kind).label }}
+      </span>
+
+      @if (task()!.labels.length > 0) {
+        <div class="label-chips">
+          @for (label of task()!.labels; track label.id) {
+            <span class="label-chip" [style.background-color]="label.color + '22'" [style.color]="label.color"
+                  [style.border-color]="label.color + '44'">
+              {{ label.name }}
+            </span>
+          }
+        </div>
+      }
+
+      <span class="task-date">Created {{ task()!.createdAt | date:'medium' }}</span>
+    }
+  </div>
+
+  <!-- Tabs: Description / Research (only when not creating) -->
+  @if (!isCreating && !editing) {
+    <mat-tab-group [(selectedIndex)]="activeTab" class="task-tabs" animationDuration="200ms">
+      <!-- Description tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon>description</mat-icon>
+          <span class="tab-label-text">Description</span>
+        </ng-template>
+        <div class="tab-body">
+          @if (task()!.description) {
+            <div class="markdown-content" [innerHTML]="renderMarkdown(task()!.description)"></div>
+          } @else {
+            <p class="no-description">No description provided.</p>
+          }
+        </div>
+      </mat-tab>
+
+      <!-- Research tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon>science</mat-icon>
+          <span class="tab-label-text">Research</span>
+          @if (researchRunning()) {
+            <mat-icon class="tab-spinner">sync</mat-icon>
+          }
+        </ng-template>
+        <div class="tab-body">
+          @if (task()!.researchContent) {
+            <div class="markdown-content" [innerHTML]="renderMarkdown(task()!.researchContent!)"></div>
+          } @else if (researchRunning()) {
+            <div class="research-running">
+              <mat-icon class="research-spinner">sync</mat-icon>
+              <h3>Research in progress...</h3>
+              <p>The agent is analyzing this task. Results will appear here when complete.</p>
+              <button mat-stroked-button color="primary" (click)="goToResearcher.emit(task()!.researchAgentId!)">
+                <mat-icon>open_in_new</mat-icon>
+                Take me to the Researcher
+              </button>
+            </div>
+          } @else {
+            <!-- Start research UI -->
+            <div class="research-empty">
+              <mat-icon class="research-icon">science</mat-icon>
+              <h3>No research yet</h3>
+              <p>Assign an agent to research this task. The output will be saved as a markdown document.</p>
+
+              <div class="research-start-form">
+                <mat-form-field appearance="outline" class="agent-picker">
+                  <mat-label>Agent</mat-label>
+                  <mat-select [(ngModel)]="selectedResearchAgentId">
+                    @if (researchAgents.length > 0) {
+                      <mat-optgroup label="Research Agents">
+                        @for (a of researchAgents; track a.id) {
+                          <mat-option [value]="a.id">
+                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                          </mat-option>
+                        }
+                      </mat-optgroup>
+                    }
+                    @if (codingAgents.length > 0) {
+                      <mat-optgroup label="Other Agents">
+                        @for (a of codingAgents; track a.id) {
+                          <mat-option [value]="a.id">
+                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                          </mat-option>
+                        }
+                      </mat-optgroup>
+                    }
+                  </mat-select>
+                </mat-form-field>
+
+                <button mat-flat-button color="primary"
+                        [disabled]="!selectedResearchAgentId"
+                        (click)="startResearch()">
+                  <mat-icon>play_arrow</mat-icon>
+                  Start Research
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </mat-tab>
+
+      <!-- Implementation tab -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon>build</mat-icon>
+          <span class="tab-label-text">Implementation</span>
+          @if (implementRunning()) {
+            <mat-icon class="tab-spinner">sync</mat-icon>
+          }
+        </ng-template>
+        <div class="tab-body">
+          @if (implementRunning()) {
+            <div class="research-running">
+              <mat-icon class="research-spinner">sync</mat-icon>
+              <h3>Implementation in progress...</h3>
+              <p>The agent is implementing this task. You can watch its progress live.</p>
+              <button mat-stroked-button color="primary" (click)="goToImplementer.emit(task()!.researchAgentId!)">
+                <mat-icon>open_in_new</mat-icon>
+                Take me to the Agent
+              </button>
+            </div>
+          } @else {
+            <div class="research-empty">
+              <mat-icon class="research-icon">build</mat-icon>
+              <h3>Implement this task</h3>
+
+              @if (!task()!.researchContent) {
+                <div class="implement-warning">
+                  <mat-icon>warning</mat-icon>
+                  <span>This task hasn't been researched yet. Research first for better implementation results.</span>
+                </div>
+              }
+
+              <p>Select an agent to implement the changes for this task.</p>
+
+              <div class="research-start-form">
+                <mat-form-field appearance="outline" class="agent-picker">
+                  <mat-label>Agent</mat-label>
+                  <mat-select [(ngModel)]="selectedImplementAgentId">
+                    @if (codingAgents.length > 0) {
+                      <mat-optgroup label="Coding Agents">
+                        @for (a of codingAgents; track a.id) {
+                          <mat-option [value]="a.id">
+                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                          </mat-option>
+                        }
+                      </mat-optgroup>
+                    }
+                    @if (researchAgents.length > 0) {
+                      <mat-optgroup label="Research Agents">
+                        @for (a of researchAgents; track a.id) {
+                          <mat-option [value]="a.id">
+                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                          </mat-option>
+                        }
+                      </mat-optgroup>
+                    }
+                  </mat-select>
+                </mat-form-field>
+
+                <button mat-flat-button color="primary"
+                        [disabled]="!selectedImplementAgentId"
+                        (click)="startImplementation()">
+                  <mat-icon>play_arrow</mat-icon>
+                  Start Implementation
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  } @else {
+    <!-- Editing / Creating — no tabs, just the description editor -->
+    <div class="detail-body">
+      <mat-form-field appearance="outline" class="description-field">
+        <mat-label>Description (Markdown)</mat-label>
+        <textarea matInput [(ngModel)]="editDescription" rows="20" placeholder="Describe the task..."></textarea>
+      </mat-form-field>
+    </div>
+  }
+</div>

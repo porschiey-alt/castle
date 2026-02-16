@@ -90,7 +90,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // ============ Chat Handlers ============
 
-  // Helper to wire up output/complete/error listeners for a session
+  // Helper to wire up output/complete/error/permission listeners for a session
   function subscribeToSession(sessionId: string, agentId: string): void {
     processManagerService.onOutput(sessionId, (message) => {
       mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, message);
@@ -105,6 +105,10 @@ export function registerIpcHandlers(services: IpcServices): void {
         timestamp: new Date()
       });
       mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, assistantMessage);
+    });
+
+    processManagerService.onPermissionRequest(sessionId, (data) => {
+      mainWindow.webContents.send(IPC_CHANNELS.PERMISSION_REQUEST, data);
     });
 
     processManagerService.onError(sessionId, (error) => {
@@ -174,10 +178,8 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   // Handle permission response from renderer
-  ipcMain.on(IPC_CHANNELS.PERMISSION_RESPONSE, (_event, { requestId, response }) => {
-    // This would be handled by a permission request queue
-    // For now, just log it
-    console.log(`Permission response for ${requestId}:`, response);
+  ipcMain.on(IPC_CHANNELS.PERMISSION_RESPONSE, (_event, { requestId, agentId, optionId }) => {
+    processManagerService.respondToPermission(agentId, requestId, optionId);
   });
 
   // ============ Settings Handlers ============
@@ -212,6 +214,104 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   ipcMain.handle(IPC_CHANNELS.APP_GET_ACTIVE_MODEL, () => {
     return processManagerService.getActiveModel();
+  });
+
+  // ============ Task Handlers ============
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_GET_ALL, async (_event, { state, kind } = {}) => {
+    return databaseService.getTasks(state, kind);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_GET, async (_event, { taskId }) => {
+    return databaseService.getTask(taskId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_CREATE, async (_event, input) => {
+    return databaseService.createTask(input);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_UPDATE, async (_event, { taskId, updates }) => {
+    return databaseService.updateTask(taskId, updates);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_DELETE, async (_event, { taskId }) => {
+    return databaseService.deleteTask(taskId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_LABELS_GET_ALL, async () => {
+    return databaseService.getTaskLabels();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_LABELS_CREATE, async (_event, { name, color }) => {
+    return databaseService.createTaskLabel(name, color);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_LABELS_DELETE, async (_event, { labelId }) => {
+    return databaseService.deleteTaskLabel(labelId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_RUN_RESEARCH, async (_event, { taskId, agentId, outputPath }) => {
+    const task = await databaseService.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+
+    let agent: Agent | null | undefined = discoveredAgents.get(agentId);
+    if (!agent) agent = await databaseService.getAgent(agentId);
+    if (!agent) throw new Error(`Agent ${agentId} not found`);
+
+    const workingDirectory = directoryService.getCurrentDirectory();
+    if (!workingDirectory) throw new Error('No workspace directory selected');
+
+    // Ensure agent has a session
+    let sessionProcess = processManagerService.getSessionByAgentId(agentId);
+    if (!sessionProcess) {
+      const session = await processManagerService.startSession(agent, workingDirectory);
+      subscribeToSession(session.id, agentId);
+      sessionProcess = processManagerService.getSessionByAgentId(agentId);
+      if (!sessionProcess) throw new Error('Failed to start research agent session');
+    }
+
+    // Build the research prompt
+    const researchPrompt = `Research the following task and produce a detailed analysis document in Markdown format.\n\nTask: ${task.title}\n\nDescription:\n${task.description || '(no description provided)'}\n\nPlease provide a thorough research document covering technical analysis, proposed approach, considerations, and implementation guidance. Output ONLY the markdown document content.`;
+
+    // Save agentId to task immediately
+    await databaseService.updateTask(taskId, { researchAgentId: agentId });
+
+    // Listen for completion to save research content
+    const onComplete = async (message: { content: string }) => {
+      // Save to task in database
+      await databaseService.updateTask(taskId, { researchContent: message.content });
+
+      // Also save to file
+      const fs = require('fs');
+      const path = require('path');
+      const researchDir = outputPath || path.join(workingDirectory, 'research');
+      if (!fs.existsSync(researchDir)) {
+        fs.mkdirSync(researchDir, { recursive: true });
+      }
+      const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
+      const filePath = path.join(researchDir, `${safeTitle}.md`);
+      fs.writeFileSync(filePath, message.content, 'utf-8');
+      console.log(`[Research] Saved research to ${filePath}`);
+
+      // Notify renderer that research is complete
+      mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
+        id: taskId,
+        agentId,
+        role: 'assistant',
+        content: message.content,
+        timestamp: new Date()
+      });
+    };
+
+    processManagerService.onComplete(sessionProcess.session.id, onComplete);
+
+    // Send the prompt (async — responses come via events)
+    processManagerService.sendMessage(sessionProcess.session.id, researchPrompt).catch((error) => {
+      console.error(`[Research] Error:`, error);
+      mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+    });
+
+    return { taskId };
   });
 
   console.log('IPC handlers registered');

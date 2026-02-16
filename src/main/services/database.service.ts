@@ -17,6 +17,7 @@ import {
 } from '../../shared/types';
 import { ChatMessage, MessageRole } from '../../shared/types/message.types';
 import { Agent } from '../../shared/types/agent.types';
+import { Task, TaskState, TaskKind, TaskLabel, CreateTaskInput, UpdateTaskInput } from '../../shared/types/task.types';
 
 export class DatabaseService {
   private db: SqlJsDatabase | null = null;
@@ -120,6 +121,57 @@ export class DatabaseService {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_messages_agent_id ON messages(agent_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_permissions_agent_id ON permissions(agent_id)`);
+
+    // Task tables
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'new',
+        research_content TEXT,
+        research_agent_id TEXT,
+        github_issue_number INTEGER,
+        github_repo TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS task_labels (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT NOT NULL DEFAULT '#6b7280'
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS task_label_assignments (
+        task_id TEXT NOT NULL,
+        label_id TEXT NOT NULL,
+        PRIMARY KEY (task_id, label_id),
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (label_id) REFERENCES task_labels(id) ON DELETE CASCADE
+      )
+    `);
+
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at)`);
+
+    // Migration: add research columns if missing
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN research_content TEXT`);
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN research_agent_id TEXT`);
+    } catch { /* column already exists */ }
+
+    // Migration: add kind column if missing
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'feature'`);
+    } catch { /* column already exists */ }
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_kind ON tasks(kind)`);
   }
 
   /**
@@ -436,6 +488,208 @@ export class DatabaseService {
     stmt.free();
 
     return directories;
+  }
+
+  // ============ Task Methods ============
+
+  async createTask(input: CreateTaskInput): Promise<Task> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    this.db.run(
+      `INSERT INTO tasks (id, title, description, state, kind, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.title, input.description || '', input.state || 'new', input.kind || 'feature', now, now]
+    );
+
+    if (input.labelIds?.length) {
+      for (const labelId of input.labelIds) {
+        this.db.run(
+          `INSERT OR IGNORE INTO task_label_assignments (task_id, label_id) VALUES (?, ?)`,
+          [id, labelId]
+        );
+      }
+    }
+
+    this.saveDatabase();
+    return this.getTask(id) as Promise<Task>;
+  }
+
+  async updateTask(taskId: string, updates: UpdateTaskInput): Promise<Task> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (updates.title !== undefined) { sets.push('title = ?'); params.push(updates.title); }
+    if (updates.description !== undefined) { sets.push('description = ?'); params.push(updates.description); }
+    if (updates.state !== undefined) { sets.push('state = ?'); params.push(updates.state); }
+    if (updates.kind !== undefined) { sets.push('kind = ?'); params.push(updates.kind); }
+    if (updates.researchContent !== undefined) { sets.push('research_content = ?'); params.push(updates.researchContent); }
+    if (updates.researchAgentId !== undefined) { sets.push('research_agent_id = ?'); params.push(updates.researchAgentId); }
+
+    if (sets.length > 0) {
+      sets.push("updated_at = datetime('now')");
+      params.push(taskId);
+      this.db.run(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`, params);
+    }
+
+    if (updates.labelIds !== undefined) {
+      this.db.run(`DELETE FROM task_label_assignments WHERE task_id = ?`, [taskId]);
+      for (const labelId of updates.labelIds) {
+        this.db.run(
+          `INSERT OR IGNORE INTO task_label_assignments (task_id, label_id) VALUES (?, ?)`,
+          [taskId, labelId]
+        );
+      }
+    }
+
+    this.saveDatabase();
+    return this.getTask(taskId) as Promise<Task>;
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    this.db.run(`DELETE FROM task_label_assignments WHERE task_id = ?`, [taskId]);
+    this.db.run(`DELETE FROM tasks WHERE id = ?`, [taskId]);
+    this.saveDatabase();
+  }
+
+  async getTask(taskId: string): Promise<Task | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const stmt = this.db.prepare(
+      `SELECT id, title, description, state, kind, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
+       FROM tasks WHERE id = ?`
+    );
+    stmt.bind([taskId]);
+
+    if (!stmt.step()) { stmt.free(); return null; }
+
+    const row = stmt.getAsObject() as {
+      id: string; title: string; description: string; state: string; kind: string;
+      research_content: string | null; research_agent_id: string | null;
+      github_issue_number: number | null; github_repo: string | null;
+      created_at: string; updated_at: string;
+    };
+    stmt.free();
+
+    const labels = this.getLabelsForTask(taskId);
+
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      state: row.state as TaskState,
+      kind: (row.kind || 'feature') as TaskKind,
+      labels,
+      researchContent: row.research_content ?? undefined,
+      researchAgentId: row.research_agent_id ?? undefined,
+      githubIssueNumber: row.github_issue_number ?? undefined,
+      githubRepo: row.github_repo ?? undefined,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  async getTasks(stateFilter?: string, kindFilter?: string): Promise<Task[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    let sql = `SELECT id, title, description, state, kind, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
+               FROM tasks`;
+    const params: unknown[] = [];
+    const conditions: string[] = [];
+
+    if (stateFilter) {
+      conditions.push(`state = ?`);
+      params.push(stateFilter);
+    }
+    if (kindFilter) {
+      conditions.push(`kind = ?`);
+      params.push(kindFilter);
+    }
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    sql += ` ORDER BY updated_at DESC`;
+
+    const stmt = this.db.prepare(sql);
+    if (params.length) stmt.bind(params);
+
+    const tasks: Task[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as {
+        id: string; title: string; description: string; state: string; kind: string;
+        research_content: string | null; research_agent_id: string | null;
+        github_issue_number: number | null; github_repo: string | null;
+        created_at: string; updated_at: string;
+      };
+
+      tasks.push({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        state: row.state as TaskState,
+        kind: (row.kind || 'feature') as TaskKind,
+        labels: this.getLabelsForTask(row.id),
+        researchContent: row.research_content ?? undefined,
+        researchAgentId: row.research_agent_id ?? undefined,
+        githubIssueNumber: row.github_issue_number ?? undefined,
+        githubRepo: row.github_repo ?? undefined,
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.updated_at),
+      });
+    }
+    stmt.free();
+    return tasks;
+  }
+
+  private getLabelsForTask(taskId: string): TaskLabel[] {
+    if (!this.db) return [];
+    const labels: TaskLabel[] = [];
+    const stmt = this.db.prepare(
+      `SELECT l.id, l.name, l.color
+       FROM task_labels l
+       INNER JOIN task_label_assignments a ON a.label_id = l.id
+       WHERE a.task_id = ?`
+    );
+    stmt.bind([taskId]);
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { id: string; name: string; color: string };
+      labels.push(row);
+    }
+    stmt.free();
+    return labels;
+  }
+
+  // ============ Task Label Methods ============
+
+  async getTaskLabels(): Promise<TaskLabel[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const labels: TaskLabel[] = [];
+    const stmt = this.db.prepare(`SELECT id, name, color FROM task_labels ORDER BY name`);
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { id: string; name: string; color: string };
+      labels.push(row);
+    }
+    stmt.free();
+    return labels;
+  }
+
+  async createTaskLabel(name: string, color: string): Promise<TaskLabel> {
+    if (!this.db) throw new Error('Database not initialized');
+    const id = uuidv4();
+    this.db.run(`INSERT INTO task_labels (id, name, color) VALUES (?, ?, ?)`, [id, name, color]);
+    this.saveDatabase();
+    return { id, name, color };
+  }
+
+  async deleteTaskLabel(labelId: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    this.db.run(`DELETE FROM task_label_assignments WHERE label_id = ?`, [labelId]);
+    this.db.run(`DELETE FROM task_labels WHERE id = ?`, [labelId]);
+    this.saveDatabase();
   }
 
   // ============ Cleanup ============

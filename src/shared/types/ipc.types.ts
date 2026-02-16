@@ -5,6 +5,7 @@
 import { Agent, AgentDiscoveryResult, AgentSession } from './agent.types';
 import { ChatMessage, StreamingMessage } from './message.types';
 import { AppSettings, PermissionRequest, PermissionResponse, PermissionSet } from './settings.types';
+import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput } from './task.types';
 
 // IPC Channel names
 export const IPC_CHANNELS = {
@@ -45,7 +46,18 @@ export const IPC_CHANNELS = {
   // App events
   APP_READY: 'app:ready',
   APP_ERROR: 'app:error',
-  APP_GET_ACTIVE_MODEL: 'app:getActiveModel'
+  APP_GET_ACTIVE_MODEL: 'app:getActiveModel',
+
+  // Task operations
+  TASKS_GET_ALL: 'tasks:getAll',
+  TASKS_GET: 'tasks:get',
+  TASKS_CREATE: 'tasks:create',
+  TASKS_UPDATE: 'tasks:update',
+  TASKS_DELETE: 'tasks:delete',
+  TASKS_LABELS_GET_ALL: 'tasks:labels:getAll',
+  TASKS_LABELS_CREATE: 'tasks:labels:create',
+  TASKS_LABELS_DELETE: 'tasks:labels:delete',
+  TASKS_RUN_RESEARCH: 'tasks:runResearch',
 } as const;
 
 // Type-safe IPC payload definitions
@@ -134,6 +146,44 @@ export interface IPCPayloads {
   [IPC_CHANNELS.SETTINGS_UPDATE]: {
     request: Partial<AppSettings>;
     response: AppSettings;
+  };
+
+  // Tasks
+  [IPC_CHANNELS.TASKS_GET_ALL]: {
+    request: { state?: string; kind?: string };
+    response: Task[];
+  };
+  [IPC_CHANNELS.TASKS_GET]: {
+    request: { taskId: string };
+    response: Task | null;
+  };
+  [IPC_CHANNELS.TASKS_CREATE]: {
+    request: CreateTaskInput;
+    response: Task;
+  };
+  [IPC_CHANNELS.TASKS_UPDATE]: {
+    request: { taskId: string; updates: UpdateTaskInput };
+    response: Task;
+  };
+  [IPC_CHANNELS.TASKS_DELETE]: {
+    request: { taskId: string };
+    response: void;
+  };
+  [IPC_CHANNELS.TASKS_LABELS_GET_ALL]: {
+    request: void;
+    response: TaskLabel[];
+  };
+  [IPC_CHANNELS.TASKS_LABELS_CREATE]: {
+    request: { name: string; color: string };
+    response: TaskLabel;
+  };
+  [IPC_CHANNELS.TASKS_LABELS_DELETE]: {
+    request: { labelId: string };
+    response: void;
+  };
+  [IPC_CHANNELS.TASKS_RUN_RESEARCH]: {
+    request: { taskId: string; agentId: string; outputPath?: string };
+    response: { taskId: string };
   };
 }
 
