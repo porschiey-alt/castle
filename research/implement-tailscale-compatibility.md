@@ -281,7 +281,30 @@ interface WSEvent {
 }
 ```
 
-#### 2.3 Implementation Outline
+#### 2.3 Multi-Client Shared State
+
+Multiple WebSocket connections are supported simultaneously. All connected clients share the same application state — there is no per-connection isolation. In practice this means:
+
+- **Current directory, active agent sessions, and chat history** are global. If one remote client switches the working directory or starts a chat, all other connected clients (including the local Electron window) see the same state.
+- **Push events are broadcast to all clients.** Events like `CHAT_STREAM_CHUNK` are sent to both `mainWindow.webContents` (the local Electron renderer) and every connected WebSocket client. The `WsBridgeService` maintains a `Set<WebSocket>` of active connections and iterates over it when dispatching events.
+- **No user identity per connection.** Since Tailscale already authenticates users at the network level (see [Tailscale ACL Integration](#tailscale-acl-integration)), the WebSocket bridge does not implement its own user identity model. All connections are treated as the same logical user.
+- **Conflict handling is last-write-wins.** If two clients send conflicting operations (e.g., both change settings at the same time), the last one processed wins. This is acceptable because Castle is designed as a single-user tool accessed from multiple devices, not a collaborative multi-user platform.
+
+```typescript
+// In WsBridgeService
+private clients: Set<WebSocket> = new Set();
+
+broadcastEvent(channel: string, payload: unknown): void {
+  const message = JSON.stringify({ channel, payload });
+  for (const client of this.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  }
+}
+```
+
+#### 2.4 Implementation Outline
 
 **New files needed:**
 
@@ -293,7 +316,7 @@ interface WSEvent {
 
 **Dependency:** The `ws` npm package (lightweight WebSocket implementation for Node.js). Alternatively, the built-in `http` server can be upgraded to WebSocket using Node's native support, but the `ws` package is more ergonomic.
 
-#### 2.4 API Shim Detection
+#### 2.5 API Shim Detection
 
 In the Angular app, create an API abstraction layer:
 
@@ -322,6 +345,29 @@ export class ApiService {
 
 All Angular components/services would then inject `ApiService` instead of directly referencing `window.electronAPI`.
 
+#### 2.6 Event Broadcasting
+
+All push events originating from the main process must be delivered to every connected client — both the local Electron renderer and all remote WebSocket clients. The current architecture sends events exclusively to `mainWindow.webContents` via `webContents.send()`. This will be extended:
+
+1. **Existing IPC event dispatchers** (e.g., chat stream handlers, agent status updates) will be updated to also call `wsBridge.broadcastEvent(channel, payload)` after sending to `mainWindow.webContents`.
+2. **A centralized event bus** is recommended to avoid duplicating broadcast logic in every handler. A lightweight `EventBroadcaster` class can subscribe to all outbound event channels and automatically fan out to both the local renderer and all WebSocket clients.
+
+```typescript
+class EventBroadcaster {
+  constructor(
+    private mainWindow: BrowserWindow,
+    private wsBridge: WsBridgeService
+  ) {}
+
+  send(channel: string, payload: unknown): void {
+    // Send to local Electron renderer
+    this.mainWindow.webContents.send(channel, payload);
+    // Broadcast to all remote WebSocket clients
+    this.wsBridge.broadcastEvent(channel, payload);
+  }
+}
+```
+
 ---
 
 ### Phase 3: Settings UI
@@ -342,13 +388,65 @@ Add a section to the Castle settings panel for Tailscale configuration:
 | Concern | Mitigation |
 |---------|-----------|
 | **Open port on all interfaces** | Tailscale encrypts traffic within the tailnet. The server binds to `0.0.0.0` but is only reachable through Tailscale's virtual interfaces (100.x.y.z) unless the user's firewall allows LAN access. Consider an option to restrict binding to the Tailscale interface only. |
-| **No authentication** | Phase 1 has no auth. For Phase 2, consider requiring a shared secret or token that must be provided via query parameter or header. This prevents unauthorized access if the port is exposed beyond Tailscale. |
+| **No authentication** | Rely on Tailscale's built-in encryption and ACL system for access control (see [Tailscale ACL Integration](#tailscale-acl-integration) below). No application-level authentication is needed for the MVP. |
 | **Directory traversal** | The static file server must validate that all resolved paths remain within `dist/renderer/browser/`. The proposed implementation does this. |
 | **WebSocket origin checking** | The WS bridge should validate the `Origin` header to prevent cross-site WebSocket hijacking. |
 
+#### Tailscale ACL Integration
+
+Tailscale provides a robust identity and access control layer at the network level that Castle can rely on instead of implementing its own authentication:
+
+**How Tailscale ACLs work:**
+
+- Every device on a tailnet is authenticated via the Tailscale identity provider (Google, Microsoft, GitHub, etc.). Each device is associated with a specific user identity.
+- Tailscale [ACLs](https://tailscale.com/kb/1018/acls) are defined in a centralized policy file (managed via the Tailscale admin console or checked into version control as `policy.hcl` / `acls.json`). ACLs control which devices and users can communicate with each other, down to specific ports.
+- ACL rules use the format `{ "action": "accept", "src": [...], "dst": [...] }` where sources and destinations can be users, groups, tags, or specific devices.
+
+**Example: Restricting Castle access to specific users or devices:**
+
+```jsonc
+// In the tailnet's ACL policy file
+{
+  "acls": [
+    {
+      // Allow only members of the 'castle-users' group to reach Castle's port
+      "action": "accept",
+      "src": ["group:castle-users"],
+      "dst": ["tag:castle-host:39417"]
+    }
+  ],
+  "groups": {
+    "group:castle-users": ["alice@example.com", "bob@example.com"]
+  },
+  "tagOwners": {
+    "tag:castle-host": ["group:castle-users"]
+  }
+}
+```
+
+With this configuration:
+- Only `alice@example.com` and `bob@example.com` can reach the Castle server on port `39417`.
+- Other tailnet members cannot connect, even though they are on the same tailnet.
+- The Castle host machine must be tagged with `tag:castle-host` in the Tailscale admin console.
+
+**Why this is sufficient for Castle:**
+
+1. **Identity is pre-verified.** Every connection arriving at Castle's port has already been authenticated by Tailscale. The connecting user's identity is cryptographically verified — there is no way to spoof it within the tailnet.
+2. **Port-level granularity.** ACLs can restrict access to the specific Castle port (`39417`), so even if a device has general tailnet access, it cannot reach Castle unless explicitly permitted.
+3. **No secrets to manage.** Unlike token-based auth, there are no shared secrets to generate, distribute, rotate, or accidentally leak. Access is managed centrally in the tailnet policy.
+4. **Audit logging.** Tailscale's admin console provides connection logs showing who accessed what, giving visibility into Castle usage across the tailnet.
+
+**Optional enhancement — identity-aware features:**
+
+If Castle later wants to know *which* Tailscale user is connecting (e.g., to display the user's name or apply per-user preferences), the Tailscale local API (`/localapi/v0/whois?addr=<ip>:<port>`) can be queried from the main process to resolve a connecting IP address to a Tailscale user identity. This is not required for the MVP but enables future multi-user personalization.
+
+### TLS / HTTPS
+
+Castle's HTTP server will serve plain HTTP. This is acceptable because Tailscale provides end-to-end encryption (WireGuard) for all traffic within the tailnet — data is encrypted in transit even though the application-layer protocol is HTTP. Adding TLS at the application level would be redundant and would require certificate management that Tailscale already handles. For any future scenario where Castle is exposed outside the tailnet (e.g., via Tailscale Funnel), Tailscale's own TLS termination handles HTTPS automatically.
+
 ### Network Binding
 
-- **Tailscale interface only:** Tailscale assigns IPs in the `100.x.y.z` range. To restrict the server to Tailscale-only access, you could enumerate network interfaces and bind specifically to the Tailscale adapter. However, this adds complexity. The simpler approach (bind to `0.0.0.0` + firewall rules) is recommended for MVP.
+- **Tailscale interface only:** Tailscale assigns IPs in the `100.x.y.z` range. To restrict the server to Tailscale-only access, you could enumerate network interfaces and bind specifically to the Tailscale adapter. However, this adds complexity. The simpler approach (bind to `0.0.0.0` + ACL rules) is recommended for MVP.
 - **Port conflicts:** The chosen port should be configurable and the server should handle `EADDRINUSE` gracefully, logging a clear error message.
 
 ### Performance
@@ -393,6 +491,7 @@ The current `index.html` loads Google Fonts from a CDN (`fonts.googleapis.com`).
    - Create Angular `ApiService` abstraction
    - Migrate all `window.electronAPI` references to use `ApiService`
    - Create `WebSocketAPI` client implementation
+   - Implement multi-client event broadcasting via `EventBroadcaster`
    - Test: Full functionality from a remote browser
 
 3. **Phase 3 — Settings UI**
@@ -405,7 +504,8 @@ The current `index.html` loads Google Fonts from a CDN (`fonts.googleapis.com`).
 | File | Phase | Description |
 |------|-------|-------------|
 | `src/main/services/tailscale-server.service.ts` | 1 | HTTP static file server |
-| `src/main/services/ws-bridge.service.ts` | 2 | WebSocket API proxy |
+| `src/main/services/ws-bridge.service.ts` | 2 | WebSocket API proxy with multi-client broadcast |
+| `src/main/services/event-broadcaster.ts` | 2 | Centralized event fan-out to Electron + WebSocket clients |
 | `src/app/core/services/api.service.ts` | 2 | Angular API abstraction layer |
 | `src/app/core/services/websocket-api.ts` | 2 | WebSocket client implementation of `ElectronAPI` |
 
@@ -419,6 +519,7 @@ The current `index.html` loads Google Fonts from a CDN (`fonts.googleapis.com`).
 | `angular.json` | 1 | Change production `baseHref` to `"/"` |
 | `src/main/window.ts` | 1 | Switch from `loadFile` to `loadURL` with `file://` |
 | `src/app/**/*.ts` (components/services) | 2 | Replace `window.electronAPI` with injected `ApiService` |
+| All IPC event dispatchers | 2 | Route events through `EventBroadcaster` instead of direct `webContents.send()` |
 | `package.json` | 2 | Add `ws` dependency |
 | Settings component | 3 | Add Tailscale configuration UI |
 
@@ -446,6 +547,7 @@ The port should always be user-configurable in case of conflicts.
 2. **Integration test:** Start Castle, verify `http://localhost:39417` returns the Angular `index.html`.
 3. **Tailscale end-to-end:** From a different machine on the same tailnet, navigate to `http://<castle-machine-tailscale-ip>:39417` and confirm the UI loads.
 4. **Phase 2 test:** From a remote browser, verify chat, agent discovery, and settings all work through the WebSocket bridge.
+5. **Multi-client test:** Open Castle in both Electron and a remote browser, verify that events (e.g., chat stream chunks) are delivered to both simultaneously.
 
 ---
 
@@ -469,9 +571,12 @@ Tailscale has built-in `tailscale serve` and `tailscale funnel` commands that ca
 
 ---
 
-## Open Questions
+## Resolved Questions
 
-1. **Multi-user access:** Should the WebSocket bridge support multiple simultaneous remote connections? If so, how should state (current directory, active agent sessions) be shared or isolated?
-2. **Notification routing:** Currently, events like `CHAT_STREAM_CHUNK` are sent to `mainWindow.webContents`. When a WebSocket client is also connected, should events be broadcast to all clients?
-3. **Authentication:** Is a shared token sufficient, or should Tailscale's ACL/identity be leveraged for access control?
-4. **HTTPS:** Tailscale provides automatic TLS certificates via `tailscale cert`. Should the HTTP server support TLS directly, or rely on Tailscale's built-in encryption?
+1. **Multi-user access:** Multiple simultaneous WebSocket connections are supported. All connections share the same application state (current directory, active agent sessions, chat history). There is no per-connection isolation — Castle is a single-user tool accessed from multiple devices, and last-write-wins semantics apply for conflicting operations.
+
+2. **Notification routing:** Yes — push events (e.g., `CHAT_STREAM_CHUNK`, agent status updates) are broadcast to all connected clients. A centralized `EventBroadcaster` will fan out events to both the local Electron renderer (`webContents.send()`) and all active WebSocket connections.
+
+3. **Authentication:** Tailscale's network-level ACL system provides sufficient access control. ACLs can restrict Castle's port to specific users, groups, or device tags — no application-level authentication is needed. See [Tailscale ACL Integration](#tailscale-acl-integration) for details and example configuration. For future personalization, the Tailscale local API's `whois` endpoint can resolve connecting IPs to user identities.
+
+4. **HTTPS:** Castle will serve plain HTTP. Tailscale's WireGuard-based encryption secures all traffic within the tailnet, making application-level TLS redundant. For exposure outside the tailnet via Tailscale Funnel, Tailscale handles TLS termination automatically.

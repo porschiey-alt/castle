@@ -35,6 +35,12 @@ export interface ToolCall {
 
 export type ToolCallStatus = 'pending' | 'running' | 'success' | 'error';
 
+export interface TodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  priority?: 'high' | 'medium' | 'low';
+}
+
 export interface StreamingMessage {
   id: string;
   agentId: string;
@@ -42,6 +48,7 @@ export interface StreamingMessage {
   thinking: string;
   isComplete: boolean;
   toolCalls?: ToolCall[];
+  todoItems?: TodoItem[];
 }
 
 export interface AgentBusMessage {

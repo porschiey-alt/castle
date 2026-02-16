@@ -1,4 +1,9 @@
 <div class="chat-wrapper">
+  <!-- Todo banner pinned to top -->
+  @if (todoItems().length > 0) {
+    <app-todo-banner [items]="todoItems()" />
+  }
+
   <!-- Message list -->
   <app-message-list 
     [messages]="messages()"

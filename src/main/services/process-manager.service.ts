@@ -7,7 +7,7 @@ import { Readable, Writable } from 'stream';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent, AgentSession } from '../../shared/types/agent.types';
-import { StreamingMessage, ToolCall } from '../../shared/types/message.types';
+import { StreamingMessage, ToolCall, TodoItem } from '../../shared/types/message.types';
 
 // Lazy-loaded ESM module — use Function to prevent tsc from converting import() to require()
 let acpModule: typeof import('@agentclientprotocol/sdk') | null = null;
@@ -28,6 +28,7 @@ interface SessionProcess {
   contentBuffer: string;
   thinkingBuffer: string;
   toolCalls: Map<string, ToolCall>;
+  todoItems: TodoItem[];
 }
 
 export class ProcessManagerService {
@@ -135,7 +136,8 @@ export class ProcessManagerService {
       eventEmitter,
       contentBuffer: '',
       thinkingBuffer: '',
-      toolCalls: new Map()
+      toolCalls: new Map(),
+      todoItems: []
     };
 
     // Create ACP client handler
@@ -180,7 +182,8 @@ export class ProcessManagerService {
             content: sessionProcess.contentBuffer,
             thinking: sessionProcess.thinkingBuffer,
             isComplete: false,
-            toolCalls: Array.from(sessionProcess.toolCalls.values())
+            toolCalls: Array.from(sessionProcess.toolCalls.values()),
+            todoItems: sessionProcess.todoItems.length > 0 ? [...sessionProcess.todoItems] : undefined
           };
           eventEmitter.emit('output', streamingMessage);
         };
@@ -214,6 +217,15 @@ export class ProcessManagerService {
             existing.status = s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'in_progress' ? 'running' : 'pending';
             if (update.title) existing.name = update.title;
           }
+          emitOutput();
+        }
+
+        if (update.sessionUpdate === 'plan') {
+          sessionProcess.todoItems = (update.entries || []).map((entry: any) => ({
+            content: entry.content || '',
+            status: entry.status || 'pending',
+            priority: entry.priority
+          }));
           emitOutput();
         }
       }
@@ -300,6 +312,7 @@ export class ProcessManagerService {
     sessionProcess.contentBuffer = '';
     sessionProcess.thinkingBuffer = '';
     sessionProcess.toolCalls.clear();
+    sessionProcess.todoItems = [];
 
     try {
       // Send prompt and wait for full response
@@ -315,7 +328,8 @@ export class ProcessManagerService {
         content: sessionProcess.contentBuffer,
         thinking: sessionProcess.thinkingBuffer,
         isComplete: true,
-        toolCalls: Array.from(sessionProcess.toolCalls.values())
+        toolCalls: Array.from(sessionProcess.toolCalls.values()),
+        todoItems: sessionProcess.todoItems.length > 0 ? [...sessionProcess.todoItems] : undefined
       };
       sessionProcess.eventEmitter.emit('complete', completeMessage);
 
@@ -406,6 +420,7 @@ export class ProcessManagerService {
     sessionProcess.contentBuffer = '';
     sessionProcess.thinkingBuffer = '';
     sessionProcess.toolCalls.clear();
+    sessionProcess.todoItems = [];
 
     // Emit a cancellation event so the UI can clean up
     sessionProcess.eventEmitter.emit('cancelled', { agentId });

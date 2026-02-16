@@ -7,6 +7,7 @@ import { CommonModule } from '@angular/common';
 
 import { MessageListComponent } from './message-list/message-list.component';
 import { ChatInputComponent } from './chat-input/chat-input.component';
+import { TodoBannerComponent } from './todo-banner/todo-banner.component';
 
 import { ChatService } from '../../core/services/chat.service';
 import { AgentService } from '../../core/services/agent.service';
@@ -18,7 +19,8 @@ import type { AgentWithSession } from '../../../shared/types/agent.types';
   imports: [
     CommonModule,
     MessageListComponent,
-    ChatInputComponent
+    ChatInputComponent,
+    TodoBannerComponent
   ],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
@@ -34,6 +36,7 @@ export class ChatComponent implements OnInit, OnChanges {
   messages = this.chatService.messages;
   streamingMessage = this.chatService.streamingMessage;
   isLoading = this.chatService.isLoading;
+  todoItems = this.chatService.todoItems;
 
   isInitializing(): boolean {
     return this.agentService.isSessionInitializing(this.agent().id);

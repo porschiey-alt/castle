@@ -1,0 +1,24 @@
+<div class="todo-banner">
+  <div class="todo-header" (click)="toggleCollapsed()">
+    <span class="todo-title">
+      <span class="todo-icon">📋</span>
+      Agent Plan
+      <span class="todo-progress">{{ completedCount() }}/{{ totalCount() }}</span>
+    </span>
+    <span class="todo-toggle">{{ collapsed() ? '▸' : '▾' }}</span>
+  </div>
+
+  @if (!collapsed()) {
+    <ul class="todo-list">
+      @for (item of items(); track item.content) {
+        <li class="todo-item" [class.completed]="item.status === 'completed'" [class.in-progress]="item.status === 'in_progress'">
+          <span class="todo-status">{{ statusIcon(item.status) }}</span>
+          <span class="todo-content">{{ item.content }}</span>
+          @if (item.priority === 'high') {
+            <span class="todo-priority high">!</span>
+          }
+        </li>
+      }
+    </ul>
+  }
+</div>
