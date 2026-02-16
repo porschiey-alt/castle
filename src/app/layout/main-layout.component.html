@@ -18,6 +18,9 @@
         @if (activeView === 'tasks') {
           <mat-icon>assignment</mat-icon>
           <span class="agent-name">Tasks</span>
+        } @else if (activeView === 'settings') {
+          <mat-icon>settings</mat-icon>
+          <span class="agent-name">Settings</span>
         } @else {
           @if (selectedAgent(); as agent) {
             <span class="agent-icon">{{ agent.icon || '🤖' }}</span>
@@ -42,38 +45,12 @@
             <mat-icon>{{ conversationPanelOpen ? 'view_sidebar' : 'chat' }}</mat-icon>
           </button>
         }
-        <button mat-icon-button matTooltip="Settings" [matMenuTriggerFor]="settingsMenu">
+        <button mat-icon-button matTooltip="Open Directory" (click)="openDirectory()">
+          <mat-icon>folder_open</mat-icon>
+        </button>
+        <button mat-icon-button matTooltip="Settings" (click)="showSettings()">
           <mat-icon>settings</mat-icon>
         </button>
-        
-        <mat-menu #settingsMenu="matMenu">
-          <button mat-menu-item [matMenuTriggerFor]="themeMenu">
-            <mat-icon>palette</mat-icon>
-            <span>Theme</span>
-          </button>
-          <button mat-menu-item (click)="openSettingsDialog()">
-            <mat-icon>lan</mat-icon>
-            <span>Remote Access</span>
-          </button>
-          <button mat-menu-item (click)="openDirectory()">
-            <mat-icon>folder_open</mat-icon>
-            <span>Open Directory</span>
-          </button>
-          <mat-divider></mat-divider>
-          <button mat-menu-item (click)="openAboutDialog()">
-            <mat-icon>info</mat-icon>
-            <span>About Castle</span>
-          </button>
-        </mat-menu>
-        
-        <mat-menu #themeMenu="matMenu">
-          @for (theme of availableThemes; track theme.id) {
-            <button mat-menu-item (click)="setTheme(theme.id)">
-              <mat-icon>{{ currentTheme().id === theme.id ? 'check' : '' }}</mat-icon>
-              <span>{{ theme.name }}</span>
-            </button>
-          }
-        </mat-menu>
 
         <!-- Window controls (for frameless window) -->
         <div class="window-controls">
@@ -93,6 +70,8 @@
     <!-- Content area -->
     <div class="content-wrapper">
       @if (activeView === 'chat' && selectedAgent()) {
+        <!-- Mobile conversation backdrop -->
+        <div class="conversation-backdrop" [class.visible]="conversationPanelOpen" (click)="toggleConversationPanel()"></div>
         <!-- Conversation panel -->
         <aside class="conversation-panel" [class.collapsed]="!conversationPanelOpen">
           <app-conversation-list (conversationSelected)="onConversationSelected($event)" />
@@ -100,7 +79,9 @@
       }
 
       <div class="chat-container">
-        @if (activeView === 'tasks') {
+        @if (activeView === 'settings') {
+          <app-settings-page />
+        } @else if (activeView === 'tasks') {
           <app-task-list (goToAgent)="goToAgent($event)" />
         } @else if (selectedAgent()) {
           <app-chat [agent]="selectedAgent()!" />

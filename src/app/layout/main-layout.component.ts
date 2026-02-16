@@ -8,9 +8,7 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDividerModule } from '@angular/material/divider';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { Subscription } from 'rxjs';
 
@@ -18,14 +16,12 @@ import { SidebarComponent } from '../features/sidebar/sidebar.component';
 import { ChatComponent } from '../features/chat/chat.component';
 import { ConversationListComponent } from '../features/chat/conversation-list/conversation-list.component';
 import { TaskListComponent } from '../features/tasks/task-list/task-list.component';
+import { SettingsPageComponent } from '../features/settings/settings-page.component';
 import { StatusBarComponent } from '../shared/components/status-bar/status-bar.component';
-import { AboutDialogComponent } from '../shared/components/about-dialog/about-dialog.component';
-import { SettingsDialogComponent } from '../shared/components/settings-dialog/settings-dialog.component';
 import { PermissionDialogComponent } from '../shared/components/permission-dialog/permission-dialog.component';
 
 import { ElectronService } from '../core/services/electron.service';
 import { AgentService } from '../core/services/agent.service';
-import { ThemeService } from '../core/services/theme.service';
 import { TaskService } from '../core/services/task.service';
 import { ConversationService } from '../core/services/conversation.service';
 import { ChatService } from '../core/services/chat.service';
@@ -39,16 +35,14 @@ import { ChatService } from '../core/services/chat.service';
     MatToolbarModule,
     MatIconModule,
     MatButtonModule,
-    MatMenuModule,
     MatTooltipModule,
-    MatDividerModule,
     MatDialogModule,
     SidebarComponent,
     ChatComponent,
     ConversationListComponent,
     TaskListComponent,
+    SettingsPageComponent,
     StatusBarComponent,
-    AboutDialogComponent
   ],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.scss'
@@ -56,7 +50,6 @@ import { ChatService } from '../core/services/chat.service';
 export class MainLayoutComponent implements OnInit, OnDestroy {
   private electronService = inject(ElectronService);
   private agentService = inject(AgentService);
-  private themeService = inject(ThemeService);
   private taskService = inject(TaskService);
   private conversationService = inject(ConversationService);
   private chatService = inject(ChatService);
@@ -69,15 +62,13 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   // Expose signals to template
   selectedAgent = this.agentService.selectedAgent;
-  currentTheme = this.themeService.currentTheme;
-  availableThemes = this.themeService.availableThemes;
   activeConversation = this.conversationService.activeConversation;
   
   currentDirectory: string | null = null;
-  activeView: 'chat' | 'tasks' = 'chat';
+  activeView: 'chat' | 'tasks' | 'settings' = 'chat';
   recentDirectories: string[] = [];
   sidebarOpen = false;
-  conversationPanelOpen = true;
+  conversationPanelOpen = window.innerWidth > 768;
 
   async ngOnInit(): Promise<void> {
     // Listen for permission requests from Copilot
@@ -166,22 +157,9 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     return parts[parts.length - 1] || dirPath;
   }
 
-  setTheme(themeId: string): void {
-    this.themeService.setTheme(themeId);
-  }
-
-  openAboutDialog(): void {
-    this.dialog.open(AboutDialogComponent, {
-      width: '400px',
-      panelClass: 'about-dialog'
-    });
-  }
-
-  openSettingsDialog(): void {
-    this.dialog.open(SettingsDialogComponent, {
-      width: '480px',
-      panelClass: 'settings-dialog'
-    });
+  showSettings(): void {
+    this.activeView = 'settings';
+    this.closeSidebar();
   }
 
   addAgent(): void {
@@ -219,6 +197,10 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     const agentId = this.agentService.selectedAgentId();
     if (agentId) {
       await this.chatService.loadHistory(agentId);
+    }
+    // Close conversation panel on mobile after selection
+    if (window.innerWidth <= 768) {
+      this.conversationPanelOpen = false;
     }
   }
 
