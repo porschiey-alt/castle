@@ -172,6 +172,12 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'feature'`);
     } catch { /* column already exists */ }
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_kind ON tasks(kind)`);
+
+    // Migration: add project_path column if missing
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN project_path TEXT`);
+    } catch { /* column already exists */ }
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_project_path ON tasks(project_path)`);
   }
 
   /**
@@ -492,15 +498,15 @@ export class DatabaseService {
 
   // ============ Task Methods ============
 
-  async createTask(input: CreateTaskInput): Promise<Task> {
+  async createTask(input: CreateTaskInput, projectPath?: string): Promise<Task> {
     if (!this.db) throw new Error('Database not initialized');
 
     const id = uuidv4();
     const now = new Date().toISOString();
     this.db.run(
-      `INSERT INTO tasks (id, title, description, state, kind, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.title, input.description || '', input.state || 'new', input.kind || 'feature', now, now]
+      `INSERT INTO tasks (id, title, description, state, kind, project_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.title, input.description || '', input.state || 'new', input.kind || 'feature', projectPath || null, now, now]
     );
 
     if (input.labelIds?.length) {
@@ -560,7 +566,7 @@ export class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT id, title, description, state, kind, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
+      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
        FROM tasks WHERE id = ?`
     );
     stmt.bind([taskId]);
@@ -569,6 +575,7 @@ export class DatabaseService {
 
     const row = stmt.getAsObject() as {
       id: string; title: string; description: string; state: string; kind: string;
+      project_path: string | null;
       research_content: string | null; research_agent_id: string | null;
       github_issue_number: number | null; github_repo: string | null;
       created_at: string; updated_at: string;
@@ -584,6 +591,7 @@ export class DatabaseService {
       state: row.state as TaskState,
       kind: (row.kind || 'feature') as TaskKind,
       labels,
+      projectPath: row.project_path ?? undefined,
       researchContent: row.research_content ?? undefined,
       researchAgentId: row.research_agent_id ?? undefined,
       githubIssueNumber: row.github_issue_number ?? undefined,
@@ -593,10 +601,10 @@ export class DatabaseService {
     };
   }
 
-  async getTasks(stateFilter?: string, kindFilter?: string): Promise<Task[]> {
+  async getTasks(stateFilter?: string, kindFilter?: string, projectPath?: string): Promise<Task[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    let sql = `SELECT id, title, description, state, kind, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
+    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
                FROM tasks`;
     const params: unknown[] = [];
     const conditions: string[] = [];
@@ -608,6 +616,10 @@ export class DatabaseService {
     if (kindFilter) {
       conditions.push(`kind = ?`);
       params.push(kindFilter);
+    }
+    if (projectPath) {
+      conditions.push(`project_path = ?`);
+      params.push(projectPath);
     }
     if (conditions.length > 0) {
       sql += ` WHERE ${conditions.join(' AND ')}`;
@@ -621,6 +633,7 @@ export class DatabaseService {
     while (stmt.step()) {
       const row = stmt.getAsObject() as {
         id: string; title: string; description: string; state: string; kind: string;
+        project_path: string | null;
         research_content: string | null; research_agent_id: string | null;
         github_issue_number: number | null; github_repo: string | null;
         created_at: string; updated_at: string;
@@ -633,6 +646,7 @@ export class DatabaseService {
         state: row.state as TaskState,
         kind: (row.kind || 'feature') as TaskKind,
         labels: this.getLabelsForTask(row.id),
+        projectPath: row.project_path ?? undefined,
         researchContent: row.research_content ?? undefined,
         researchAgentId: row.research_agent_id ?? undefined,
         githubIssueNumber: row.github_issue_number ?? undefined,

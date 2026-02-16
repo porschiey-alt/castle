@@ -109,6 +109,10 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       if (this.statusBar) {
         this.statusBar.updateDirectory(directory);
       }
+      // Reload tasks scoped to the new project
+      if (this.activeView === 'tasks') {
+        this.taskService.loadTasks();
+      }
     }
   }
 

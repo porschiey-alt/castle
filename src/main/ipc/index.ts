@@ -219,7 +219,8 @@ export function registerIpcHandlers(services: IpcServices): void {
   // ============ Task Handlers ============
 
   ipcMain.handle(IPC_CHANNELS.TASKS_GET_ALL, async (_event, { state, kind } = {}) => {
-    return databaseService.getTasks(state, kind);
+    const projectPath = directoryService.getCurrentDirectory();
+    return databaseService.getTasks(state, kind, projectPath || undefined);
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_GET, async (_event, { taskId }) => {
@@ -227,7 +228,8 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_CREATE, async (_event, input) => {
-    return databaseService.createTask(input);
+    const projectPath = directoryService.getCurrentDirectory();
+    return databaseService.createTask(input, projectPath || undefined);
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_UPDATE, async (_event, { taskId, updates }) => {

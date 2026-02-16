@@ -34,6 +34,7 @@ export interface Task {
   state: TaskState;
   kind: TaskKind;
   labels: TaskLabel[];
+  projectPath?: string;
   researchContent?: string;
   researchAgentId?: string;
   githubIssueNumber?: number;
