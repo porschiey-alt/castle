@@ -5,12 +5,13 @@
   </div>
 
   <div class="settings-sections">
-    <!-- Theme Section -->
+    <!-- Theme Preset Section -->
     <section class="settings-section">
       <h3>
         <mat-icon>palette</mat-icon>
-        Theme
+        Theme Preset
       </h3>
+      <p class="section-description">Choose a base theme, then customize colors below.</p>
       <div class="theme-grid">
         @for (theme of availableThemes; track theme.id) {
           <button class="theme-card" [class.active]="currentTheme().id === theme.id" (click)="setTheme(theme.id)">
@@ -24,6 +25,144 @@
           </button>
         }
       </div>
+    </section>
+
+    <mat-divider />
+
+    <!-- Custom Colors Section -->
+    <section class="settings-section">
+      <h3>
+        <mat-icon>tune</mat-icon>
+        Customize Colors
+      </h3>
+      <p class="section-description">
+        Adjust background and accent colors. Text color is automatically calculated for readability.
+      </p>
+
+      <div class="color-controls">
+        <!-- Background Color -->
+        <div class="color-row">
+          <label class="color-label">
+            <mat-icon>format_color_fill</mat-icon>
+            Background
+          </label>
+          <div class="color-input-group">
+            <input
+              type="color"
+              class="color-picker"
+              [(ngModel)]="customBgPrimary"
+              (ngModelChange)="onCustomizationChange()"
+            />
+            <input
+              type="text"
+              class="color-hex"
+              [(ngModel)]="customBgPrimary"
+              (ngModelChange)="onCustomizationChange()"
+              maxlength="7"
+              placeholder="#0a0a0a"
+            />
+          </div>
+        </div>
+
+        <!-- Accent Color -->
+        <div class="color-row">
+          <label class="color-label">
+            <mat-icon>colorize</mat-icon>
+            Accent
+          </label>
+          <div class="color-input-group">
+            <input
+              type="color"
+              class="color-picker"
+              [(ngModel)]="customAccentColor"
+              (ngModelChange)="onCustomizationChange()"
+            />
+            <input
+              type="text"
+              class="color-hex"
+              [(ngModel)]="customAccentColor"
+              (ngModelChange)="onCustomizationChange()"
+              maxlength="7"
+              placeholder="#6366f1"
+            />
+          </div>
+        </div>
+
+        <!-- Gradient Toggle -->
+        <div class="color-row">
+          <label class="color-label">
+            <mat-icon>gradient</mat-icon>
+            Background Gradient
+          </label>
+          <mat-slide-toggle
+            [(ngModel)]="gradientEnabled"
+            (change)="onCustomizationChange()">
+          </mat-slide-toggle>
+        </div>
+
+        <!-- Gradient Options (shown when enabled) -->
+        @if (gradientEnabled) {
+          <div class="gradient-options">
+            <div class="color-row">
+              <label class="color-label">
+                <mat-icon>color_lens</mat-icon>
+                Gradient End Color
+              </label>
+              <div class="color-input-group">
+                <input
+                  type="color"
+                  class="color-picker"
+                  [(ngModel)]="gradientEndColor"
+                  (ngModelChange)="onCustomizationChange()"
+                />
+                <input
+                  type="text"
+                  class="color-hex"
+                  [(ngModel)]="gradientEndColor"
+                  (ngModelChange)="onCustomizationChange()"
+                  maxlength="7"
+                  placeholder="#1a1a2e"
+                />
+              </div>
+            </div>
+
+            <div class="color-row">
+              <label class="color-label">
+                <mat-icon>north_east</mat-icon>
+                Direction
+              </label>
+              <mat-form-field appearance="outline" class="direction-field">
+                <mat-select [(ngModel)]="gradientDirection" (ngModelChange)="onCustomizationChange()">
+                  @for (dir of gradientDirections; track dir.value) {
+                    <mat-option [value]="dir.value">{{ dir.label }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- Preview -->
+      <div class="theme-preview-card">
+        <span class="preview-label">Preview</span>
+        <div class="preview-box" [style.background]="getGradientPreview()">
+          <span class="preview-text" [style.color]="getAutoTextColor()">Sample Text</span>
+          <span class="preview-accent" [style.background]="customAccentColor">Accent</span>
+        </div>
+        <div class="contrast-info">
+          <mat-icon>visibility</mat-icon>
+          <span>Text contrast ratio: <strong>{{ getContrastRatio() }}:1</strong></span>
+          <span class="contrast-badge" [class.good]="getContrastRatio() >= '4.5'" [class.poor]="getContrastRatio() < '4.5'">
+            {{ getContrastRatio() >= '4.5' ? 'AA Pass' : 'Low' }}
+          </span>
+        </div>
+      </div>
+
+      <button mat-stroked-button class="reset-btn" (click)="resetCustomization()">
+        <mat-icon>restart_alt</mat-icon>
+        Reset to Preset Defaults
+      </button>
     </section>
 
     <mat-divider />

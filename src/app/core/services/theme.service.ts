@@ -4,6 +4,15 @@
 
 import { Injectable, signal, effect } from '@angular/core';
 import { ElectronService } from './electron.service';
+import type { ThemeCustomization } from '../../../shared/types/settings.types';
+import {
+  getContrastingTextColor,
+  getSecondaryTextColor,
+  getMutedTextColor,
+  getBorderColor,
+  deriveBackgroundColors,
+  relativeLuminance,
+} from '../../shared/utils/color.utils';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -96,10 +105,13 @@ export class ThemeService {
   // Current theme signal
   currentTheme = signal<CastleTheme>(this.availableThemes[0]);
 
+  // Custom overrides signal
+  customization = signal<ThemeCustomization>({});
+
   constructor(private electronService: ElectronService) {
     // Apply theme changes to DOM
     effect(() => {
-      this.applyTheme(this.currentTheme());
+      this.applyTheme(this.currentTheme(), this.customization());
     });
 
     // Load saved theme
@@ -117,6 +129,9 @@ export class ThemeService {
         this.currentTheme.set(theme);
       }
     }
+    if (settings?.themeCustomization) {
+      this.customization.set(settings.themeCustomization);
+    }
   }
 
   /**
@@ -126,14 +141,24 @@ export class ThemeService {
     const theme = this.availableThemes.find(t => t.id === themeId);
     if (theme) {
       this.currentTheme.set(theme);
-      await this.electronService.updateSettings({ theme: themeId });
+      // Reset customization when switching preset
+      this.customization.set({});
+      await this.electronService.updateSettings({ theme: themeId, themeCustomization: {} });
     }
+  }
+
+  /**
+   * Apply custom theme overrides
+   */
+  async applyCustomization(overrides: ThemeCustomization): Promise<void> {
+    this.customization.set(overrides);
+    await this.electronService.updateSettings({ themeCustomization: overrides });
   }
 
   /**
    * Apply theme to the DOM
    */
-  private applyTheme(theme: CastleTheme): void {
+  private applyTheme(theme: CastleTheme, custom: ThemeCustomization): void {
     const body = document.body;
     
     // Remove existing theme classes
@@ -146,36 +171,43 @@ export class ThemeService {
     
     // Set CSS custom properties
     const root = document.documentElement;
-    root.style.setProperty('--theme-primary', theme.primary);
+    const accent = custom.accentColor || theme.primary;
+    root.style.setProperty('--theme-primary', accent);
     root.style.setProperty('--theme-accent', theme.accent);
     root.style.setProperty('--theme-warn', theme.warn);
-    
-    // Set mode-specific properties
-    if (theme.mode === 'dark') {
-      // Use theme-specific colors if available, otherwise defaults
-      root.style.setProperty('--bg-primary', theme.bgPrimary || '#0a0a0a');
-      root.style.setProperty('--bg-secondary', theme.bgSecondary || '#111111');
-      root.style.setProperty('--bg-tertiary', theme.bgTertiary || '#1a1a1a');
-      root.style.setProperty('--bg-hover', theme.bgHover || '#222222');
-      root.style.setProperty('--text-primary', theme.textPrimary || '#e5e5e5');
-      root.style.setProperty('--text-secondary', theme.textSecondary || '#a3a3a3');
-      root.style.setProperty('--text-muted', theme.textMuted || '#737373');
-      root.style.setProperty('--border-color', theme.borderColor || '#262626');
-      root.style.setProperty('--user-bubble', theme.primary);
-      root.style.setProperty('--agent-bubble', theme.bgTertiary || '#1a1a1a');
-      root.style.setProperty('--code-bg', '#0d0d0d');
+
+    // Determine effective background
+    const bgPrimary = custom.bgPrimary || (theme.mode === 'dark' ? (theme.bgPrimary || '#0a0a0a') : '#ffffff');
+
+    // Auto-derive text and UI colors from the effective background
+    const textPrimary = getContrastingTextColor(bgPrimary);
+    const textSecondary = getSecondaryTextColor(bgPrimary);
+    const textMuted = getMutedTextColor(bgPrimary);
+    const borderColor = getBorderColor(bgPrimary);
+    const derived = deriveBackgroundColors(bgPrimary);
+
+    const bgSecondary = custom.bgSecondary || (theme.mode === 'dark' ? (theme.bgSecondary || derived.bgSecondary) : derived.bgSecondary);
+
+    root.style.setProperty('--bg-primary', bgPrimary);
+    root.style.setProperty('--bg-secondary', bgSecondary);
+    root.style.setProperty('--bg-tertiary', derived.bgTertiary);
+    root.style.setProperty('--bg-hover', derived.bgHover);
+    root.style.setProperty('--text-primary', textPrimary);
+    root.style.setProperty('--text-secondary', textSecondary);
+    root.style.setProperty('--text-muted', textMuted);
+    root.style.setProperty('--border-color', borderColor);
+    root.style.setProperty('--user-bubble', accent);
+    root.style.setProperty('--agent-bubble', derived.bgTertiary);
+    root.style.setProperty('--code-bg', relativeLuminance(bgPrimary) > 0.179 ? '#f7fafc' : '#0d0d0d');
+
+    // Gradient support
+    if (custom.gradientEnabled && custom.gradientEndColor) {
+      const dir = custom.gradientDirection || 'to bottom';
+      root.style.setProperty('--bg-gradient', `linear-gradient(${dir}, ${bgPrimary}, ${custom.gradientEndColor})`);
+      body.style.setProperty('background', `var(--bg-gradient)`);
     } else {
-      root.style.setProperty('--bg-primary', '#ffffff');
-      root.style.setProperty('--bg-secondary', '#f7fafc');
-      root.style.setProperty('--bg-tertiary', '#edf2f7');
-      root.style.setProperty('--bg-hover', '#e2e8f0');
-      root.style.setProperty('--text-primary', '#1a202c');
-      root.style.setProperty('--text-secondary', '#4a5568');
-      root.style.setProperty('--text-muted', '#718096');
-      root.style.setProperty('--border-color', '#e2e8f0');
-      root.style.setProperty('--user-bubble', theme.primary);
-      root.style.setProperty('--agent-bubble', '#edf2f7');
-      root.style.setProperty('--code-bg', '#f7fafc');
+      root.style.removeProperty('--bg-gradient');
+      body.style.removeProperty('background');
     }
   }
 

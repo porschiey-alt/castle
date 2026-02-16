@@ -55,6 +55,7 @@ html, body {
 
 body {
   background-color: var(--bg-primary);
+  background: var(--bg-gradient, var(--bg-primary));
   color: var(--text-primary);
 }
 

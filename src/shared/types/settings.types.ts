@@ -2,8 +2,18 @@
  * Settings and permission type definitions
  */
 
+export interface ThemeCustomization {
+  bgPrimary?: string;
+  bgSecondary?: string;
+  accentColor?: string;
+  gradientEnabled?: boolean;
+  gradientEndColor?: string;
+  gradientDirection?: string;
+}
+
 export interface AppSettings {
   theme: string;
+  themeCustomization?: ThemeCustomization;
   defaultModel: string;
   autoStartAgents: boolean;
   showToolCalls: boolean;
