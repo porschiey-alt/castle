@@ -111,14 +111,34 @@ export class TaskDetailComponent implements OnInit {
     );
   }
 
+  get debugAgents(): Agent[] {
+    return this.agents().filter(a =>
+      a.name.toLowerCase().includes('debug') ||
+      a.description?.toLowerCase().includes('debug') ||
+      a.description?.toLowerCase().includes('diagnos')
+    );
+  }
+
   get codingAgents(): Agent[] {
     return this.agents().filter(a =>
       !a.name.toLowerCase().includes('research') &&
-      !a.description?.toLowerCase().includes('research')
+      !a.description?.toLowerCase().includes('research') &&
+      !a.name.toLowerCase().includes('debug') &&
+      !a.description?.toLowerCase().includes('debug') &&
+      !a.description?.toLowerCase().includes('diagnos')
     );
   }
 
   get defaultResearchAgentId(): string {
+    const t = this.task();
+
+    // For bugs, prefer the debug agent
+    if (t?.kind === 'bug') {
+      const debug = this.debugAgents;
+      if (debug.length > 0) return debug[0].id;
+    }
+
+    // For non-bugs, prefer research agents (existing behavior)
     const research = this.researchAgents;
     if (research.length > 0) return research[0].id;
     const all = this.agents();

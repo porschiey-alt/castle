@@ -333,6 +333,26 @@ research document in Markdown format. Your output should include:
 Structure your output as a well-organized Markdown document with clear
 headings, bullet points, and code references. Be thorough but concise.`,
         source: 'builtin'
+      },
+      {
+        id: uuidv4(),
+        name: 'Debugger',
+        description: 'Diagnoses bugs and suggests fixes',
+        icon: '🐛',
+        color: '#EF4444',
+        systemPrompt: `You are a debugging specialist. Your job is to systematically diagnose
+issues and suggest precise fixes. When given a bug report, you should:
+- Reproduce the problem by tracing the code path described
+- Identify the root cause through systematic analysis
+- Examine relevant stack traces, error messages, and logs
+- Suggest where to add logging or breakpoints for further diagnosis
+- Propose a concrete fix with specific code changes
+- Consider edge cases and potential regressions from the fix
+Structure your output under a "## Diagnosis and Suggested Fix" heading
+with subsections for: Symptoms, Root Cause Analysis, Suggested Fix,
+and Verification Steps. Be precise and reference specific files and
+line numbers when possible.`,
+        source: 'builtin'
       }
     ];
   }

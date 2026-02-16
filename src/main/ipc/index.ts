@@ -293,26 +293,60 @@ export function registerIpcHandlers(services: IpcServices): void {
       if (!sessionProcess) throw new Error('Failed to start research agent session');
     }
 
-    // Build the research prompt
-    const researchPrompt = `Research the following task and produce a detailed analysis document in Markdown format.\n\nTask: ${task.title}\n\nDescription:\n${task.description || '(no description provided)'}\n\nPlease provide a thorough research document covering technical analysis, proposed approach, considerations, and implementation guidance. Output ONLY the markdown document content.`;
+    // Build the research prompt based on task kind
+    let researchPrompt: string;
+
+    if (task.kind === 'bug') {
+      researchPrompt = [
+        `Diagnose the following bug and suggest a fix.`,
+        ``,
+        `Bug: ${task.title}`,
+        ``,
+        `Description:`,
+        task.description || '(no description provided)',
+        ``,
+        `Systematically analyze this bug. Identify the root cause and propose a concrete fix.`,
+        `Structure your output under a "## Diagnosis and Suggested Fix" heading with subsections`,
+        `for: Symptoms, Root Cause Analysis, Suggested Fix, and Verification Steps.`,
+        `Output ONLY the markdown content starting with the ## heading.`,
+      ].join('\n');
+    } else {
+      researchPrompt = `Research the following task and produce a detailed analysis document in Markdown format.\n\nTask: ${task.title}\n\nDescription:\n${task.description || '(no description provided)'}\n\nPlease provide a thorough research document covering technical analysis, proposed approach, considerations, and implementation guidance. Output ONLY the markdown document content.`;
+    }
 
     // Save agentId to task immediately
     await databaseService.updateTask(taskId, { researchAgentId: agentId });
 
     // Listen for completion to save research content
     const onComplete = async (message: { content: string }) => {
-      // Save to task in database
-      await databaseService.updateTask(taskId, { researchContent: message.content });
+      if (task.kind === 'bug') {
+        // For bugs, append/replace diagnosis in the task description
+        const marker = '## Diagnosis and Suggested Fix';
+        const existingIdx = (task.description || '').indexOf(marker);
+        const baseDescription = existingIdx >= 0
+          ? task.description!.substring(0, existingIdx).trimEnd()
+          : (task.description || '');
+        const separator = baseDescription ? '\n\n' : '';
+        const updatedDescription = baseDescription + separator + message.content;
 
-      // Also save to file
-      const researchDir = outputPath || path.join(workingDirectory, 'research');
-      if (!fs.existsSync(researchDir)) {
-        fs.mkdirSync(researchDir, { recursive: true });
+        await databaseService.updateTask(taskId, {
+          description: updatedDescription,
+          researchContent: message.content,
+        });
+      } else {
+        // Save to task in database
+        await databaseService.updateTask(taskId, { researchContent: message.content });
+
+        // Also save to file
+        const researchDir = outputPath || path.join(workingDirectory, 'research');
+        if (!fs.existsSync(researchDir)) {
+          fs.mkdirSync(researchDir, { recursive: true });
+        }
+        const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
+        const filePath = path.join(researchDir, `${safeTitle}.md`);
+        fs.writeFileSync(filePath, message.content, 'utf-8');
+        console.log(`[Research] Saved research to ${filePath}`);
       }
-      const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
-      const filePath = path.join(researchDir, `${safeTitle}.md`);
-      fs.writeFileSync(filePath, message.content, 'utf-8');
-      console.log(`[Research] Saved research to ${filePath}`);
 
       // Notify renderer that research is complete
       mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {

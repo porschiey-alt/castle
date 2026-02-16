@@ -129,11 +129,11 @@
         </div>
       </mat-tab>
 
-      <!-- Research tab -->
+      <!-- Research / Diagnosis tab -->
       <mat-tab>
         <ng-template mat-tab-label>
-          <mat-icon>science</mat-icon>
-          <span class="tab-label-text">Research</span>
+          <mat-icon>{{ task()!.kind === 'bug' ? 'bug_report' : 'science' }}</mat-icon>
+          <span class="tab-label-text">{{ task()!.kind === 'bug' ? 'Diagnosis' : 'Research' }}</span>
           @if (researchRunning()) {
             <mat-icon class="tab-spinner">sync</mat-icon>
           }
@@ -144,24 +144,33 @@
           } @else if (researchRunning()) {
             <div class="research-running">
               <mat-icon class="research-spinner">sync</mat-icon>
-              <h3>Research in progress...</h3>
+              <h3>{{ task()!.kind === 'bug' ? 'Diagnosis in progress...' : 'Research in progress...' }}</h3>
               <p>The agent is analyzing this task. Results will appear here when complete.</p>
               <button mat-stroked-button color="primary" (click)="goToResearcher.emit(task()!.researchAgentId!)">
                 <mat-icon>open_in_new</mat-icon>
-                Take me to the Researcher
+                {{ task()!.kind === 'bug' ? 'Take me to the Debugger' : 'Take me to the Researcher' }}
               </button>
             </div>
           } @else {
-            <!-- Start research UI -->
+            <!-- Start research/diagnosis UI -->
             <div class="research-empty">
-              <mat-icon class="research-icon">science</mat-icon>
-              <h3>No research yet</h3>
-              <p>Assign an agent to research this task. The output will be saved as a markdown document.</p>
+              <mat-icon class="research-icon">{{ task()!.kind === 'bug' ? 'bug_report' : 'science' }}</mat-icon>
+              <h3>{{ task()!.kind === 'bug' ? 'No diagnosis yet' : 'No research yet' }}</h3>
+              <p>{{ task()!.kind === 'bug' ? 'Assign an agent to diagnose this bug. The diagnosis will be appended to the task description.' : 'Assign an agent to research this task. The output will be saved as a markdown document.' }}</p>
 
               <div class="research-start-form">
                 <mat-form-field appearance="outline" class="agent-picker">
                   <mat-label>Agent</mat-label>
                   <mat-select [(ngModel)]="selectedResearchAgentId">
+                    @if (task()!.kind === 'bug' && debugAgents.length > 0) {
+                      <mat-optgroup label="Debug Agents">
+                        @for (a of debugAgents; track a.id) {
+                          <mat-option [value]="a.id">
+                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                          </mat-option>
+                        }
+                      </mat-optgroup>
+                    }
                     @if (researchAgents.length > 0) {
                       <mat-optgroup label="Research Agents">
                         @for (a of researchAgents; track a.id) {
@@ -187,7 +196,7 @@
                         [disabled]="!selectedResearchAgentId"
                         (click)="startResearch()">
                   <mat-icon>play_arrow</mat-icon>
-                  Start Research
+                  {{ task()!.kind === 'bug' ? 'Start Diagnosis' : 'Start Research' }}
                 </button>
               </div>
             </div>
