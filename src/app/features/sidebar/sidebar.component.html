@@ -1,7 +1,10 @@
 <div class="sidebar-container">
-  <!-- Logo/Home button -->
+  <!-- Logo/Home button — opens tasks view -->
   <div class="sidebar-header">
-    <button mat-fab class="home-button" matTooltip="Castle" matTooltipPosition="right">
+    <button mat-fab class="home-button" matTooltip="Tasks" matTooltipPosition="right"
+            [matBadge]="unfinishedTaskCount() > 0 ? unfinishedTaskCount() : null"
+            matBadgeColor="warn" matBadgeSize="small" matBadgePosition="above after"
+            (click)="onTasksClicked()">
       <span class="castle-logo">🏰</span>
     </button>
   </div>

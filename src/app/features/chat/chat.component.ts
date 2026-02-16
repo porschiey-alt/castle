@@ -9,6 +9,7 @@ import { MessageListComponent } from './message-list/message-list.component';
 import { ChatInputComponent } from './chat-input/chat-input.component';
 
 import { ChatService } from '../../core/services/chat.service';
+import { AgentService } from '../../core/services/agent.service';
 import type { AgentWithSession } from '../../../shared/types/agent.types';
 
 @Component({
@@ -24,6 +25,7 @@ import type { AgentWithSession } from '../../../shared/types/agent.types';
 })
 export class ChatComponent implements OnInit, OnChanges {
   private chatService = inject(ChatService);
+  private agentService = inject(AgentService);
 
   // Input
   agent = input.required<AgentWithSession>();
@@ -32,6 +34,10 @@ export class ChatComponent implements OnInit, OnChanges {
   messages = this.chatService.messages;
   streamingMessage = this.chatService.streamingMessage;
   isLoading = this.chatService.isLoading;
+
+  isInitializing(): boolean {
+    return this.agentService.isSessionInitializing(this.agent().id);
+  }
 
   ngOnInit(): void {
     this.loadHistory();

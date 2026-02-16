@@ -2,12 +2,19 @@
  * Message Bubble Component - Individual chat message
  */
 
-import { Component, input } from '@angular/core';
+import { Component, input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
+import { marked } from 'marked';
 
 import { CodeBlockComponent } from '../code-block/code-block.component';
-import type { ChatMessage } from '../../../../shared/types/message.types';
+import type { ChatMessage, ToolCall } from '../../../../shared/types/message.types';
+
+// Configure marked for chat rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
 
 @Component({
   selector: 'app-message-bubble',
@@ -24,9 +31,14 @@ export class MessageBubbleComponent {
   // Inputs
   message = input<ChatMessage | undefined>(undefined);
   streamingContent = input<string>('');
+  streamingThinking = input<string>('');
+  streamingToolCalls = input<ToolCall[] | undefined>(undefined);
   isStreaming = input<boolean>(false);
   agentName = input<string>('Agent');
   agentIcon = input<string | undefined>(undefined);
+
+  /** Max visible tool calls when streaming; older ones are collapsed */
+  private readonly MAX_VISIBLE_TOOLS = 5;
 
   get isUser(): boolean {
     return this.message()?.role === 'user';
@@ -39,8 +51,38 @@ export class MessageBubbleComponent {
     return this.message()?.content || '';
   }
 
+  get thinking(): string {
+    if (this.isStreaming()) {
+      return this.streamingThinking();
+    }
+    return '';
+  }
+
   get timestamp(): Date | undefined {
     return this.message()?.timestamp;
+  }
+
+  get activeToolCalls(): ToolCall[] {
+    const calls = this.isStreaming()
+      ? (this.streamingToolCalls() || [])
+      : (this.message()?.metadata?.toolCalls || []);
+    return calls;
+  }
+
+  get visibleToolCalls(): ToolCall[] {
+    const all = this.activeToolCalls;
+    if (all.length <= this.MAX_VISIBLE_TOOLS) return all;
+    return all.slice(all.length - this.MAX_VISIBLE_TOOLS);
+  }
+
+  get hiddenToolCallCount(): number {
+    const all = this.activeToolCalls;
+    return Math.max(0, all.length - this.MAX_VISIBLE_TOOLS);
+  }
+
+  /** True when the agent is working but has no text content yet */
+  get isProcessing(): boolean {
+    return this.isStreaming() && !this.content && (this.activeToolCalls.length > 0 || !!this.thinking);
   }
 
   // Parse content for code blocks
@@ -86,5 +128,10 @@ export class MessageBubbleComponent {
     }
 
     return parts;
+  }
+
+  /** Render a markdown text fragment to HTML */
+  renderMarkdown(text: string): string {
+    return marked.parse(text, { async: false }) as string;
   }
 }

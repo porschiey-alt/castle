@@ -1,7 +1,7 @@
 <div class="app-container">
   <!-- Sidebar with agent circles -->
   <aside class="agent-sidebar">
-    <app-sidebar (addAgentClicked)="addAgent()" />
+    <app-sidebar (addAgentClicked)="addAgent()" (tasksClicked)="showTasks()" (agentSelected)="showChat()" />
   </aside>
 
   <!-- Main content area -->
@@ -9,16 +9,21 @@
     <!-- Toolbar -->
     <mat-toolbar class="app-toolbar">
       <div class="toolbar-left">
-        @if (selectedAgent(); as agent) {
-          <span class="agent-icon">{{ agent.icon || '🤖' }}</span>
-          <span class="agent-name">{{ agent.name }}</span>
-          @if (agent.session) {
-            <span class="session-status" [class]="'status-' + agent.session.status">
-              {{ agent.session.status }}
-            </span>
-          }
+        @if (activeView === 'tasks') {
+          <mat-icon>assignment</mat-icon>
+          <span class="agent-name">Tasks</span>
         } @else {
-          <span class="no-agent">Select an agent to start</span>
+          @if (selectedAgent(); as agent) {
+            <span class="agent-icon">{{ agent.icon || '🤖' }}</span>
+            <span class="agent-name">{{ agent.name }}</span>
+            @if (agent.session) {
+              <span class="session-status" [class]="'status-' + agent.session.status">
+                {{ agent.session.status }}
+              </span>
+            }
+          } @else {
+            <span class="no-agent">Select an agent to start</span>
+          }
         }
       </div>
       
@@ -67,9 +72,11 @@
       </div>
     </mat-toolbar>
 
-    <!-- Chat area -->
+    <!-- Content area -->
     <div class="chat-container">
-      @if (selectedAgent()) {
+      @if (activeView === 'tasks') {
+        <app-task-list (goToAgent)="goToAgent($event)" />
+      } @else if (selectedAgent()) {
         <app-chat [agent]="selectedAgent()!" />
       } @else {
         <div class="no-agent-selected">

@@ -314,6 +314,25 @@ export class AgentDiscoveryService {
 - Applying design patterns
 - Eliminating code duplication`,
         source: 'builtin'
+      },
+      {
+        id: uuidv4(),
+        name: 'Researcher',
+        description: 'Researches tasks and produces detailed analysis documents',
+        icon: '🔬',
+        color: '#06B6D4',
+        systemPrompt: `You are a research specialist. When given a task, you produce a thorough
+research document in Markdown format. Your output should include:
+- An executive summary of the task
+- Technical analysis and feasibility
+- Proposed approach with step-by-step breakdown
+- Key considerations, risks, and edge cases
+- Relevant code references and file locations in the codebase
+- Estimated complexity and dependencies
+- Recommended implementation order
+Structure your output as a well-organized Markdown document with clear
+headings, bullet points, and code references. Be thorough but concise.`,
+        source: 'builtin'
       }
     ];
   }

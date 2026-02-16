@@ -16,11 +16,21 @@ export class AgentService {
   private selectedAgentIdSignal = signal<string | null>(null);
   private unreadCountsSignal = signal<Map<string, number>>(new Map());
   private loadingSignal = signal<boolean>(false);
+  private sessionInitializingSignal = signal<Set<string>>(new Set());
+  private workspacePath: string | null = null;
 
   // Computed values
   readonly agents = this.agentsSignal.asReadonly();
   readonly selectedAgentId = this.selectedAgentIdSignal.asReadonly();
   readonly loading = this.loadingSignal.asReadonly();
+  readonly sessionInitializing = this.sessionInitializingSignal.asReadonly();
+
+  /**
+   * Check if a specific agent's session is currently initializing
+   */
+  isSessionInitializing(agentId: string): boolean {
+    return this.sessionInitializingSignal().has(agentId);
+  }
 
   readonly agentsWithSessions = computed<AgentWithSession[]>(() => {
     const agents = this.agentsSignal();
@@ -48,15 +58,16 @@ export class AgentService {
    */
   async discoverAgents(workspacePath: string): Promise<void> {
     this.loadingSignal.set(true);
+    this.workspacePath = workspacePath;
     
     try {
       const result = await this.electronService.discoverAgents(workspacePath);
       if (result) {
         this.agentsSignal.set(result.combined);
         
-        // Select first agent by default
+        // Select first agent by default (this will auto-start its session)
         if (result.combined.length > 0 && !this.selectedAgentIdSignal()) {
-          this.selectAgent(result.combined[0].id);
+          await this.selectAgent(result.combined[0].id);
         }
       }
     } finally {
@@ -65,15 +76,31 @@ export class AgentService {
   }
 
   /**
-   * Select an agent
+   * Select an agent and auto-start its session
    */
-  selectAgent(agentId: string): void {
+  async selectAgent(agentId: string): Promise<void> {
     this.selectedAgentIdSignal.set(agentId);
     
     // Clear unread count for selected agent
     const unreadCounts = new Map(this.unreadCountsSignal());
     unreadCounts.set(agentId, 0);
     this.unreadCountsSignal.set(unreadCounts);
+
+    // Auto-start session if not already active
+    if (this.workspacePath && !this.hasActiveSession(agentId)) {
+      const inits = new Set(this.sessionInitializingSignal());
+      inits.add(agentId);
+      this.sessionInitializingSignal.set(inits);
+      try {
+        await this.startSession(agentId, this.workspacePath);
+      } catch (e) {
+        console.error(`Failed to auto-start session for agent ${agentId}:`, e);
+      } finally {
+        const done = new Set(this.sessionInitializingSignal());
+        done.delete(agentId);
+        this.sessionInitializingSignal.set(done);
+      }
+    }
   }
 
   /**

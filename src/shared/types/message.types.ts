@@ -39,6 +39,7 @@ export interface StreamingMessage {
   id: string;
   agentId: string;
   content: string;
+  thinking: string;
   isComplete: boolean;
   toolCalls?: ToolCall[];
 }

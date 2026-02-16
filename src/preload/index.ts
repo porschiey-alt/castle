@@ -8,6 +8,7 @@ import { IPC_CHANNELS } from '../shared/types/ipc.types';
 import { AppSettings, PermissionSet, PermissionResponse } from '../shared/types/settings.types';
 import { Agent, AgentDiscoveryResult, AgentSession } from '../shared/types/agent.types';
 import { ChatMessage, StreamingMessage } from '../shared/types/message.types';
+import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput } from '../shared/types/task.types';
 
 // Type definitions for the exposed API
 export interface ElectronAPI {
@@ -40,7 +41,7 @@ export interface ElectronAPI {
     get: (agentId: string) => Promise<PermissionSet>;
     set: (agentId: string, permission: keyof PermissionSet, granted: boolean) => Promise<void>;
     onRequest: (callback: (request: unknown) => void) => () => void;
-    respond: (requestId: string, response: PermissionResponse) => void;
+    respond: (requestId: string, agentId: string, optionId: string) => void;
   };
 
   // Settings operations
@@ -61,6 +62,19 @@ export interface ElectronAPI {
     onReady: (callback: () => void) => () => void;
     onError: (callback: (error: { agentId?: string; error: string }) => void) => () => void;
     getActiveModel: () => Promise<string | null>;
+  };
+
+  // Task operations
+  tasks: {
+    getAll: (state?: string) => Promise<Task[]>;
+    get: (taskId: string) => Promise<Task | null>;
+    create: (input: CreateTaskInput) => Promise<Task>;
+    update: (taskId: string, updates: UpdateTaskInput) => Promise<Task>;
+    delete: (taskId: string) => Promise<void>;
+    getLabels: () => Promise<TaskLabel[]>;
+    createLabel: (name: string, color: string) => Promise<TaskLabel>;
+    deleteLabel: (labelId: string) => Promise<void>;
+    runResearch: (taskId: string, agentId: string, outputPath?: string) => Promise<{ taskId: string }>;
   };
 }
 
@@ -112,8 +126,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on(IPC_CHANNELS.PERMISSION_REQUEST, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.PERMISSION_REQUEST, handler);
     },
-    respond: (requestId: string, response: PermissionResponse) =>
-      ipcRenderer.send(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, response })
+    respond: (requestId: string, agentId: string, optionId: string) =>
+      ipcRenderer.send(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, agentId, optionId })
   },
 
   settings: {
@@ -140,6 +154,27 @@ const electronAPI: ElectronAPI = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_ERROR, handler);
     },
     getActiveModel: () => ipcRenderer.invoke(IPC_CHANNELS.APP_GET_ACTIVE_MODEL)
+  },
+
+  tasks: {
+    getAll: (state?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_GET_ALL, { state }),
+    get: (taskId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_GET, { taskId }),
+    create: (input: CreateTaskInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_CREATE, input),
+    update: (taskId: string, updates: UpdateTaskInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_UPDATE, { taskId, updates }),
+    delete: (taskId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_DELETE, { taskId }),
+    getLabels: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_LABELS_GET_ALL),
+    createLabel: (name: string, color: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_LABELS_CREATE, { name, color }),
+    deleteLabel: (labelId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_LABELS_DELETE, { labelId }),
+    runResearch: (taskId: string, agentId: string, outputPath?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_RESEARCH, { taskId, agentId, outputPath }),
   }
 };
 

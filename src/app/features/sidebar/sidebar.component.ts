@@ -12,6 +12,7 @@ import { MatDividerModule } from '@angular/material/divider';
 
 import { AgentCircleComponent } from './agent-circle/agent-circle.component';
 import { AgentService } from '../../core/services/agent.service';
+import { TaskService } from '../../core/services/task.service';
 import type { AgentWithSession } from '../../../shared/types/agent.types';
 
 @Component({
@@ -31,17 +32,26 @@ import type { AgentWithSession } from '../../../shared/types/agent.types';
 })
 export class SidebarComponent {
   private agentService = inject(AgentService);
+  private taskService = inject(TaskService);
 
-  // Output event for add agent button
+  // Output events
   addAgentClicked = output<void>();
+  tasksClicked = output<void>();
+  agentSelected = output<void>();
 
   // Expose signals to template
   agents = this.agentService.agentsWithSessions;
   selectedAgentId = this.agentService.selectedAgentId;
   loading = this.agentService.loading;
+  unfinishedTaskCount = this.taskService.unfinishedCount;
 
   selectAgent(agent: AgentWithSession): void {
     this.agentService.selectAgent(agent.id);
+    this.agentSelected.emit();
+  }
+
+  onTasksClicked(): void {
+    this.tasksClicked.emit();
   }
 
   onAddAgent(): void {

@@ -26,6 +26,7 @@ interface SessionProcess {
   acpSessionId: string | null;
   eventEmitter: EventEmitter;
   contentBuffer: string;
+  thinkingBuffer: string;
   toolCalls: Map<string, ToolCall>;
 }
 
@@ -92,10 +93,6 @@ export class ProcessManagerService {
       args.push('--model', bestModel);
     }
 
-    if (agent.systemPrompt) {
-      args.push('--agent', agent.name);
-    }
-
     // Spawn copilot in ACP mode
     const childProcess = spawn('copilot', args, {
       cwd: workingDirectory,
@@ -137,32 +134,65 @@ export class ProcessManagerService {
       acpSessionId: null,
       eventEmitter,
       contentBuffer: '',
+      thinkingBuffer: '',
       toolCalls: new Map()
     };
 
     // Create ACP client handler
     const client: import('@agentclientprotocol/sdk').Client = {
       async requestPermission(params) {
-        // Auto-allow for now; later we can forward to the UI
-        const allowOption = params.options.find(o => o.kind === 'allow_always')
-          || params.options.find(o => o.kind === 'allow_once')
-          || params.options[0];
-        return { outcome: { outcome: 'selected' as const, optionId: allowOption.optionId } };
+        // Forward to renderer and wait for user response
+        return new Promise((resolve) => {
+          const requestId = uuidv4();
+          const permissionData = {
+            requestId,
+            agentId: agent.id,
+            agentName: agent.name,
+            toolCall: params.toolCall,
+            options: params.options.map(o => ({
+              optionId: o.optionId,
+              name: o.name,
+              kind: o.kind
+            }))
+          };
+
+          // Listen for the response
+          const onResponse = (response: { requestId: string; optionId: string }) => {
+            if (response.requestId === requestId) {
+              eventEmitter.off('permissionResponse', onResponse);
+              resolve({ outcome: { outcome: 'selected' as const, optionId: response.optionId } });
+            }
+          };
+          eventEmitter.on('permissionResponse', onResponse);
+
+          // Emit to IPC layer
+          eventEmitter.emit('permissionRequest', permissionData);
+        });
       },
       async sessionUpdate(params) {
         const { update } = params;
         sessionProcess.session.lastActivityAt = new Date();
 
-        if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
-          sessionProcess.contentBuffer += update.content.text;
+        const emitOutput = () => {
           const streamingMessage: StreamingMessage = {
             id: sessionId,
             agentId: agent.id,
             content: sessionProcess.contentBuffer,
+            thinking: sessionProcess.thinkingBuffer,
             isComplete: false,
             toolCalls: Array.from(sessionProcess.toolCalls.values())
           };
           eventEmitter.emit('output', streamingMessage);
+        };
+
+        if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
+          sessionProcess.contentBuffer += update.content.text;
+          emitOutput();
+        }
+
+        if (update.sessionUpdate === 'agent_thought_chunk' && update.content.type === 'text') {
+          sessionProcess.thinkingBuffer += update.content.text;
+          emitOutput();
         }
 
         if (update.sessionUpdate === 'tool_call') {
@@ -174,15 +204,7 @@ export class ProcessManagerService {
             status: acpStatus === 'completed' ? 'success' : acpStatus === 'failed' ? 'error' : acpStatus === 'in_progress' ? 'running' : 'pending'
           };
           sessionProcess.toolCalls.set(update.toolCallId, toolCall);
-
-          const streamingMessage: StreamingMessage = {
-            id: sessionId,
-            agentId: agent.id,
-            content: sessionProcess.contentBuffer,
-            isComplete: false,
-            toolCalls: Array.from(sessionProcess.toolCalls.values())
-          };
-          eventEmitter.emit('output', streamingMessage);
+          emitOutput();
         }
 
         if (update.sessionUpdate === 'tool_call_update') {
@@ -190,7 +212,9 @@ export class ProcessManagerService {
           if (existing) {
             const s = update.status;
             existing.status = s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'in_progress' ? 'running' : 'pending';
+            if (update.title) existing.name = update.title;
           }
+          emitOutput();
         }
       }
     };
@@ -274,6 +298,7 @@ export class ProcessManagerService {
     sessionProcess.session.status = 'busy';
     sessionProcess.session.lastActivityAt = new Date();
     sessionProcess.contentBuffer = '';
+    sessionProcess.thinkingBuffer = '';
     sessionProcess.toolCalls.clear();
 
     try {
@@ -288,6 +313,7 @@ export class ProcessManagerService {
         id: sessionId,
         agentId: sessionProcess.session.agentId,
         content: sessionProcess.contentBuffer,
+        thinking: sessionProcess.thinkingBuffer,
         isComplete: true,
         toolCalls: Array.from(sessionProcess.toolCalls.values())
       };
@@ -324,6 +350,29 @@ export class ProcessManagerService {
 
     sessionProcess.eventEmitter.on('complete', callback);
     return () => { sessionProcess.eventEmitter.off('complete', callback); };
+  }
+
+  /**
+   * Subscribe to permission requests
+   */
+  onPermissionRequest(sessionId: string, callback: (data: any) => void): () => void {
+    const sessionProcess = this.sessions.get(sessionId);
+    if (!sessionProcess) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+
+    sessionProcess.eventEmitter.on('permissionRequest', callback);
+    return () => { sessionProcess.eventEmitter.off('permissionRequest', callback); };
+  }
+
+  /**
+   * Send a permission response back to the ACP client handler
+   */
+  respondToPermission(agentId: string, requestId: string, optionId: string): void {
+    const sessionProcess = this.getSessionByAgentId(agentId);
+    if (sessionProcess) {
+      sessionProcess.eventEmitter.emit('permissionResponse', { requestId, optionId });
+    }
   }
 
   /**

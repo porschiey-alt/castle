@@ -1,0 +1,47 @@
+:host {
+  display: block;
+}
+
+h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+
+  mat-icon {
+    color: var(--theme-warn, #f59e0b);
+  }
+}
+
+.agent-name {
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.tool-call-info {
+  background-color: var(--bg-tertiary, #1e1e2e);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0;
+
+  code {
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 13px;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+}
+
+mat-dialog-actions {
+  gap: 8px;
+  padding: 12px 0 0;
+
+  button {
+    mat-icon {
+      margin-right: 4px;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
+}

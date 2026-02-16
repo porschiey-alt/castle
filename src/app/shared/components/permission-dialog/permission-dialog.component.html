@@ -1,0 +1,23 @@
+<h2 mat-dialog-title>
+  <mat-icon>security</mat-icon>
+  Permission Required
+</h2>
+
+<mat-dialog-content>
+  <p class="agent-name">{{ data.agentName }} wants to:</p>
+  <div class="tool-call-info">
+    <code>{{ data.toolCall.title || 'Execute an action' }}</code>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @for (option of data.options; track option.optionId) {
+    <button
+      mat-raised-button
+      [color]="getColor(option.kind)"
+      (click)="selectOption(option.optionId)">
+      <mat-icon>{{ getIcon(option.kind) }}</mat-icon>
+      {{ option.name }}
+    </button>
+  }
+</mat-dialog-actions>

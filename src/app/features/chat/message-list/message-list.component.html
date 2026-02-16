@@ -16,6 +16,8 @@
     @if (streamingMessage(); as streaming) {
       <app-message-bubble
         [streamingContent]="streaming.content"
+        [streamingThinking]="streaming.thinking"
+        [streamingToolCalls]="streaming.toolCalls"
         [isStreaming]="true"
         [agentName]="agentName()"
         [agentIcon]="agentIcon()"

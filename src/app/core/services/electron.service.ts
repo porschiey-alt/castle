@@ -8,6 +8,7 @@ import type { ElectronAPI } from '../../../preload/index';
 import type { Agent, AgentDiscoveryResult, AgentSession } from '../../../shared/types/agent.types';
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
 import type { AppSettings, PermissionSet, PermissionResponse } from '../../../shared/types/settings.types';
+import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput } from '../../../shared/types/task.types';
 
 @Injectable({
   providedIn: 'root'
@@ -19,11 +20,13 @@ export class ElectronService {
   private streamChunkSubject = new Subject<StreamingMessage>();
   private streamCompleteSubject = new Subject<ChatMessage>();
   private errorSubject = new Subject<{ agentId?: string; error: string }>();
+  private permissionRequestSubject = new Subject<any>();
 
   // Observables
   readonly streamChunk$ = this.streamChunkSubject.asObservable();
   readonly streamComplete$ = this.streamCompleteSubject.asObservable();
   readonly error$ = this.errorSubject.asObservable();
+  readonly permissionRequest$ = this.permissionRequestSubject.asObservable();
 
   constructor(private ngZone: NgZone) {
     this.initializeApi();
@@ -57,6 +60,12 @@ export class ElectronService {
     this.api.app.onError((error) => {
       this.ngZone.run(() => {
         this.errorSubject.next(error);
+      });
+    });
+
+    this.api.permissions.onRequest((request) => {
+      this.ngZone.run(() => {
+        this.permissionRequestSubject.next(request);
       });
     });
   }
@@ -137,9 +146,9 @@ export class ElectronService {
     return this.api.permissions.set(agentId, permission, granted);
   }
 
-  respondToPermissionRequest(requestId: string, response: PermissionResponse): void {
+  respondToPermissionRequest(requestId: string, agentId: string, optionId: string): void {
     if (!this.api) return;
-    this.api.permissions.respond(requestId, response);
+    this.api.permissions.respond(requestId, agentId, optionId);
   }
 
   // ============ Settings Methods ============
@@ -176,5 +185,52 @@ export class ElectronService {
   async getActiveModel(): Promise<string | null> {
     if (!this.api) return null;
     return this.api.app.getActiveModel();
+  }
+
+  // ============ Task Methods ============
+
+  async getTasks(state?: string): Promise<Task[]> {
+    if (!this.api) return [];
+    return this.api.tasks.getAll(state);
+  }
+
+  async getTask(taskId: string): Promise<Task | null> {
+    if (!this.api) return null;
+    return this.api.tasks.get(taskId);
+  }
+
+  async createTask(input: CreateTaskInput): Promise<Task | null> {
+    if (!this.api) return null;
+    return this.api.tasks.create(input);
+  }
+
+  async updateTask(taskId: string, updates: UpdateTaskInput): Promise<Task | null> {
+    if (!this.api) return null;
+    return this.api.tasks.update(taskId, updates);
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    if (!this.api) return;
+    return this.api.tasks.delete(taskId);
+  }
+
+  async getTaskLabels(): Promise<TaskLabel[]> {
+    if (!this.api) return [];
+    return this.api.tasks.getLabels();
+  }
+
+  async createTaskLabel(name: string, color: string): Promise<TaskLabel | null> {
+    if (!this.api) return null;
+    return this.api.tasks.createLabel(name, color);
+  }
+
+  async deleteTaskLabel(labelId: string): Promise<void> {
+    if (!this.api) return;
+    return this.api.tasks.deleteLabel(labelId);
+  }
+
+  async runTaskResearch(taskId: string, agentId: string, outputPath?: string): Promise<{ taskId: string } | null> {
+    if (!this.api) return null;
+    return this.api.tasks.runResearch(taskId, agentId, outputPath);
   }
 }

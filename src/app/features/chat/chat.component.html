@@ -11,7 +11,7 @@
   <app-chat-input
     [agentName]="agent().name"
     [isLoading]="isLoading()"
-    [disabled]="agent().session?.status === 'error'"
+    [disabled]="isInitializing() || !agent().session || agent().session?.status !== 'ready'"
     (messageSent)="onSendMessage($event)"
   />
 </div>
