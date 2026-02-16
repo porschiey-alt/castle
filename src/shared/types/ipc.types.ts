@@ -83,6 +83,7 @@ export const IPC_CHANNELS = {
   CONVERSATIONS_CREATE: 'conversations:create',
   CONVERSATIONS_UPDATE: 'conversations:update',
   CONVERSATIONS_DELETE: 'conversations:delete',
+  CONVERSATIONS_DELETE_ALL: 'conversations:deleteAll',
   CONVERSATIONS_GET_MESSAGES: 'conversations:getMessages',
 } as const;
 
@@ -253,7 +254,11 @@ export interface IPCPayloads {
     request: { conversationId: string };
     response: void;
   };
-  [IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES]: {
+  [IPC_CHANNELS.CONVERSATIONS_DELETE_ALL]: {
+    request: { agentId: string };
+    response: void;
+  };
+  [IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES]:{
     request: { conversationId: string; limit?: number; offset?: number };
     response: ChatMessage[];
   };

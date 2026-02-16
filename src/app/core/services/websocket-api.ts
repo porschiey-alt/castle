@@ -244,6 +244,8 @@ export class WebSocketAPI implements ElectronAPI {
       this.invoke(IPC_CHANNELS.CONVERSATIONS_UPDATE, { conversationId, updates }),
     delete: (conversationId: string): Promise<void> =>
       this.invoke(IPC_CHANNELS.CONVERSATIONS_DELETE, { conversationId }),
+    deleteAll: (agentId: string): Promise<void> =>
+      this.invoke(IPC_CHANNELS.CONVERSATIONS_DELETE_ALL, { agentId }),
     getMessages: (conversationId: string, limit?: number, offset?: number): Promise<ChatMessage[]> =>
       this.invoke(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, { conversationId, limit, offset }),
   };

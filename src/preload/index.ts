@@ -106,6 +106,7 @@ export interface ElectronAPI {
     create: (input: CreateConversationInput) => Promise<Conversation>;
     update: (conversationId: string, updates: UpdateConversationInput) => Promise<Conversation>;
     delete: (conversationId: string) => Promise<void>;
+    deleteAll: (agentId: string) => Promise<void>;
     getMessages: (conversationId: string, limit?: number, offset?: number) => Promise<ChatMessage[]>;
   };
 }
@@ -266,6 +267,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_UPDATE, { conversationId, updates }),
     delete: (conversationId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_DELETE, { conversationId }),
+    deleteAll: (agentId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_DELETE_ALL, { agentId }),
     getMessages: (conversationId: string, limit?: number, offset?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, { conversationId, limit, offset }),
   },

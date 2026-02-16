@@ -296,6 +296,10 @@ export class ElectronService {
     return this.api.conversations.delete(conversationId);
   }
 
+  async deleteAllConversations(agentId: string): Promise<void> {
+    return this.api.conversations.deleteAll(agentId);
+  }
+
   async getConversationMessages(conversationId: string, limit?: number, offset?: number): Promise<ChatMessage[]> {
     return this.api.conversations.getMessages(conversationId, limit, offset);
   }

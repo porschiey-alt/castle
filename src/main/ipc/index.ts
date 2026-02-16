@@ -718,6 +718,11 @@ export function registerIpcHandlers(services: IpcServices): void {
     broadcaster.send(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, { action: 'deleted', conversationId });
   });
 
+  handle(IPC_CHANNELS.CONVERSATIONS_DELETE_ALL, async (_event, { agentId }) => {
+    await databaseService.deleteAllConversations(agentId);
+    broadcaster.send(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, { action: 'deletedAll', agentId });
+  });
+
   handle(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, async (_event, { conversationId, limit, offset }) => {
     return databaseService.getMessagesByConversation(conversationId, limit, offset);
   });

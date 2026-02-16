@@ -556,6 +556,17 @@ export class DatabaseService {
     this.saveDatabase();
   }
 
+  async deleteAllConversations(agentId: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db.run(
+      'DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE agent_id = ?)',
+      [agentId]
+    );
+    this.db.run('DELETE FROM conversations WHERE agent_id = ?', [agentId]);
+    this.saveDatabase();
+  }
+
   async getMessagesByConversation(conversationId: string, limit = 100, offset = 0): Promise<ChatMessage[]> {
     if (!this.db) throw new Error('Database not initialized');
 

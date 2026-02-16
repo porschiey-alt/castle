@@ -79,6 +79,10 @@ export class ConversationListComponent {
     await this.conversationService.deleteConversation(conversation.id);
   }
 
+  async clearAllConversations(): Promise<void> {
+    await this.conversationService.deleteAllConversations();
+  }
+
   formatTime(date: Date | string): string {
     const d = new Date(date);
     const now = new Date();

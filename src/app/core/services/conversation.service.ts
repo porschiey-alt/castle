@@ -105,6 +105,18 @@ export class ConversationService {
   }
 
   /**
+   * Delete all conversations for the current agent
+   */
+  async deleteAllConversations(): Promise<void> {
+    const agentId = this.agentService.selectedAgentId();
+    if (!agentId) return;
+
+    await this.electronService.deleteAllConversations(agentId);
+    await this.loadConversations(agentId);
+    this.activeConversationIdSignal.set(null);
+  }
+
+  /**
    * Auto-generate title from first message content
    */
   generateTitle(content: string): string {

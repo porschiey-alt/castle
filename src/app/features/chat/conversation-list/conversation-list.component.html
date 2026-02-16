@@ -68,4 +68,17 @@
       </div>
     }
   </div>
+
+  @if (conversations().length > 0) {
+    <div class="conversation-list-footer">
+      <mat-divider></mat-divider>
+      <button
+        mat-button
+        class="clear-all-btn"
+        (click)="clearAllConversations()">
+        <mat-icon>delete_sweep</mat-icon>
+        Clear all conversations
+      </button>
+    </div>
+  }
 </div>
