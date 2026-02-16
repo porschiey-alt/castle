@@ -9,10 +9,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDialog } from '@angular/material/dialog';
+import { firstValueFrom } from 'rxjs';
 
 import { TaskService } from '../../../core/services/task.service';
 import { AgentService } from '../../../core/services/agent.service';
 import { ElectronService } from '../../../core/services/electron.service';
+import { ConfirmDialogComponent, type ConfirmDialogData } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { TaskDetailComponent, type TaskSaveEvent, type TaskResearchEvent, type TaskImplementEvent, type TaskReviewSubmitEvent } from '../task-detail/task-detail.component';
 import { TASK_STATES, TASK_KINDS, type Task, type TaskState, type TaskKind, type BugCloseReason } from '../../../../shared/types/task.types';
 
@@ -35,6 +38,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
   taskService = inject(TaskService);
   private agentService = inject(AgentService);
   private electronService = inject(ElectronService);
+  private dialog = inject(MatDialog);
 
   states = TASK_STATES;
   kinds = TASK_KINDS;
@@ -61,7 +65,12 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
     // Listen for diagnosis file cleanup prompts
     this.diagnosisCleanupUnsub = this.electronService.onDiagnosisFileCleanup(async (data) => {
-      if (confirm(`This bug has a diagnosis file:\n${data.filePath}\n\nWould you like to delete it?`)) {
+      const confirmed = await this.openConfirmDialog({
+        title: 'Delete Diagnosis File',
+        message: `This bug has a diagnosis file:\n${data.filePath}\n\nWould you like to delete it?`,
+        confirmText: 'Delete',
+      });
+      if (confirmed) {
         await this.electronService.deleteDiagnosisFile(data.filePath);
       }
     });
@@ -134,7 +143,12 @@ export class TaskListComponent implements OnInit, OnDestroy {
   }
 
   async deleteTask(task: Task): Promise<void> {
-    if (confirm(`Delete task "${task.title}"?`)) {
+    const confirmed = await this.openConfirmDialog({
+      title: 'Delete Task',
+      message: `Delete task "${task.title}"?`,
+      confirmText: 'Delete',
+    });
+    if (confirmed) {
       await this.taskService.deleteTask(task.id);
     }
   }
@@ -159,5 +173,10 @@ export class TaskListComponent implements OnInit, OnDestroy {
   async onReviewSubmitted(event: TaskReviewSubmitEvent): Promise<void> {
     this.taskService.markReviewRunning(event.taskId);
     await this.taskService.submitResearchReview(event.taskId, event.comments, event.researchSnapshot);
+  }
+
+  private openConfirmDialog(data: ConfirmDialogData): Promise<boolean> {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, { data });
+    return firstValueFrom(dialogRef.afterClosed()).then(result => !!result);
   }
 }

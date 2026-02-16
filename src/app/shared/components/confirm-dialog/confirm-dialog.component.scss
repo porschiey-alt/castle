@@ -1,0 +1,34 @@
+.confirm-dialog {
+  padding: 24px;
+  color: var(--text-primary);
+  max-width: 400px;
+}
+
+.confirm-title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.confirm-message {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-line;
+  margin-bottom: 24px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+
+  button {
+    color: var(--text-primary);
+  }
+
+  button[color="warn"] {
+    background-color: var(--theme-primary);
+    color: #fff;
+  }
+}
