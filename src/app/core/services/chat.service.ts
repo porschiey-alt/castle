@@ -5,12 +5,13 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { ElectronService } from './electron.service';
 import { AgentService } from './agent.service';
-import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
+import type { ChatMessage, StreamingMessage, TodoItem } from '../../../shared/types/message.types';
 
 interface ChatState {
   messages: ChatMessage[];
   streamingMessage: StreamingMessage | null;
   isLoading: boolean;
+  todoItems: TodoItem[];
 }
 
 @Injectable({
@@ -28,7 +29,8 @@ export class ChatService {
     return this.chatStatesSignal().get(selectedAgentId) || {
       messages: [],
       streamingMessage: null,
-      isLoading: false
+      isLoading: false,
+      todoItems: []
     };
   });
 
@@ -44,6 +46,10 @@ export class ChatService {
     return this.currentChatState()?.isLoading || false;
   });
 
+  readonly todoItems = computed<TodoItem[]>(() => {
+    return this.currentChatState()?.todoItems || [];
+  });
+
   constructor(
     private electronService: ElectronService,
     private agentService: AgentService
@@ -56,6 +62,14 @@ export class ChatService {
     this.electronService.streamChunk$.subscribe((chunk: StreamingMessage) => {
       this.updateStreamingMessage(chunk.agentId, chunk);
       
+      // Update todo items if present
+      if (chunk.todoItems && chunk.todoItems.length > 0) {
+        this.updateTodoItems(chunk.agentId, chunk.todoItems);
+      }
+      
+      // Ensure loading state is true so the stop button is visible
+      this.setLoading(chunk.agentId, true);
+
       // Update agent session status to busy
       this.agentService.updateSessionStatus(chunk.agentId, 'busy');
     });
@@ -84,7 +98,8 @@ export class ChatService {
     const currentState = states.get(agentId) || {
       messages: [],
       streamingMessage: null,
-      isLoading: false
+      isLoading: false,
+      todoItems: []
     };
     
     states.set(agentId, {
@@ -134,7 +149,8 @@ export class ChatService {
     if (currentState) {
       states.set(agentId, {
         ...currentState,
-        messages: []
+        messages: [],
+        todoItems: []
       });
       this.chatStatesSignal.set(states);
     }
@@ -148,7 +164,8 @@ export class ChatService {
     const currentState = states.get(agentId) || {
       messages: [],
       streamingMessage: null,
-      isLoading: false
+      isLoading: false,
+      todoItems: []
     };
     
     states.set(agentId, {
@@ -167,7 +184,8 @@ export class ChatService {
     const currentState = states.get(agentId) || {
       messages: [],
       streamingMessage: null,
-      isLoading: true
+      isLoading: true,
+      todoItems: []
     };
     
     states.set(agentId, {
@@ -195,6 +213,26 @@ export class ChatService {
   }
 
   /**
+   * Update todo items for an agent
+   */
+  private updateTodoItems(agentId: string, todoItems: TodoItem[]): void {
+    const states = new Map(this.chatStatesSignal());
+    const currentState = states.get(agentId) || {
+      messages: [],
+      streamingMessage: null,
+      isLoading: false,
+      todoItems: []
+    };
+    
+    states.set(agentId, {
+      ...currentState,
+      todoItems
+    });
+    
+    this.chatStatesSignal.set(states);
+  }
+
+  /**
    * Set loading state for an agent
    */
   private setLoading(agentId: string, isLoading: boolean): void {
@@ -202,7 +240,8 @@ export class ChatService {
     const currentState = states.get(agentId) || {
       messages: [],
       streamingMessage: null,
-      isLoading: false
+      isLoading: false,
+      todoItems: []
     };
     
     states.set(agentId, {
