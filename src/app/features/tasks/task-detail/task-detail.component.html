@@ -157,7 +157,7 @@
         <ng-template mat-tab-label>
           <mat-icon>{{ task()!.kind === 'bug' ? 'bug_report' : 'science' }}</mat-icon>
           <span class="tab-label-text">{{ task()!.kind === 'bug' ? 'Diagnosis' : 'Research' }}</span>
-          @if (researchRunning()) {
+          @if (researchRunning() || reviewRunning()) {
             <mat-icon class="tab-spinner">sync</mat-icon>
           }
         </ng-template>
@@ -169,8 +169,19 @@
               (commentAdded)="addComment($event)"
               (commentRemoved)="removeComment($event)" />
 
-            <!-- Comment summary / review panel -->
-            @if (pendingComments.length > 0) {
+            <!-- Review in progress indicator -->
+            @if (reviewRunning()) {
+              <div class="research-running">
+                <mat-icon class="research-spinner">sync</mat-icon>
+                <h3>Revising research based on your comments...</h3>
+                <p>The agent is updating the document to address your review comments.</p>
+                <button mat-stroked-button color="primary"
+                        (click)="goToResearcher.emit(task()!.researchAgentId!)">
+                  <mat-icon>open_in_new</mat-icon>
+                  Take me to the Researcher
+                </button>
+              </div>
+            } @else if (pendingComments.length > 0) {
               <div class="review-panel">
                 <div class="review-panel-header">
                   <mat-icon>rate_review</mat-icon>

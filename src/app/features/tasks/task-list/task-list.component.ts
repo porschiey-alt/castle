@@ -75,8 +75,6 @@ export class TaskListComponent implements OnInit, OnDestroy {
       if (this.reviewRunningTaskIds.has(msg.id)) {
         this.reviewRunningTaskIds.delete(msg.id);
         await this.taskService.refreshTask(msg.id);
-        // Signal the detail component to clear its pending comments
-        this._reviewCompleteTaskId = msg.id;
       }
     });
 
@@ -195,9 +193,6 @@ export class TaskListComponent implements OnInit, OnDestroy {
   isReviewRunning(taskId: string): boolean {
     return this.reviewRunningTaskIds.has(taskId);
   }
-
-  /** Tracks the last task whose review completed, so the detail can react */
-  _reviewCompleteTaskId: string | null = null;
 
   async onReviewSubmitted(event: TaskReviewSubmitEvent): Promise<void> {
     this.reviewRunningTaskIds.add(event.taskId);

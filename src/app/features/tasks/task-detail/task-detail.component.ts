@@ -3,7 +3,7 @@
  * Supports Description and Research tabs
  */
 
-import { Component, input, output, inject, OnInit } from '@angular/core';
+import { Component, input, output, inject, effect, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -81,6 +81,8 @@ export class TaskDetailComponent implements OnInit {
   researchRunning = input(false);
   /** Whether implementation is currently running */
   implementRunning = input(false);
+  /** Whether a review revision is currently running */
+  reviewRunning = input(false);
 
   saved = output<TaskSaveEvent>();
   deleteRequested = output<Task>();
@@ -112,6 +114,14 @@ export class TaskDetailComponent implements OnInit {
   // Research review comments
   pendingComments: ResearchComment[] = [];
   reviewSubmitting = false;
+
+  /** Clear review state when reviewRunning transitions from true to false */
+  private reviewRunningEffect = effect(() => {
+    const running = this.reviewRunning();
+    if (!running && this.reviewSubmitting) {
+      this.onReviewComplete();
+    }
+  });
 
   get isCreating(): boolean {
     return !this.task();

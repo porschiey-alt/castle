@@ -16,6 +16,7 @@
         [agents]="agents()"
         [researchRunning]="isResearchRunning(task.id)"
         [implementRunning]="isImplementRunning(task.id)"
+        [reviewRunning]="isReviewRunning(task.id)"
         (saved)="onSave(task.id, $event)"
         (deleteRequested)="deleteTask($event)"
         (stateChanged)="onStateChange($event)"
