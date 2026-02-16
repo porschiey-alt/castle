@@ -103,8 +103,14 @@
             </div>
             <div class="task-card-body">
               <div class="task-card-title">{{ task.title }}</div>
-              @if (task.labels.length > 0) {
+              @if (task.labels.length > 0 || task.researchContent) {
                 <div class="task-card-labels">
+                  @if (task.researchContent) {
+                    <span class="mini-label research-badge">
+                      <mat-icon class="badge-icon">{{ task.kind === 'bug' ? 'bug_report' : 'science' }}</mat-icon>
+                      {{ task.kind === 'bug' ? 'Diagnosed' : 'Researched' }}
+                    </span>
+                  }
                   @for (label of task.labels; track label.id) {
                     <span class="mini-label" [style.background-color]="label.color + '22'" [style.color]="label.color"
                           [style.border-color]="label.color + '44'">

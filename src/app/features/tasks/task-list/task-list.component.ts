@@ -146,6 +146,10 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   async onImplementRequested(event: TaskImplementEvent): Promise<void> {
     this.taskService.markImplementRunning(event.task.id);
+    // Transition task to "in_progress" when implementation starts
+    if (event.task.state !== 'in_progress' && event.task.state !== 'done') {
+      await this.taskService.updateTask(event.task.id, { state: 'in_progress' });
+    }
     // Navigate to agent chat so user can watch
     this.goToAgent.emit(event.agentId);
     // Run implementation via IPC (main process handles completion)

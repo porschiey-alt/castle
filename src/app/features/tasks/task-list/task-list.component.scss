@@ -132,12 +132,26 @@
 }
 
 .mini-label {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 11px;
   font-weight: 500;
   border: 1px solid;
+}
+
+.research-badge {
+  color: #8b5cf6;
+  background-color: #8b5cf622;
+  border-color: #8b5cf644;
+
+  .badge-icon {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
+  }
 }
 
 .task-card-meta {
