@@ -105,7 +105,8 @@ export class ChatService {
     if (conversationId) {
       messages = await this.electronService.getConversationMessages(conversationId);
     } else {
-      messages = await this.electronService.getChatHistory(agentId);
+      // No conversation selected — show empty state (ready for new chat)
+      messages = [];
     }
     
     const states = new Map(this.chatStatesSignal());

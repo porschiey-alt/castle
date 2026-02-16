@@ -113,6 +113,15 @@ export class ConversationService {
   }
 
   /**
+   * Select the most recent conversation for the current agent.
+   * Call after loadConversations() to auto-select.
+   */
+  selectMostRecent(): void {
+    const convs = this.conversations();
+    this.activeConversationIdSignal.set(convs.length > 0 ? convs[0].id : null);
+  }
+
+  /**
    * Reset active conversation (e.g., when switching agents)
    */
   clearActive(): void {

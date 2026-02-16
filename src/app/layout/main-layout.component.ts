@@ -96,10 +96,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     // Discover agents if directory is set (this auto-selects and starts session for first agent)
     if (this.currentDirectory) {
       await this.agentService.discoverAgents(this.currentDirectory);
-      // Load conversations for the auto-selected agent
+      // Load conversations for the auto-selected agent and select the most recent
       const agentId = this.agentService.selectedAgentId();
       if (agentId) {
         await this.conversationService.loadConversations(agentId);
+        this.conversationService.selectMostRecent();
       }
     } else {
       this.recentDirectories = await this.electronService.getRecentDirectories();
@@ -135,10 +136,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       this.currentDirectory = directory;
       this.activeView = 'chat';
       await this.agentService.discoverAgents(directory);
-      // Load conversations for the auto-selected agent
+      // Load conversations for the auto-selected agent and select the most recent
       const agentId = this.agentService.selectedAgentId();
       if (agentId) {
         await this.conversationService.loadConversations(agentId);
+        this.conversationService.selectMostRecent();
       }
       // Update status bar
       if (this.statusBar) {
@@ -152,10 +154,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.currentDirectory = dirPath;
     this.activeView = 'chat';
     await this.agentService.discoverAgents(dirPath);
-    // Load conversations for the auto-selected agent
+    // Load conversations for the auto-selected agent and select the most recent
     const agentId = this.agentService.selectedAgentId();
     if (agentId) {
       await this.conversationService.loadConversations(agentId);
+      this.conversationService.selectMostRecent();
     }
     if (this.statusBar) {
       this.statusBar.updateDirectory(dirPath);
@@ -242,11 +245,12 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   showChat(): void {
     this.activeView = 'chat';
     this.closeSidebar();
-    // Reset conversation selection and load conversations for the selected agent
-    this.conversationService.clearActive();
+    // Load conversations for the selected agent and auto-select the most recent
     const agentId = this.agentService.selectedAgentId();
     if (agentId) {
-      this.conversationService.loadConversations(agentId);
+      this.conversationService.loadConversations(agentId).then(() => {
+        this.conversationService.selectMostRecent();
+      });
     }
   }
 
@@ -267,8 +271,9 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   goToAgent(agentId: string): void {
     this.agentService.selectAgent(agentId);
-    this.conversationService.clearActive();
-    this.conversationService.loadConversations(agentId);
+    this.conversationService.loadConversations(agentId).then(() => {
+      this.conversationService.selectMostRecent();
+    });
     this.activeView = 'chat';
     this.closeSidebar();
   }
