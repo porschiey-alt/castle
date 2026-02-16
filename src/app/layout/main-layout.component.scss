@@ -139,6 +139,10 @@
   }
 }
 
+.conversation-backdrop {
+  display: none;
+}
+
 .conversation-title-badge {
   font-size: 12px;
   color: var(--text-muted);
@@ -287,7 +291,40 @@
   }
 
   .conversation-panel {
-    display: none;
+    position: fixed;
+    top: 48px;
+    left: 0;
+    bottom: 0;
+    z-index: 998;
+    width: 260px;
+    min-width: 260px;
+    transform: translateX(0);
+    transition: transform 0.25s ease, opacity 0.2s ease;
+
+    &.collapsed {
+      transform: translateX(-100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
+  .conversation-backdrop {
+    display: block;
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 997;
+    background-color: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+
+    &.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
   }
 
   .window-controls {
