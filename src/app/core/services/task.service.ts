@@ -42,7 +42,12 @@ export class TaskService {
     const state = this.filterStateSignal();
     const kind = this.filterKindSignal();
     let all = this.tasksSignal();
-    if (state) all = all.filter(t => t.state === state);
+    if (state) {
+      all = all.filter(t => t.state === state);
+    } else {
+      // Hide finished tasks by default unless "Done" filter is active
+      all = all.filter(t => t.state !== 'done');
+    }
     if (kind) all = all.filter(t => t.kind === kind);
     return all;
   });
