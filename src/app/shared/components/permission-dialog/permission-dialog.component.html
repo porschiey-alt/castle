@@ -6,8 +6,33 @@
 <mat-dialog-content>
   <p class="agent-name">{{ data.agentName }} wants to:</p>
   <div class="tool-call-info">
+    @if (data.toolCall.kind) {
+      <div class="tool-kind">
+        <mat-icon>{{ getToolKindIcon(data.toolCall.kind) }}</mat-icon>
+        <span class="tool-kind-label">{{ data.toolCall.kind }}</span>
+      </div>
+    }
     <code>{{ data.toolCall.title || 'Execute an action' }}</code>
   </div>
+
+  @if (data.toolCall.locations?.length) {
+    <div class="tool-locations">
+      <p class="section-label">Files:</p>
+      @for (loc of data.toolCall.locations; track loc.path) {
+        <div class="location-item">
+          <mat-icon>description</mat-icon>
+          <code>{{ loc.path }}@if (loc.line) {:{{ loc.line }}}</code>
+        </div>
+      }
+    </div>
+  }
+
+  @if (data.toolCall.rawInput) {
+    <div class="tool-command">
+      <p class="section-label">Command:</p>
+      <code>{{ formatRawInput(data.toolCall.rawInput) }}</code>
+    </div>
+  }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

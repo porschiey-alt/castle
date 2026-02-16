@@ -15,6 +15,9 @@ export interface PermissionDialogData {
   toolCall: {
     title?: string;
     toolCallId: string;
+    kind?: string | null;
+    locations?: Array<{ path: string; line?: number | null }> | null;
+    rawInput?: unknown;
   };
   options: Array<{
     optionId: string;
@@ -43,6 +46,28 @@ export class PermissionDialogComponent {
 
   selectOption(optionId: string): void {
     this.dialogRef.close(optionId);
+  }
+
+  getToolKindIcon(kind: string): string {
+    switch (kind) {
+      case 'read': return 'visibility';
+      case 'edit': return 'edit';
+      case 'delete': return 'delete';
+      case 'move': return 'drive_file_move';
+      case 'search': return 'search';
+      case 'execute': return 'terminal';
+      case 'fetch': return 'cloud_download';
+      default: return 'build';
+    }
+  }
+
+  formatRawInput(rawInput: unknown): string {
+    if (typeof rawInput === 'string') return rawInput;
+    try {
+      return JSON.stringify(rawInput, null, 2);
+    } catch {
+      return String(rawInput);
+    }
   }
 
   getIcon(kind: string): string {
