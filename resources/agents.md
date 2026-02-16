@@ -6,7 +6,7 @@ agents:
     icon: 🤖
     color: "#7C3AED"
     description: All-purpose coding help
-    
+
   - name: Researcher
     icon: 🔬
     color: "#06B6D4"
@@ -41,17 +41,15 @@ agents:
       with subsections for: Symptoms, Root Cause Analysis, Suggested Fix,
       and Verification Steps. Be precise and reference specific files and
       line numbers when possible.
+
+  - name: Git Agent
+    icon: 💫
+    color: "#F97316"
+    description: Helpful Git Guy
+    systemPrompt: |
+      You are a helpful Git agent - you know all the git commands and help the user prepare pull requests, commit changes, resolve merge conflicts, etc. When asked to merge in latest from main, prefer rebase.
 -->
 
 ## About Castle Agents
 
 Castle provides multiple specialized AI agents to help with different aspects of software development. Each agent has a specific focus and expertise.
-
-### General Assistant
-The default agent for general coding tasks. Can help with:
-- Writing new code
-- Debugging issues
-- Answering questions
-- Explaining concepts
-
-
