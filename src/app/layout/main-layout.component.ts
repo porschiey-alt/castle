@@ -66,6 +66,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   currentDirectory: string | null = null;
   activeView: 'chat' | 'tasks' = 'chat';
   recentDirectories: string[] = [];
+  sidebarOpen = false;
 
   async ngOnInit(): Promise<void> {
     // Listen for permission requests from Copilot
@@ -152,19 +153,30 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     console.log('Add agent feature coming soon');
   }
 
+  toggleSidebar(): void {
+    this.sidebarOpen = !this.sidebarOpen;
+  }
+
+  closeSidebar(): void {
+    this.sidebarOpen = false;
+  }
+
   showTasks(): void {
     this.activeView = 'tasks';
+    this.closeSidebar();
     // Load tasks when switching to view
     this.taskService.loadTasks();
   }
 
   showChat(): void {
     this.activeView = 'chat';
+    this.closeSidebar();
   }
 
   goToAgent(agentId: string): void {
     this.agentService.selectAgent(agentId);
     this.activeView = 'chat';
+    this.closeSidebar();
   }
 
   minimizeWindow(): void {

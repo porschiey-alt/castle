@@ -56,3 +56,9 @@
     margin: 0 12px;
   }
 }
+
+@media (max-width: 768px) {
+  .chat-input-container {
+    padding: 8px;
+  }
+}

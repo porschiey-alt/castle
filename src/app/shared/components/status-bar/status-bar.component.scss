@@ -71,3 +71,13 @@
     color: var(--text-primary);
   }
 }
+
+@media (max-width: 768px) {
+  .status-bar {
+    padding: 0 8px;
+  }
+
+  .model-selector {
+    display: none;
+  }
+}

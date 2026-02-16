@@ -321,3 +321,16 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+@media (max-width: 768px) {
+  .message-bubble {
+    padding: 6px 8px;
+    gap: 8px;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+  }
+}

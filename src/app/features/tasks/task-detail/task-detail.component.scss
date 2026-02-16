@@ -457,3 +457,21 @@
   display: flex;
   gap: 8px;
 }
+
+@media (max-width: 768px) {
+  .detail-header {
+    padding: 12px;
+  }
+
+  .detail-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .tab-body,
+  .detail-body {
+    padding: 12px;
+  }
+}

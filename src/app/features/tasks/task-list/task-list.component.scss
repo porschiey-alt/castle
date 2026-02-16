@@ -194,3 +194,21 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+@media (max-width: 768px) {
+  .tasks-header {
+    padding: 12px 12px;
+  }
+
+  .filter-bar {
+    padding: 8px 12px;
+  }
+
+  .task-items {
+    padding: 4px 8px;
+  }
+
+  .task-card {
+    padding: 10px 12px;
+  }
+}

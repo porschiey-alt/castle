@@ -42,3 +42,13 @@
   height: 200px;
   color: var(--text-muted);
 }
+
+@media (max-width: 768px) {
+  .message-list-container {
+    padding: 8px;
+  }
+
+  .messages-wrapper {
+    max-width: 100%;
+  }
+}
