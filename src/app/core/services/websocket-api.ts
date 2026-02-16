@@ -6,7 +6,7 @@
  */
 
 import type { ElectronAPI } from '../../../preload/index';
-import type { AgentDiscoveryResult, AgentSession } from '../../../shared/types/agent.types';
+import type { AgentDiscoveryResult, AgentSession, CastleAgentConfig } from '../../../shared/types/agent.types';
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
 import type { AppSettings, PermissionSet } from '../../../shared/types/settings.types';
 import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
@@ -133,6 +133,8 @@ export class WebSocketAPI implements ElectronAPI {
       this.invoke(IPC_CHANNELS.AGENTS_STOP_SESSION, { sessionId }),
     getSession: (agentId: string): Promise<AgentSession | null> =>
       this.invoke(IPC_CHANNELS.AGENTS_GET_SESSION, { agentId }),
+    saveBuiltinConfig: (agents: CastleAgentConfig[]): Promise<void> =>
+      this.invoke(IPC_CHANNELS.AGENTS_SAVE_BUILTIN_CONFIG, { agents }),
   };
 
   chat = {

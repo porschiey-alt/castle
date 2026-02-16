@@ -31,9 +31,15 @@ export class AgentCircleComponent {
 
   // Outputs
   selected = output<AgentWithSession>();
+  editRequested = output<AgentWithSession>();
 
   onSelect(): void {
     this.selected.emit(this.agent());
+  }
+
+  onContextMenu(event: MouseEvent): void {
+    event.preventDefault();
+    this.editRequested.emit(this.agent());
   }
 
   getStatusClass(): string {

@@ -126,6 +126,10 @@ export function registerIpcHandlers(services: IpcServices): void {
     return sessionProcess?.session || null;
   });
 
+  handle(IPC_CHANNELS.AGENTS_SAVE_BUILTIN_CONFIG, async (_event, { agents }) => {
+    agentDiscoveryService.saveBuiltinConfig(agents);
+  });
+
   // ============ Chat Handlers ============
 
   // Helper to wire up output/complete/error/permission listeners for a session

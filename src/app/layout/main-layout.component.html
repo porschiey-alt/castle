@@ -4,7 +4,7 @@
 
   <!-- Sidebar with agent circles -->
   <aside class="agent-sidebar" [class.open]="sidebarOpen">
-    <app-sidebar (addAgentClicked)="addAgent()" (tasksClicked)="showTasks()" (agentSelected)="showChat()" />
+    <app-sidebar (addAgentClicked)="addAgent()" (editAgentClicked)="editAgent($event)" (tasksClicked)="showTasks()" (agentSelected)="showChat()" />
   </aside>
 
   <!-- Main content area -->

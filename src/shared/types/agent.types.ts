@@ -14,6 +14,14 @@ export interface Agent {
   mcpServers?: MCPServerConfig[];
 }
 
+export interface CastleAgentConfig {
+  name: string;
+  icon?: string;
+  color?: string;
+  description?: string;
+  systemPrompt?: string;
+}
+
 export interface MCPServerConfig {
   name: string;
   command: string;

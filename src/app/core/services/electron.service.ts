@@ -9,7 +9,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import type { ElectronAPI } from '../../../preload/index';
-import type { Agent, AgentDiscoveryResult, AgentSession } from '../../../shared/types/agent.types';
+import type { Agent, AgentDiscoveryResult, AgentSession, CastleAgentConfig } from '../../../shared/types/agent.types';
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
 import type { AppSettings, PermissionSet, PermissionResponse } from '../../../shared/types/settings.types';
 import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
@@ -138,6 +138,10 @@ export class ElectronService {
 
   async getAgentSession(agentId: string): Promise<AgentSession | null> {
     return this.api.agents.getSession(agentId);
+  }
+
+  async saveBuiltinAgentsConfig(agents: CastleAgentConfig[]): Promise<void> {
+    return this.api.agents.saveBuiltinConfig(agents);
   }
 
   // ============ Chat Methods ============

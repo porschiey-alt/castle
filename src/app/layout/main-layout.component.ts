@@ -20,11 +20,16 @@ import { SettingsPageComponent } from '../features/settings/settings-page.compon
 import { StatusBarComponent } from '../shared/components/status-bar/status-bar.component';
 import { PermissionDialogComponent } from '../shared/components/permission-dialog/permission-dialog.component';
 
+import { AgentDialogComponent, AgentDialogData, AgentDialogResult } from '../shared/components/agent-dialog/agent-dialog.component';
+
 import { ElectronService } from '../core/services/electron.service';
 import { AgentService } from '../core/services/agent.service';
 import { TaskService } from '../core/services/task.service';
 import { ConversationService } from '../core/services/conversation.service';
 import { ChatService } from '../core/services/chat.service';
+
+import type { AgentWithSession } from '../../shared/types/agent.types';
+import type { CastleAgentConfig } from '../../shared/types/agent.types';
 
 @Component({
   selector: 'app-main-layout',
@@ -163,8 +168,51 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   }
 
   addAgent(): void {
-    // TODO: Open add agent dialog
-    console.log('Add agent feature coming soon');
+    const dialogRef = this.dialog.open(AgentDialogComponent, {
+      data: {} as AgentDialogData,
+      width: '520px',
+      panelClass: 'agent-dialog',
+    });
+
+    dialogRef.afterClosed().subscribe(async (result: AgentDialogResult | undefined) => {
+      if (!result || result.action !== 'save') return;
+      const configs = this.agentService.getBuiltinAgentConfigs();
+      configs.push(result.agent);
+      await this.agentService.saveAgentsConfig(configs);
+    });
+  }
+
+  editAgent(agent: AgentWithSession): void {
+    const agentConfig: CastleAgentConfig = {
+      name: agent.name,
+      icon: agent.icon,
+      color: agent.color,
+      description: agent.description,
+      systemPrompt: agent.systemPrompt,
+    };
+
+    const dialogRef = this.dialog.open(AgentDialogComponent, {
+      data: { agent: agentConfig } as AgentDialogData,
+      width: '520px',
+      panelClass: 'agent-dialog',
+    });
+
+    dialogRef.afterClosed().subscribe(async (result: AgentDialogResult | undefined) => {
+      if (!result) return;
+      const configs = this.agentService.getBuiltinAgentConfigs();
+      if (result.action === 'save') {
+        const idx = configs.findIndex(c => c.name === agent.name);
+        if (idx >= 0) {
+          configs[idx] = result.agent;
+        } else {
+          configs.push(result.agent);
+        }
+      } else if (result.action === 'delete') {
+        const idx = configs.findIndex(c => c.name === agent.name);
+        if (idx >= 0) configs.splice(idx, 1);
+      }
+      await this.agentService.saveAgentsConfig(configs);
+    });
   }
 
   toggleSidebar(): void {

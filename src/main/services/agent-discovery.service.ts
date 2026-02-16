@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { Agent, AgentDiscoveryResult } from '../../shared/types/agent.types';
+import { Agent, AgentDiscoveryResult, CastleAgentConfig } from '../../shared/types/agent.types';
 import { AGENTS_MD_FILENAMES, BUILTIN_AGENT_COLORS } from '../../shared/constants';
 
 /** Generate a deterministic UUID v4-format ID from a stable key (name + source) */
@@ -20,14 +20,6 @@ function stableAgentId(name: string, source: string): string {
     ((parseInt(hash[16], 16) & 0x3) | 0x8).toString(16) + hash.slice(17, 20), // variant
     hash.slice(20, 32)
   ].join('-');
-}
-
-interface CastleAgentConfig {
-  name: string;
-  icon?: string;
-  color?: string;
-  description?: string;
-  systemPrompt?: string;
 }
 
 interface CastleConfig {
@@ -46,6 +38,42 @@ export class AgentDiscoveryService {
     } else {
       this.builtinAgentsPath = path.join(process.resourcesPath, 'resources', 'agents.md');
     }
+  }
+
+  /**
+   * Save agent configurations to the builtin agents.md file
+   */
+  saveBuiltinConfig(agents: CastleAgentConfig[]): void {
+    const yamlLines: string[] = ['agents:'];
+    for (const agent of agents) {
+      yamlLines.push(`  - name: ${agent.name}`);
+      if (agent.icon) yamlLines.push(`    icon: ${agent.icon}`);
+      if (agent.color) yamlLines.push(`    color: "${agent.color}"`);
+      if (agent.description) yamlLines.push(`    description: ${agent.description}`);
+      if (agent.systemPrompt) {
+        yamlLines.push(`    systemPrompt: |`);
+        for (const line of agent.systemPrompt.split('\n')) {
+          yamlLines.push(`      ${line}`);
+        }
+      }
+      yamlLines.push('');
+    }
+
+    const configBlock = yamlLines.join('\n').trimEnd();
+    const mdContent = [
+      `# Castle Built-in Agents`,
+      ``,
+      `<!-- castle-config`,
+      configBlock,
+      `-->`,
+      ``,
+      `## About Castle Agents`,
+      ``,
+      `Castle provides multiple specialized AI agents to help with different aspects of software development. Each agent has a specific focus and expertise.`,
+      ``,
+    ].join('\n');
+
+    fs.writeFileSync(this.builtinAgentsPath, mdContent, 'utf-8');
   }
 
   /**

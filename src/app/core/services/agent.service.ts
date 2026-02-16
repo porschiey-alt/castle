@@ -4,7 +4,7 @@
 
 import { Injectable, signal, computed } from '@angular/core';
 import { ElectronService } from './electron.service';
-import type { Agent, AgentWithSession, AgentSession } from '../../../shared/types/agent.types';
+import type { Agent, AgentWithSession, AgentSession, CastleAgentConfig } from '../../../shared/types/agent.types';
 
 @Injectable({
   providedIn: 'root'
@@ -173,5 +173,30 @@ export class AgentService {
   hasActiveSession(agentId: string): boolean {
     const session = this.sessionsSignal().get(agentId);
     return session !== undefined && session.status !== 'stopped' && session.status !== 'error';
+  }
+
+  /**
+   * Save agents config and re-discover
+   */
+  async saveAgentsConfig(configs: CastleAgentConfig[]): Promise<void> {
+    await this.electronService.saveBuiltinAgentsConfig(configs);
+    if (this.workspacePath) {
+      await this.discoverAgents(this.workspacePath);
+    }
+  }
+
+  /**
+   * Get the current builtin agent configs (for editing)
+   */
+  getBuiltinAgentConfigs(): CastleAgentConfig[] {
+    return this.agentsSignal()
+      .filter(a => a.source === 'builtin')
+      .map(a => ({
+        name: a.name,
+        icon: a.icon,
+        color: a.color,
+        description: a.description,
+        systemPrompt: a.systemPrompt,
+      }));
   }
 }

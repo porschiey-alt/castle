@@ -2,7 +2,7 @@
  * IPC channel definitions and payload types for Electron communication
  */
 
-import { Agent, AgentDiscoveryResult, AgentSession } from './agent.types';
+import { Agent, AgentDiscoveryResult, AgentSession, CastleAgentConfig } from './agent.types';
 import { ChatMessage, StreamingMessage } from './message.types';
 import { AppSettings, PermissionRequest, PermissionResponse, PermissionSet } from './settings.types';
 import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from './task.types';
@@ -22,6 +22,7 @@ export const IPC_CHANNELS = {
   AGENTS_START_SESSION: 'agents:startSession',
   AGENTS_STOP_SESSION: 'agents:stopSession',
   AGENTS_GET_SESSION: 'agents:getSession',
+  AGENTS_SAVE_BUILTIN_CONFIG: 'agents:saveBuiltinConfig',
   
   // Chat operations
   CHAT_SEND_MESSAGE: 'chat:sendMessage',
@@ -125,6 +126,10 @@ export interface IPCPayloads {
   [IPC_CHANNELS.AGENTS_GET_SESSION]: {
     request: { agentId: string };
     response: AgentSession | null;
+  };
+  [IPC_CHANNELS.AGENTS_SAVE_BUILTIN_CONFIG]: {
+    request: { agents: CastleAgentConfig[] };
+    response: void;
   };
   
   // Chat

@@ -10,7 +10,8 @@
   [matBadgeHidden]="!hasUnread()"
   matBadgeColor="accent"
   matBadgeSize="small"
-  (click)="onSelect()">
+  (click)="onSelect()"
+  (contextmenu)="onContextMenu($event)">
   
   @if (agent().icon) {
     <span class="agent-icon">{{ agent().icon }}</span>

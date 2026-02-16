@@ -6,7 +6,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/types/ipc.types';
 import { AppSettings, PermissionSet, PermissionResponse } from '../shared/types/settings.types';
-import { Agent, AgentDiscoveryResult, AgentSession } from '../shared/types/agent.types';
+import { Agent, AgentDiscoveryResult, AgentSession, CastleAgentConfig } from '../shared/types/agent.types';
 import { ChatMessage, StreamingMessage } from '../shared/types/message.types';
 import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../shared/types/task.types';
 import { Conversation, CreateConversationInput, UpdateConversationInput } from '../shared/types/conversation.types';
@@ -27,6 +27,7 @@ export interface ElectronAPI {
     startSession: (agentId: string, workingDirectory: string) => Promise<AgentSession>;
     stopSession: (sessionId: string) => Promise<void>;
     getSession: (agentId: string) => Promise<AgentSession | null>;
+    saveBuiltinConfig: (agents: CastleAgentConfig[]) => Promise<void>;
   };
 
   // Chat operations
@@ -126,7 +127,9 @@ const electronAPI: ElectronAPI = {
     stopSession: (sessionId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENTS_STOP_SESSION, { sessionId }),
     getSession: (agentId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.AGENTS_GET_SESSION, { agentId })
+      ipcRenderer.invoke(IPC_CHANNELS.AGENTS_GET_SESSION, { agentId }),
+    saveBuiltinConfig: (agents: CastleAgentConfig[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.AGENTS_SAVE_BUILTIN_CONFIG, { agents })
   },
 
   chat: {

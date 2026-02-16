@@ -23,6 +23,7 @@
           [agent]="agent"
           [isSelected]="selectedAgentId() === agent.id"
           (selected)="selectAgent($event)"
+          (editRequested)="onEditAgent($event)"
         />
       } @empty {
         <div class="no-agents" matTooltip="No agents found" matTooltipPosition="right">

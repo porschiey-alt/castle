@@ -36,6 +36,7 @@ export class SidebarComponent {
 
   // Output events
   addAgentClicked = output<void>();
+  editAgentClicked = output<AgentWithSession>();
   tasksClicked = output<void>();
   agentSelected = output<void>();
 
@@ -56,6 +57,10 @@ export class SidebarComponent {
 
   onAddAgent(): void {
     this.addAgentClicked.emit();
+  }
+
+  onEditAgent(agent: AgentWithSession): void {
+    this.editAgentClicked.emit(agent);
   }
 
   trackByAgentId(_index: number, agent: AgentWithSession): string {
