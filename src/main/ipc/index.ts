@@ -325,6 +325,12 @@ export function registerIpcHandlers(services: IpcServices): void {
     // Save agentId to task immediately
     await databaseService.updateTask(taskId, { researchAgentId: agentId });
 
+    // Record start time to detect agent-created files
+    const researchStartTime = Date.now();
+    const researchDir = outputPath || path.join(workingDirectory, 'research');
+    const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
+    const expectedFilePath = path.join(researchDir, `${safeTitle}.md`);
+
     // Listen for completion to save research content
     const onComplete = async (message: { content: string }) => {
       if (task.kind === 'bug') {
@@ -342,18 +348,29 @@ export function registerIpcHandlers(services: IpcServices): void {
           researchContent: message.content,
         });
       } else {
-        // Save to task in database
-        await databaseService.updateTask(taskId, { researchContent: message.content });
+        // Check if the agent already wrote the research file during execution
+        let researchContent = message.content;
+        try {
+          if (fs.existsSync(expectedFilePath)) {
+            const stat = fs.statSync(expectedFilePath);
+            if (stat.mtimeMs >= researchStartTime) {
+              // Agent created/modified this file — use its content, not the chat response
+              researchContent = fs.readFileSync(expectedFilePath, 'utf-8');
+            }
+          }
+        } catch { /* fall back to message.content */ }
 
-        // Also save to file
-        const researchDir = outputPath || path.join(workingDirectory, 'research');
-        if (!fs.existsSync(researchDir)) {
-          fs.mkdirSync(researchDir, { recursive: true });
+        // Save to task in database
+        await databaseService.updateTask(taskId, { researchContent });
+
+        // Write to disk only if agent didn't already create the file
+        if (!fs.existsSync(expectedFilePath) || fs.statSync(expectedFilePath).mtimeMs < researchStartTime) {
+          if (!fs.existsSync(researchDir)) {
+            fs.mkdirSync(researchDir, { recursive: true });
+          }
+          fs.writeFileSync(expectedFilePath, researchContent, 'utf-8');
         }
-        const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
-        const filePath = path.join(researchDir, `${safeTitle}.md`);
-        fs.writeFileSync(filePath, message.content, 'utf-8');
-        console.log(`[Research] Saved research to ${filePath}`);
+        console.log(`[Research] Saved research to ${expectedFilePath}`);
       }
 
       // Notify renderer that research is complete
@@ -366,7 +383,10 @@ export function registerIpcHandlers(services: IpcServices): void {
       });
     };
 
-    processManagerService.onComplete(sessionProcess.session.id, onComplete);
+    const unsubscribeResearch = processManagerService.onComplete(sessionProcess.session.id, (message) => {
+      unsubscribeResearch();
+      onComplete(message);
+    });
 
     // Send the prompt (async — responses come via events)
     processManagerService.sendMessage(sessionProcess.session.id, researchPrompt).catch((error) => {
@@ -463,7 +483,10 @@ export function registerIpcHandlers(services: IpcServices): void {
       });
     };
 
-    processManagerService.onComplete(sessionProcess.session.id, onComplete);
+    const unsubscribeReview = processManagerService.onComplete(sessionProcess.session.id, (message) => {
+      unsubscribeReview();
+      onComplete(message);
+    });
     processManagerService.sendMessage(sessionProcess.session.id, revisionPrompt).catch((error) => {
       console.error('[Research Review] Error:', error);
       databaseService.updateResearchReview(reviewId, { status: 'pending' });
