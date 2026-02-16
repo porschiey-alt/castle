@@ -29,6 +29,11 @@ interface SessionProcess {
   thinkingBuffer: string;
   toolCalls: Map<string, ToolCall>;
   todoItems: TodoItem[];
+  capabilities: {
+    canLoadSession: boolean;
+    canResumeSession: boolean;
+    canListSessions: boolean;
+  };
 }
 
 export class ProcessManagerService {
@@ -67,9 +72,10 @@ export class ProcessManagerService {
   }
 
   /**
-   * Start a new Copilot CLI session for an agent via ACP
+   * Start a new Copilot CLI session for an agent via ACP.
+   * If acpSessionIdToResume is provided, attempts to resume that session.
    */
-  async startSession(agent: Agent, workingDirectory: string): Promise<AgentSession> {
+  async startSession(agent: Agent, workingDirectory: string, acpSessionIdToResume?: string): Promise<AgentSession> {
     const existingSession = this.getSessionByAgentId(agent.id);
     if (existingSession) {
       return existingSession.session;
@@ -137,7 +143,8 @@ export class ProcessManagerService {
       contentBuffer: '',
       thinkingBuffer: '',
       toolCalls: new Map(),
-      todoItems: []
+      todoItems: [],
+      capabilities: { canLoadSession: false, canResumeSession: false, canListSessions: false }
     };
 
     // Register immediately so concurrent calls find it (status is 'starting')
@@ -231,6 +238,12 @@ export class ProcessManagerService {
           }));
           emitOutput();
         }
+
+        if (update.sessionUpdate === 'session_info_update') {
+          if ((update as any).title) {
+            eventEmitter.emit('titleUpdate', { title: (update as any).title });
+          }
+        }
       }
     };
 
@@ -239,25 +252,71 @@ export class ProcessManagerService {
 
     try {
       // Initialize ACP protocol
-      await connection.initialize({
+      const initResult = await connection.initialize({
         protocolVersion: 1,
         clientInfo: { name: 'Castle', version: '0.1.0' }
       });
 
-      // Create ACP session
-      const acpSession = await connection.newSession({
-        cwd: workingDirectory,
-        mcpServers: (agent.mcpServers || []).map(s => ({
-          name: s.name,
-          command: s.command,
-          args: s.args || [],
-          env: Object.entries(s.env || {}).map(([name, value]) => ({ name, value }))
-        }))
-      });
+      // Detect agent capabilities
+      const agentCaps = initResult?.agentCapabilities;
+      sessionProcess.capabilities = {
+        canLoadSession: agentCaps?.loadSession ?? false,
+        canResumeSession: !!agentCaps?.sessionCapabilities?.resume,
+        canListSessions: !!agentCaps?.sessionCapabilities?.list,
+      };
 
-      sessionProcess.acpSessionId = acpSession.sessionId;
+      const mcpServers = (agent.mcpServers || []).map(s => ({
+        name: s.name,
+        command: s.command,
+        args: s.args || [],
+        env: Object.entries(s.env || {}).map(([name, value]) => ({ name, value }))
+      }));
+
+      let acpSessionId: string | null = null;
+
+      // Try to resume existing ACP session
+      if (acpSessionIdToResume) {
+        if (sessionProcess.capabilities.canResumeSession) {
+          try {
+            const resumed = await connection.unstable_resumeSession({
+              sessionId: acpSessionIdToResume,
+              cwd: workingDirectory,
+              mcpServers
+            });
+            acpSessionId = (resumed as any)?.sessionId || acpSessionIdToResume;
+            console.log(`[Agent ${agent.name}] Resumed ACP session: ${acpSessionId}`);
+          } catch (e) {
+            console.warn(`[Agent ${agent.name}] Resume failed, trying loadSession:`, e);
+          }
+        }
+
+        if (!acpSessionId && sessionProcess.capabilities.canLoadSession) {
+          try {
+            const loaded = await connection.loadSession({
+              sessionId: acpSessionIdToResume,
+              cwd: workingDirectory,
+              mcpServers
+            });
+            acpSessionId = (loaded as any)?.sessionId || acpSessionIdToResume;
+            console.log(`[Agent ${agent.name}] Loaded ACP session: ${acpSessionId}`);
+          } catch (e) {
+            console.warn(`[Agent ${agent.name}] Load session failed, creating new:`, e);
+          }
+        }
+      }
+
+      // Fall back to new session
+      if (!acpSessionId) {
+        const acpSession = await connection.newSession({
+          cwd: workingDirectory,
+          mcpServers
+        });
+        acpSessionId = acpSession.sessionId;
+        console.log(`[Agent ${agent.name}] New ACP session: ${acpSessionId}`);
+      }
+
+      sessionProcess.acpSessionId = acpSessionId;
       session.status = 'ready';
-      console.log(`[Agent ${agent.name}] ACP session ready: ${acpSession.sessionId}`);
     } catch (error) {
       console.error(`[Agent ${agent.name}] ACP initialization failed:`, error);
       session.status = 'error';
@@ -402,6 +461,27 @@ export class ProcessManagerService {
 
     sessionProcess.eventEmitter.on('error', callback);
     return () => { sessionProcess.eventEmitter.off('error', callback); };
+  }
+
+  /**
+   * Subscribe to session title updates from ACP session_info_update
+   */
+  onTitleUpdate(sessionId: string, callback: (data: { title: string }) => void): () => void {
+    const sessionProcess = this.sessions.get(sessionId);
+    if (!sessionProcess) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+
+    sessionProcess.eventEmitter.on('titleUpdate', callback);
+    return () => { sessionProcess.eventEmitter.off('titleUpdate', callback); };
+  }
+
+  /**
+   * Get the ACP session ID for an agent's active session
+   */
+  getAcpSessionId(agentId: string): string | null {
+    const sessionProcess = this.getSessionByAgentId(agentId);
+    return sessionProcess?.acpSessionId || null;
   }
 
   /**

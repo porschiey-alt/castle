@@ -1,0 +1,71 @@
+<div class="conversation-list-container">
+  <div class="conversation-list-header">
+    <span class="header-title">Conversations</span>
+    <button mat-icon-button class="new-chat-btn" matTooltip="New Chat" (click)="newChat()">
+      <mat-icon>add</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <div class="conversation-items">
+    @for (conv of conversations(); track trackById($index, conv)) {
+      <div 
+        class="conversation-item"
+        [class.active]="activeConversationId() === conv.id"
+        (click)="selectConversation(conv)">
+        
+        @if (renamingId === conv.id) {
+          <input
+            class="rename-input"
+            [(ngModel)]="renameValue"
+            (blur)="commitRename()"
+            (keydown.enter)="commitRename()"
+            (keydown.escape)="cancelRename()"
+            (click)="$event.stopPropagation()"
+            autofocus
+          />
+        } @else {
+          <div class="conversation-info">
+            <span class="conversation-title">{{ conv.title || 'New conversation' }}</span>
+            <span class="conversation-meta">
+              {{ formatTime(conv.updatedAt) }}
+              @if (conv.messageCount) {
+                · {{ conv.messageCount }} msgs
+              }
+            </span>
+          </div>
+
+          <button 
+            mat-icon-button 
+            class="conversation-menu-btn"
+            [matMenuTriggerFor]="convMenu"
+            (click)="$event.stopPropagation()">
+            <mat-icon>more_horiz</mat-icon>
+          </button>
+
+          <mat-menu #convMenu="matMenu">
+            <button mat-menu-item (click)="startRename(conv, $event)">
+              <mat-icon>edit</mat-icon>
+              <span>Rename</span>
+            </button>
+            <button mat-menu-item (click)="deleteConversation(conv, $event)">
+              <mat-icon>delete</mat-icon>
+              <span>Delete</span>
+            </button>
+          </mat-menu>
+        }
+
+        @if (conv.acpSessionId) {
+          <mat-icon class="resume-indicator" matTooltip="Session can be resumed">sync</mat-icon>
+        }
+      </div>
+    } @empty {
+      <div class="empty-state">
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <span>No conversations yet</span>
+        <span class="empty-hint">Send a message to start one</span>
+      </div>
+    }
+  </div>
+</div>

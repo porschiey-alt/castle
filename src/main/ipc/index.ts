@@ -30,6 +30,9 @@ let discoveredAgents: Map<string, Agent> = new Map();
 /** Registry of IPC handlers that can be invoked from both Electron IPC and WebSocket */
 export const ipcHandlerRegistry = new Map<string, (payload: any) => Promise<any>>();
 
+// Track active conversationId per agent for associating assistant replies
+const activeConversationIds = new Map<string, string>();
+
 export function registerIpcHandlers(services: IpcServices): void {
   const {
     databaseService,
@@ -80,7 +83,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     return result;
   });
 
-  handle(IPC_CHANNELS.AGENTS_START_SESSION, async (_event, { agentId, workingDirectory }) => {
+  handle(IPC_CHANNELS.AGENTS_START_SESSION, async (_event, { agentId, workingDirectory, acpSessionId: resumeSessionId }) => {
     // Reuse existing session if one is already running for this agent
     const existing = processManagerService.getSessionByAgentId(agentId);
     if (existing && existing.session.status !== 'stopped' && existing.session.status !== 'error') {
@@ -99,7 +102,17 @@ export function registerIpcHandlers(services: IpcServices): void {
       throw new Error(`Agent ${agentId} not found`);
     }
 
-    const session = await processManagerService.startSession(agent, workingDirectory);
+    // Try to find an ACP session ID to resume from the most recent conversation
+    let acpSessionIdToResume = resumeSessionId || undefined;
+    if (!acpSessionIdToResume) {
+      const conversations = await databaseService.getConversations(agentId);
+      const withSession = conversations.find(c => c.acpSessionId);
+      if (withSession?.acpSessionId) {
+        acpSessionIdToResume = withSession.acpSessionId;
+      }
+    }
+
+    const session = await processManagerService.startSession(agent, workingDirectory, acpSessionIdToResume);
     subscribeToSession(session.id, agentId);
     return session;
   });
@@ -122,15 +135,16 @@ export function registerIpcHandlers(services: IpcServices): void {
     });
 
     processManagerService.onComplete(sessionId, async (message) => {
-      // Save assistant message to database
+      // Save assistant message to database with active conversation context
+      const conversationId = activeConversationIds.get(agentId);
       const assistantMessage = await databaseService.saveMessage({
         agentId,
+        conversationId,
         role: 'assistant',
         content: message.content,
         timestamp: new Date()
       });
       broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, assistantMessage);
-      // Notify all devices to reload chat history
       broadcaster.send(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, assistantMessage);
     });
 
@@ -145,12 +159,38 @@ export function registerIpcHandlers(services: IpcServices): void {
     processManagerService.onCancelled(sessionId, () => {
       broadcaster.send(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, { agentId });
     });
+
+    // Listen for ACP session title updates
+    processManagerService.onTitleUpdate(sessionId, async ({ title }) => {
+      const conversationId = activeConversationIds.get(agentId);
+      if (conversationId) {
+        const conversation = await databaseService.updateConversation(conversationId, { title });
+        broadcaster.send(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, { action: 'updated', conversation });
+      }
+    });
+
+    // Persist ACP session ID to active conversation
+    const acpId = processManagerService.getAcpSessionId(agentId);
+    if (acpId) {
+      const conversationId = activeConversationIds.get(agentId);
+      if (conversationId) {
+        databaseService.updateConversation(conversationId, { acpSessionId: acpId });
+      }
+    }
   }
 
-  handle(IPC_CHANNELS.CHAT_SEND_MESSAGE, async (_event, { agentId, content }) => {
+  handle(IPC_CHANNELS.CHAT_SEND_MESSAGE, async (_event, { agentId, content, conversationId }) => {
+    // Track active conversation for associating assistant replies
+    if (conversationId) {
+      activeConversationIds.set(agentId, conversationId);
+    } else {
+      activeConversationIds.delete(agentId);
+    }
+
     // Save user message
     const userMessage = await databaseService.saveMessage({
       agentId,
+      conversationId,
       role: 'user',
       content,
       timestamp: new Date()
@@ -576,6 +616,37 @@ export function registerIpcHandlers(services: IpcServices): void {
     });
 
     return { reviewId };
+  });
+
+  // ============ Conversation Handlers ============
+
+  handle(IPC_CHANNELS.CONVERSATIONS_GET_ALL, async (_event, { agentId }) => {
+    return databaseService.getConversations(agentId);
+  });
+
+  handle(IPC_CHANNELS.CONVERSATIONS_GET, async (_event, { conversationId }) => {
+    return databaseService.getConversation(conversationId);
+  });
+
+  handle(IPC_CHANNELS.CONVERSATIONS_CREATE, async (_event, input) => {
+    const conversation = await databaseService.createConversation(input);
+    broadcaster.send(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, { action: 'created', conversation });
+    return conversation;
+  });
+
+  handle(IPC_CHANNELS.CONVERSATIONS_UPDATE, async (_event, { conversationId, updates }) => {
+    const conversation = await databaseService.updateConversation(conversationId, updates);
+    broadcaster.send(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, { action: 'updated', conversation });
+    return conversation;
+  });
+
+  handle(IPC_CHANNELS.CONVERSATIONS_DELETE, async (_event, { conversationId }) => {
+    await databaseService.deleteConversation(conversationId);
+    broadcaster.send(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, { action: 'deleted', conversationId });
+  });
+
+  handle(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, async (_event, { conversationId, limit, offset }) => {
+    return databaseService.getMessagesByConversation(conversationId, limit, offset);
   });
 
   console.log('IPC handlers registered');

@@ -10,6 +10,7 @@ import type { AgentDiscoveryResult, AgentSession } from '../../../shared/types/a
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
 import type { AppSettings, PermissionSet } from '../../../shared/types/settings.types';
 import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
+import type { Conversation, CreateConversationInput, UpdateConversationInput } from '../../../shared/types/conversation.types';
 import { IPC_CHANNELS } from '../../../shared/types/ipc.types';
 
 type EventCallback = (...args: any[]) => void;
@@ -135,8 +136,8 @@ export class WebSocketAPI implements ElectronAPI {
   };
 
   chat = {
-    sendMessage: (agentId: string, content: string): Promise<ChatMessage> =>
-      this.invoke(IPC_CHANNELS.CHAT_SEND_MESSAGE, { agentId, content }),
+    sendMessage: (agentId: string, content: string, conversationId?: string): Promise<ChatMessage> =>
+      this.invoke(IPC_CHANNELS.CHAT_SEND_MESSAGE, { agentId, content, conversationId }),
     getHistory: (agentId: string, limit?: number, offset?: number): Promise<ChatMessage[]> =>
       this.invoke(IPC_CHANNELS.CHAT_GET_HISTORY, { agentId, limit, offset }),
     clearHistory: (agentId: string): Promise<void> =>
@@ -224,5 +225,22 @@ export class WebSocketAPI implements ElectronAPI {
       this.on(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, callback),
     onPermissionResponded: (callback: (data: { requestId: string }) => void): (() => void) =>
       this.on(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, callback),
+    onConversationsChanged: (callback: (data: { action: string; conversation?: Conversation; conversationId?: string }) => void): (() => void) =>
+      this.on(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, callback),
+  };
+
+  conversations = {
+    getAll: (agentId: string): Promise<Conversation[]> =>
+      this.invoke(IPC_CHANNELS.CONVERSATIONS_GET_ALL, { agentId }),
+    get: (conversationId: string): Promise<Conversation | null> =>
+      this.invoke(IPC_CHANNELS.CONVERSATIONS_GET, { conversationId }),
+    create: (input: CreateConversationInput): Promise<Conversation> =>
+      this.invoke(IPC_CHANNELS.CONVERSATIONS_CREATE, input),
+    update: (conversationId: string, updates: UpdateConversationInput): Promise<Conversation> =>
+      this.invoke(IPC_CHANNELS.CONVERSATIONS_UPDATE, { conversationId, updates }),
+    delete: (conversationId: string): Promise<void> =>
+      this.invoke(IPC_CHANNELS.CONVERSATIONS_DELETE, { conversationId }),
+    getMessages: (conversationId: string, limit?: number, offset?: number): Promise<ChatMessage[]> =>
+      this.invoke(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, { conversationId, limit, offset }),
   };
 }

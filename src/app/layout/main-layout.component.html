@@ -22,6 +22,9 @@
           @if (selectedAgent(); as agent) {
             <span class="agent-icon">{{ agent.icon || '🤖' }}</span>
             <span class="agent-name">{{ agent.name }}</span>
+            @if (activeConversation(); as conv) {
+              <span class="conversation-title-badge">{{ conv.title || 'New conversation' }}</span>
+            }
             @if (agent.session) {
               <span class="session-status" [class]="'status-' + agent.session.status">
                 {{ agent.session.status }}
@@ -34,6 +37,11 @@
       </div>
       
       <div class="toolbar-right">
+        @if (activeView === 'chat' && selectedAgent()) {
+          <button mat-icon-button matTooltip="Toggle conversations" (click)="toggleConversationPanel()">
+            <mat-icon>{{ conversationPanelOpen ? 'view_sidebar' : 'chat' }}</mat-icon>
+          </button>
+        }
         <button mat-icon-button matTooltip="Settings" [matMenuTriggerFor]="settingsMenu">
           <mat-icon>settings</mat-icon>
         </button>
@@ -83,12 +91,20 @@
     </mat-toolbar>
 
     <!-- Content area -->
-    <div class="chat-container">
-      @if (activeView === 'tasks') {
-        <app-task-list (goToAgent)="goToAgent($event)" />
-      } @else if (selectedAgent()) {
-        <app-chat [agent]="selectedAgent()!" />
-      } @else {
+    <div class="content-wrapper">
+      @if (activeView === 'chat' && selectedAgent()) {
+        <!-- Conversation panel -->
+        <aside class="conversation-panel" [class.collapsed]="!conversationPanelOpen">
+          <app-conversation-list (conversationSelected)="onConversationSelected($event)" />
+        </aside>
+      }
+
+      <div class="chat-container">
+        @if (activeView === 'tasks') {
+          <app-task-list (goToAgent)="goToAgent($event)" />
+        } @else if (selectedAgent()) {
+          <app-chat [agent]="selectedAgent()!" />
+        } @else {
         <div class="no-agent-selected">
           <mat-icon class="large-icon">smart_toy</mat-icon>
           <h2>Welcome to Castle</h2>
@@ -117,6 +133,7 @@
           }
         </div>
       }
+    </div>
     </div>
 
     <!-- Status bar -->

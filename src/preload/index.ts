@@ -9,6 +9,7 @@ import { AppSettings, PermissionSet, PermissionResponse } from '../shared/types/
 import { Agent, AgentDiscoveryResult, AgentSession } from '../shared/types/agent.types';
 import { ChatMessage, StreamingMessage } from '../shared/types/message.types';
 import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../shared/types/task.types';
+import { Conversation, CreateConversationInput, UpdateConversationInput } from '../shared/types/conversation.types';
 
 // Type definitions for the exposed API
 export interface ElectronAPI {
@@ -30,7 +31,7 @@ export interface ElectronAPI {
 
   // Chat operations
   chat: {
-    sendMessage: (agentId: string, content: string) => Promise<ChatMessage>;
+    sendMessage: (agentId: string, content: string, conversationId?: string) => Promise<ChatMessage>;
     getHistory: (agentId: string, limit?: number, offset?: number) => Promise<ChatMessage[]>;
     clearHistory: (agentId: string) => Promise<void>;
     cancelMessage: (agentId: string) => Promise<void>;
@@ -93,6 +94,17 @@ export interface ElectronAPI {
     onTasksChanged: (callback: (data: { action: string; task?: Task; taskId?: string }) => void) => () => void;
     onChatMessageAdded: (callback: (message: ChatMessage) => void) => () => void;
     onPermissionResponded: (callback: (data: { requestId: string }) => void) => () => void;
+    onConversationsChanged: (callback: (data: { action: string; conversation?: Conversation; conversationId?: string }) => void) => () => void;
+  };
+
+  // Conversation operations
+  conversations: {
+    getAll: (agentId: string) => Promise<Conversation[]>;
+    get: (conversationId: string) => Promise<Conversation | null>;
+    create: (input: CreateConversationInput) => Promise<Conversation>;
+    update: (conversationId: string, updates: UpdateConversationInput) => Promise<Conversation>;
+    delete: (conversationId: string) => Promise<void>;
+    getMessages: (conversationId: string, limit?: number, offset?: number) => Promise<ChatMessage[]>;
   };
 }
 
@@ -117,8 +129,8 @@ const electronAPI: ElectronAPI = {
   },
 
   chat: {
-    sendMessage: (agentId: string, content: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND_MESSAGE, { agentId, content }),
+    sendMessage: (agentId: string, content: string, conversationId?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND_MESSAGE, { agentId, content, conversationId }),
     getHistory: (agentId: string, limit?: number, offset?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HISTORY, { agentId, limit, offset }),
     clearHistory: (agentId: string) =>
@@ -230,7 +242,27 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, handler);
     },
-  }
+    onConversationsChanged: (callback: (data: { action: string; conversation?: Conversation; conversationId?: string }) => void) => {
+      const handler = (_event: IpcRendererEvent, data: { action: string; conversation?: Conversation; conversationId?: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC_CONVERSATIONS_CHANGED, handler);
+    },
+  },
+
+  conversations: {
+    getAll: (agentId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_GET_ALL, { agentId }),
+    get: (conversationId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_GET, { conversationId }),
+    create: (input: CreateConversationInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_CREATE, input),
+    update: (conversationId: string, updates: UpdateConversationInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_UPDATE, { conversationId, updates }),
+    delete: (conversationId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_DELETE, { conversationId }),
+    getMessages: (conversationId: string, limit?: number, offset?: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, { conversationId, limit, offset }),
+  },
 };
 
 // Expose the API to the renderer process

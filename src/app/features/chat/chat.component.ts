@@ -2,7 +2,7 @@
  * Chat Component - Main chat interface
  */
 
-import { Component, input, inject, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, input, inject, OnInit, OnChanges, SimpleChanges, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 import { MessageListComponent } from './message-list/message-list.component';
@@ -11,6 +11,7 @@ import { TodoBannerComponent } from './todo-banner/todo-banner.component';
 
 import { ChatService } from '../../core/services/chat.service';
 import { AgentService } from '../../core/services/agent.service';
+import { ConversationService } from '../../core/services/conversation.service';
 import type { AgentWithSession } from '../../../shared/types/agent.types';
 
 @Component({
@@ -28,6 +29,7 @@ import type { AgentWithSession } from '../../../shared/types/agent.types';
 export class ChatComponent implements OnInit, OnChanges {
   private chatService = inject(ChatService);
   private agentService = inject(AgentService);
+  private conversationService = inject(ConversationService);
 
   // Input
   agent = input.required<AgentWithSession>();
@@ -37,6 +39,18 @@ export class ChatComponent implements OnInit, OnChanges {
   streamingMessage = this.chatService.streamingMessage;
   isLoading = this.chatService.isLoading;
   todoItems = this.chatService.todoItems;
+
+  constructor() {
+    // Reload history when active conversation changes
+    effect(() => {
+      const convId = this.conversationService.activeConversationId();
+      // Side effect: reload messages for the new conversation
+      const agentId = this.agentService.selectedAgentId();
+      if (agentId) {
+        this.chatService.loadHistory(agentId);
+      }
+    });
+  }
 
   isInitializing(): boolean {
     return this.agentService.isSessionInitializing(this.agent().id);

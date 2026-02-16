@@ -17,6 +17,7 @@ import {
 } from '../../shared/types';
 import { ChatMessage, MessageRole } from '../../shared/types/message.types';
 import { Agent } from '../../shared/types/agent.types';
+import { Conversation, CreateConversationInput, UpdateConversationInput } from '../../shared/types/conversation.types';
 import { Task, TaskState, TaskKind, TaskLabel, CreateTaskInput, UpdateTaskInput, BugCloseReason, ResearchReview, ResearchComment } from '../../shared/types/task.types';
 
 export class DatabaseService {
@@ -199,6 +200,63 @@ export class DatabaseService {
       )
     `);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_research_reviews_task_id ON research_reviews(task_id)`);
+
+    // Conversations table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS conversations (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        acp_session_id TEXT,
+        title TEXT,
+        working_directory TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+      )
+    `);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_conversations_agent_id ON conversations(agent_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at)`);
+
+    // Migration: add conversation_id to messages
+    try {
+      this.db.run(`ALTER TABLE messages ADD COLUMN conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE`);
+    } catch { /* column already exists */ }
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)`);
+
+    // Migration: create legacy conversations for existing messages without conversation_id
+    this.migrateLegacyConversations();
+  }
+
+  private migrateLegacyConversations(): void {
+    if (!this.db) return;
+
+    // Find agents with messages that have no conversation_id
+    const stmt = this.db.prepare(
+      `SELECT DISTINCT agent_id FROM messages WHERE conversation_id IS NULL`
+    );
+    const agentIds: string[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { agent_id: string };
+      agentIds.push(row.agent_id);
+    }
+    stmt.free();
+
+    for (const agentId of agentIds) {
+      const legacyId = `legacy-${agentId}`;
+      // Create a legacy conversation if it doesn't exist
+      this.db.run(
+        `INSERT OR IGNORE INTO conversations (id, agent_id, title, created_at, updated_at)
+         VALUES (?, ?, 'Previous conversation', 
+           (SELECT MIN(created_at) FROM messages WHERE agent_id = ?),
+           (SELECT MAX(created_at) FROM messages WHERE agent_id = ?))`,
+        [legacyId, agentId, agentId, agentId]
+      );
+      // Link orphaned messages
+      this.db.run(
+        `UPDATE messages SET conversation_id = ? WHERE agent_id = ? AND conversation_id IS NULL`,
+        [legacyId, agentId]
+      );
+    }
   }
 
   /**
@@ -270,17 +328,26 @@ export class DatabaseService {
 
     const id = uuidv4();
     this.db.run(
-      `INSERT INTO messages (id, agent_id, role, content, metadata, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, agent_id, conversation_id, role, content, metadata, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         message.agentId,
+        message.conversationId || null,
         message.role,
         message.content,
         message.metadata ? JSON.stringify(message.metadata) : null,
         message.timestamp.toISOString()
       ]
     );
+
+    // Update conversation's updated_at timestamp
+    if (message.conversationId) {
+      this.db.run(
+        `UPDATE conversations SET updated_at = datetime('now') WHERE id = ?`,
+        [message.conversationId]
+      );
+    }
 
     this.saveDatabase();
     return { ...message, id };
@@ -291,7 +358,7 @@ export class DatabaseService {
 
     const messages: ChatMessage[] = [];
     const stmt = this.db.prepare(
-      `SELECT id, agent_id, role, content, metadata, created_at
+      `SELECT id, agent_id, conversation_id, role, content, metadata, created_at
        FROM messages
        WHERE agent_id = ?
        ORDER BY created_at DESC
@@ -303,6 +370,7 @@ export class DatabaseService {
       const row = stmt.getAsObject() as {
         id: string;
         agent_id: string;
+        conversation_id: string | null;
         role: string;
         content: string;
         metadata: string | null;
@@ -312,6 +380,7 @@ export class DatabaseService {
       messages.push({
         id: row.id,
         agentId: row.agent_id,
+        conversationId: row.conversation_id || undefined,
         role: row.role as MessageRole,
         content: row.content,
         metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
@@ -320,7 +389,7 @@ export class DatabaseService {
     }
     stmt.free();
 
-    return messages.reverse(); // Reverse to get chronological order
+    return messages.reverse();
   }
 
   async searchMessages(agentId: string, query: string): Promise<ChatMessage[]> {
@@ -365,6 +434,153 @@ export class DatabaseService {
 
     this.db.run('DELETE FROM messages WHERE agent_id = ?', [agentId]);
     this.saveDatabase();
+  }
+
+  // ============ Conversation Methods ============
+
+  async createConversation(input: CreateConversationInput): Promise<Conversation> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    this.db.run(
+      `INSERT INTO conversations (id, agent_id, title, working_directory, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, input.agentId, input.title || null, input.workingDirectory || null, now, now]
+    );
+
+    this.saveDatabase();
+    return this.getConversation(id) as Promise<Conversation>;
+  }
+
+  async getConversation(conversationId: string): Promise<Conversation | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const stmt = this.db.prepare(
+      `SELECT c.id, c.agent_id, c.acp_session_id, c.title, c.working_directory, c.created_at, c.updated_at,
+              (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count,
+              (SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message
+       FROM conversations c WHERE c.id = ?`
+    );
+    stmt.bind([conversationId]);
+
+    if (!stmt.step()) { stmt.free(); return null; }
+
+    const row = stmt.getAsObject() as {
+      id: string; agent_id: string; acp_session_id: string | null;
+      title: string | null; working_directory: string | null;
+      created_at: string; updated_at: string;
+      message_count: number; last_message: string | null;
+    };
+    stmt.free();
+
+    return {
+      id: row.id,
+      agentId: row.agent_id,
+      acpSessionId: row.acp_session_id || undefined,
+      title: row.title || undefined,
+      workingDirectory: row.working_directory || undefined,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+      messageCount: row.message_count,
+      lastMessage: row.last_message || undefined,
+    };
+  }
+
+  async getConversations(agentId: string): Promise<Conversation[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const conversations: Conversation[] = [];
+    const stmt = this.db.prepare(
+      `SELECT c.id, c.agent_id, c.acp_session_id, c.title, c.working_directory, c.created_at, c.updated_at,
+              (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count,
+              (SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message
+       FROM conversations c
+       WHERE c.agent_id = ?
+       ORDER BY c.updated_at DESC`
+    );
+    stmt.bind([agentId]);
+
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as {
+        id: string; agent_id: string; acp_session_id: string | null;
+        title: string | null; working_directory: string | null;
+        created_at: string; updated_at: string;
+        message_count: number; last_message: string | null;
+      };
+      conversations.push({
+        id: row.id,
+        agentId: row.agent_id,
+        acpSessionId: row.acp_session_id || undefined,
+        title: row.title || undefined,
+        workingDirectory: row.working_directory || undefined,
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.updated_at),
+        messageCount: row.message_count,
+        lastMessage: row.last_message || undefined,
+      });
+    }
+    stmt.free();
+    return conversations;
+  }
+
+  async updateConversation(conversationId: string, updates: UpdateConversationInput): Promise<Conversation> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (updates.title !== undefined) { sets.push('title = ?'); params.push(updates.title); }
+    if (updates.acpSessionId !== undefined) { sets.push('acp_session_id = ?'); params.push(updates.acpSessionId); }
+
+    if (sets.length > 0) {
+      sets.push("updated_at = datetime('now')");
+      params.push(conversationId);
+      this.db.run(`UPDATE conversations SET ${sets.join(', ')} WHERE id = ?`, params);
+      this.saveDatabase();
+    }
+
+    return this.getConversation(conversationId) as Promise<Conversation>;
+  }
+
+  async deleteConversation(conversationId: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db.run('DELETE FROM messages WHERE conversation_id = ?', [conversationId]);
+    this.db.run('DELETE FROM conversations WHERE id = ?', [conversationId]);
+    this.saveDatabase();
+  }
+
+  async getMessagesByConversation(conversationId: string, limit = 100, offset = 0): Promise<ChatMessage[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const messages: ChatMessage[] = [];
+    const stmt = this.db.prepare(
+      `SELECT id, agent_id, conversation_id, role, content, metadata, created_at
+       FROM messages
+       WHERE conversation_id = ?
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`
+    );
+    stmt.bind([conversationId, limit, offset]);
+
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as {
+        id: string; agent_id: string; conversation_id: string | null;
+        role: string; content: string; metadata: string | null; created_at: string;
+      };
+      messages.push({
+        id: row.id,
+        agentId: row.agent_id,
+        conversationId: row.conversation_id || undefined,
+        role: row.role as MessageRole,
+        content: row.content,
+        metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+        timestamp: new Date(row.created_at)
+      });
+    }
+    stmt.free();
+    return messages.reverse();
   }
 
   // ============ Permission Methods ============

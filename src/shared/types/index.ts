@@ -7,3 +7,4 @@ export * from './message.types';
 export * from './settings.types';
 export * from './ipc.types';
 export * from './task.types';
+export * from './conversation.types';

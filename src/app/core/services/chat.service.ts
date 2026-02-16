@@ -2,9 +2,10 @@
  * Chat Service - Manages chat messages and streaming
  */
 
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { ElectronService } from './electron.service';
 import { AgentService } from './agent.service';
+import { ConversationService } from './conversation.service';
 import type { ChatMessage, StreamingMessage, TodoItem } from '../../../shared/types/message.types';
 
 interface ChatState {
@@ -20,6 +21,10 @@ interface ChatState {
 export class ChatService {
   // State per agent
   private chatStatesSignal = signal<Map<string, ChatState>>(new Map());
+  
+  private electronService = inject(ElectronService);
+  private agentService = inject(AgentService);
+  private conversationService = inject(ConversationService);
   
   // Current agent's chat state
   readonly currentChatState = computed<ChatState | null>(() => {
@@ -50,10 +55,7 @@ export class ChatService {
     return this.currentChatState()?.todoItems || [];
   });
 
-  constructor(
-    private electronService: ElectronService,
-    private agentService: AgentService
-  ) {
+  constructor() {
     this.setupStreamingListeners();
   }
 
@@ -94,10 +96,17 @@ export class ChatService {
   }
 
   /**
-   * Load chat history for an agent
+   * Load chat history for an agent, scoped to the active conversation
    */
   async loadHistory(agentId: string): Promise<void> {
-    const messages = await this.electronService.getChatHistory(agentId);
+    const conversationId = this.conversationService.activeConversationId();
+    
+    let messages: ChatMessage[];
+    if (conversationId) {
+      messages = await this.electronService.getConversationMessages(conversationId);
+    } else {
+      messages = await this.electronService.getChatHistory(agentId);
+    }
     
     const states = new Map(this.chatStatesSignal());
     const currentState = states.get(agentId) || {
@@ -116,15 +125,22 @@ export class ChatService {
   }
 
   /**
-   * Send a message to an agent
+   * Send a message to an agent, creating a conversation if needed
    */
   async sendMessage(agentId: string, content: string): Promise<void> {
     this.setLoading(agentId, true);
 
     try {
-      const userMessage = await this.electronService.sendMessage(agentId, content);
+      // Auto-create conversation on first message if none exists
+      let conversationId = this.conversationService.activeConversationId();
+      if (!conversationId) {
+        const title = this.conversationService.generateTitle(content);
+        const conversation = await this.conversationService.createConversation(agentId, title);
+        conversationId = conversation?.id || null;
+      }
+
+      const userMessage = await this.electronService.sendMessage(agentId, content, conversationId || undefined);
       if (userMessage) {
-        // Use dedup — the SYNC_CHAT_MESSAGE_ADDED broadcast may have already added it
         this.addMessageIfNew(agentId, userMessage);
       }
     } catch (error) {

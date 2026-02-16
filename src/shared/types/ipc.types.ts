@@ -6,6 +6,7 @@ import { Agent, AgentDiscoveryResult, AgentSession } from './agent.types';
 import { ChatMessage, StreamingMessage } from './message.types';
 import { AppSettings, PermissionRequest, PermissionResponse, PermissionSet } from './settings.types';
 import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from './task.types';
+import { Conversation, CreateConversationInput, UpdateConversationInput } from './conversation.types';
 
 // IPC Channel names
 export const IPC_CHANNELS = {
@@ -72,6 +73,15 @@ export const IPC_CHANNELS = {
   SYNC_TASKS_CHANGED: 'sync:tasksChanged',
   SYNC_CHAT_MESSAGE_ADDED: 'sync:chatMessageAdded',
   SYNC_PERMISSION_RESPONDED: 'sync:permissionResponded',
+  SYNC_CONVERSATIONS_CHANGED: 'sync:conversationsChanged',
+
+  // Conversation operations
+  CONVERSATIONS_GET_ALL: 'conversations:getAll',
+  CONVERSATIONS_GET: 'conversations:get',
+  CONVERSATIONS_CREATE: 'conversations:create',
+  CONVERSATIONS_UPDATE: 'conversations:update',
+  CONVERSATIONS_DELETE: 'conversations:delete',
+  CONVERSATIONS_GET_MESSAGES: 'conversations:getMessages',
 } as const;
 
 // Type-safe IPC payload definitions
@@ -118,7 +128,7 @@ export interface IPCPayloads {
   
   // Chat
   [IPC_CHANNELS.CHAT_SEND_MESSAGE]: {
-    request: { agentId: string; content: string };
+    request: { agentId: string; content: string; conversationId?: string };
     response: ChatMessage;
   };
   [IPC_CHANNELS.CHAT_GET_HISTORY]: {
@@ -210,6 +220,32 @@ export interface IPCPayloads {
   [IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW]: {
     request: { taskId: string; comments: ResearchComment[]; researchSnapshot: string };
     response: { reviewId: string };
+  };
+
+  // Conversations
+  [IPC_CHANNELS.CONVERSATIONS_GET_ALL]: {
+    request: { agentId: string };
+    response: Conversation[];
+  };
+  [IPC_CHANNELS.CONVERSATIONS_GET]: {
+    request: { conversationId: string };
+    response: Conversation | null;
+  };
+  [IPC_CHANNELS.CONVERSATIONS_CREATE]: {
+    request: CreateConversationInput;
+    response: Conversation;
+  };
+  [IPC_CHANNELS.CONVERSATIONS_UPDATE]: {
+    request: { conversationId: string; updates: UpdateConversationInput };
+    response: Conversation;
+  };
+  [IPC_CHANNELS.CONVERSATIONS_DELETE]: {
+    request: { conversationId: string };
+    response: void;
+  };
+  [IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES]: {
+    request: { conversationId: string; limit?: number; offset?: number };
+    response: ChatMessage[];
   };
 }
 

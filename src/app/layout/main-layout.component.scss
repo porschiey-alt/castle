@@ -113,6 +113,41 @@
   -webkit-app-region: no-drag;
 }
 
+.content-wrapper {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  min-height: 0;
+  -webkit-app-region: no-drag;
+}
+
+.conversation-panel {
+  width: 240px;
+  min-width: 240px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease;
+
+  &.collapsed {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    overflow: hidden;
+  }
+}
+
+.conversation-title-badge {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .no-agent-selected {
   flex: 1;
   display: flex;
@@ -249,6 +284,10 @@
 
   .main-content {
     width: 100vw;
+  }
+
+  .conversation-panel {
+    display: none;
   }
 
   .window-controls {

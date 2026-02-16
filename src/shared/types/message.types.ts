@@ -5,6 +5,7 @@
 export interface ChatMessage {
   id: string;
   agentId: string;
+  conversationId?: string;
   role: MessageRole;
   content: string;
   timestamp: Date;

@@ -13,6 +13,7 @@ import type { Agent, AgentDiscoveryResult, AgentSession } from '../../../shared/
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
 import type { AppSettings, PermissionSet, PermissionResponse } from '../../../shared/types/settings.types';
 import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
+import type { Conversation, CreateConversationInput, UpdateConversationInput } from '../../../shared/types/conversation.types';
 import { ApiService } from './api.service';
 
 @Injectable({
@@ -30,6 +31,7 @@ export class ElectronService {
   private tasksChangedSubject = new Subject<{ action: string; task?: Task; taskId?: string }>();
   private chatMessageAddedSubject = new Subject<ChatMessage>();
   private permissionRespondedSubject = new Subject<{ requestId: string }>();
+  private conversationsChangedSubject = new Subject<{ action: string; conversation?: Conversation; conversationId?: string }>();
 
   // Observables
   readonly streamChunk$ = this.streamChunkSubject.asObservable();
@@ -39,6 +41,7 @@ export class ElectronService {
   readonly tasksChanged$ = this.tasksChangedSubject.asObservable();
   readonly chatMessageAdded$ = this.chatMessageAddedSubject.asObservable();
   readonly permissionResponded$ = this.permissionRespondedSubject.asObservable();
+  readonly conversationsChanged$ = this.conversationsChangedSubject.asObservable();
 
   constructor(private ngZone: NgZone) {
     this.api = this.apiService.api;
@@ -89,6 +92,12 @@ export class ElectronService {
         this.permissionRespondedSubject.next(data);
       });
     });
+
+    this.api.sync.onConversationsChanged((data) => {
+      this.ngZone.run(() => {
+        this.conversationsChangedSubject.next(data);
+      });
+    });
   }
 
   get isElectron(): boolean {
@@ -133,8 +142,8 @@ export class ElectronService {
 
   // ============ Chat Methods ============
 
-  async sendMessage(agentId: string, content: string): Promise<ChatMessage | null> {
-    return this.api.chat.sendMessage(agentId, content);
+  async sendMessage(agentId: string, content: string, conversationId?: string): Promise<ChatMessage | null> {
+    return this.api.chat.sendMessage(agentId, content, conversationId);
   }
 
   async getChatHistory(agentId: string, limit?: number, offset?: number): Promise<ChatMessage[]> {
@@ -255,5 +264,31 @@ export class ElectronService {
 
   onDiagnosisFileCleanup(callback: (data: { taskId: string; filePath: string }) => void): () => void {
     return this.api.tasks.onDiagnosisFileCleanup(callback);
+  }
+
+  // ============ Conversation Methods ============
+
+  async getConversations(agentId: string): Promise<Conversation[]> {
+    return this.api.conversations.getAll(agentId);
+  }
+
+  async getConversation(conversationId: string): Promise<Conversation | null> {
+    return this.api.conversations.get(conversationId);
+  }
+
+  async createConversation(input: CreateConversationInput): Promise<Conversation | null> {
+    return this.api.conversations.create(input);
+  }
+
+  async updateConversation(conversationId: string, updates: UpdateConversationInput): Promise<Conversation | null> {
+    return this.api.conversations.update(conversationId, updates);
+  }
+
+  async deleteConversation(conversationId: string): Promise<void> {
+    return this.api.conversations.delete(conversationId);
+  }
+
+  async getConversationMessages(conversationId: string, limit?: number, offset?: number): Promise<ChatMessage[]> {
+    return this.api.conversations.getMessages(conversationId, limit, offset);
   }
 }

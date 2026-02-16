@@ -16,6 +16,7 @@ import { Subscription } from 'rxjs';
 
 import { SidebarComponent } from '../features/sidebar/sidebar.component';
 import { ChatComponent } from '../features/chat/chat.component';
+import { ConversationListComponent } from '../features/chat/conversation-list/conversation-list.component';
 import { TaskListComponent } from '../features/tasks/task-list/task-list.component';
 import { StatusBarComponent } from '../shared/components/status-bar/status-bar.component';
 import { AboutDialogComponent } from '../shared/components/about-dialog/about-dialog.component';
@@ -26,6 +27,8 @@ import { ElectronService } from '../core/services/electron.service';
 import { AgentService } from '../core/services/agent.service';
 import { ThemeService } from '../core/services/theme.service';
 import { TaskService } from '../core/services/task.service';
+import { ConversationService } from '../core/services/conversation.service';
+import { ChatService } from '../core/services/chat.service';
 
 @Component({
   selector: 'app-main-layout',
@@ -42,6 +45,7 @@ import { TaskService } from '../core/services/task.service';
     MatDialogModule,
     SidebarComponent,
     ChatComponent,
+    ConversationListComponent,
     TaskListComponent,
     StatusBarComponent,
     AboutDialogComponent
@@ -54,6 +58,8 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private agentService = inject(AgentService);
   private themeService = inject(ThemeService);
   private taskService = inject(TaskService);
+  private conversationService = inject(ConversationService);
+  private chatService = inject(ChatService);
   private dialog = inject(MatDialog);
   private permissionSub?: Subscription;
   private permissionRespondedSub?: Subscription;
@@ -65,11 +71,13 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   selectedAgent = this.agentService.selectedAgent;
   currentTheme = this.themeService.currentTheme;
   availableThemes = this.themeService.availableThemes;
+  activeConversation = this.conversationService.activeConversation;
   
   currentDirectory: string | null = null;
   activeView: 'chat' | 'tasks' = 'chat';
   recentDirectories: string[] = [];
   sidebarOpen = false;
+  conversationPanelOpen = true;
 
   async ngOnInit(): Promise<void> {
     // Listen for permission requests from Copilot
@@ -92,6 +100,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     // Discover agents if directory is set (this auto-selects and starts session for first agent)
     if (this.currentDirectory) {
       await this.agentService.discoverAgents(this.currentDirectory);
+      // Load conversations for the auto-selected agent
+      const agentId = this.agentService.selectedAgentId();
+      if (agentId) {
+        await this.conversationService.loadConversations(agentId);
+      }
     } else {
       this.recentDirectories = await this.electronService.getRecentDirectories();
     }
@@ -194,10 +207,29 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   showChat(): void {
     this.activeView = 'chat';
     this.closeSidebar();
+    // Reset conversation selection and load conversations for the selected agent
+    this.conversationService.clearActive();
+    const agentId = this.agentService.selectedAgentId();
+    if (agentId) {
+      this.conversationService.loadConversations(agentId);
+    }
+  }
+
+  async onConversationSelected(conversationId: string): Promise<void> {
+    const agentId = this.agentService.selectedAgentId();
+    if (agentId) {
+      await this.chatService.loadHistory(agentId);
+    }
+  }
+
+  toggleConversationPanel(): void {
+    this.conversationPanelOpen = !this.conversationPanelOpen;
   }
 
   goToAgent(agentId: string): void {
     this.agentService.selectAgent(agentId);
+    this.conversationService.clearActive();
+    this.conversationService.loadConversations(agentId);
     this.activeView = 'chat';
     this.closeSidebar();
   }
