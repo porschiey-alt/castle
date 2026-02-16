@@ -79,7 +79,7 @@
 
 .status-error,
 .status-stopped {
-  background-color: #ef4444;
+  background-color: var(--theme-warn);
   color: white;
 }
 

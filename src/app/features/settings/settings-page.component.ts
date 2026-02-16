@@ -49,6 +49,7 @@ export class SettingsPageComponent implements OnInit {
   // Customization form state
   customBgPrimary = '';
   customAccentColor = '';
+  customSecondaryAccentColor = '';
   gradientEnabled = false;
   gradientEndColor = '#1a1a2e';
   gradientDirection = 'to bottom';
@@ -78,6 +79,7 @@ export class SettingsPageComponent implements OnInit {
       if (c) {
         this.customBgPrimary = c.bgPrimary || '';
         this.customAccentColor = c.accentColor || '';
+        this.customSecondaryAccentColor = c.secondaryAccentColor || '';
         this.gradientEnabled = c.gradientEnabled || false;
         this.gradientEndColor = c.gradientEndColor || '#1a1a2e';
         this.gradientDirection = c.gradientDirection || 'to bottom';
@@ -91,6 +93,9 @@ export class SettingsPageComponent implements OnInit {
     if (!this.customAccentColor) {
       this.customAccentColor = this.currentTheme().primary;
     }
+    if (!this.customSecondaryAccentColor) {
+      this.customSecondaryAccentColor = this.currentTheme().secondaryAccent;
+    }
 
     const status = await this.electronService.getTailscaleStatus();
     this.tailscaleRunning = status.running;
@@ -103,6 +108,7 @@ export class SettingsPageComponent implements OnInit {
     if (theme) {
       this.customBgPrimary = theme.bgPrimary || (theme.mode === 'dark' ? '#0a0a0a' : '#ffffff');
       this.customAccentColor = theme.primary;
+      this.customSecondaryAccentColor = theme.secondaryAccent;
       this.gradientEnabled = false;
       this.gradientEndColor = '#1a1a2e';
       this.gradientDirection = 'to bottom';
@@ -113,6 +119,7 @@ export class SettingsPageComponent implements OnInit {
     const overrides: ThemeCustomization = {
       bgPrimary: this.customBgPrimary || undefined,
       accentColor: this.customAccentColor || undefined,
+      secondaryAccentColor: this.customSecondaryAccentColor || undefined,
       gradientEnabled: this.gradientEnabled,
       gradientEndColor: this.gradientEnabled ? this.gradientEndColor : undefined,
       gradientDirection: this.gradientEnabled ? this.gradientDirection : undefined,
@@ -179,6 +186,7 @@ export class SettingsPageComponent implements OnInit {
     const theme = this.currentTheme();
     this.customBgPrimary = theme.bgPrimary || (theme.mode === 'dark' ? '#0a0a0a' : '#ffffff');
     this.customAccentColor = theme.primary;
+    this.customSecondaryAccentColor = theme.secondaryAccent;
     this.gradientEnabled = false;
     this.gradientEndColor = '#1a1a2e';
     this.gradientDirection = 'to bottom';

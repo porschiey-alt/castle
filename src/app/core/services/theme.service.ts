@@ -22,6 +22,7 @@ export interface CastleTheme {
   mode: ThemeMode;
   primary: string;
   accent: string;
+  secondaryAccent: string;
   warn: string;
   // Extended theme properties for dark themes
   bgPrimary?: string;
@@ -48,6 +49,7 @@ export class ThemeService {
       mode: 'dark',
       primary: '#6366f1',
       accent: '#22c55e',
+      secondaryAccent: '#a855f7',
       warn: '#ef4444',
       // Very dark, minimal color palette
       bgPrimary: '#0a0a0a',
@@ -65,6 +67,7 @@ export class ThemeService {
       mode: 'light',
       primary: '#6366F1',
       accent: '#14B8A6',
+      secondaryAccent: '#8B5CF6',
       warn: '#F59E0B'
     },
     {
@@ -73,6 +76,7 @@ export class ThemeService {
       mode: 'dark',
       primary: '#3b82f6',
       accent: '#22c55e',
+      secondaryAccent: '#818cf8',
       warn: '#f97316',
       bgPrimary: '#0c0c14',
       bgSecondary: '#12121c',
@@ -89,6 +93,7 @@ export class ThemeService {
       mode: 'dark',
       primary: '#ffffff',
       accent: '#22c55e',
+      secondaryAccent: '#a78bfa',
       warn: '#ef4444',
       // Pure black for AMOLED screens
       bgPrimary: '#000000',
@@ -172,8 +177,10 @@ export class ThemeService {
     // Set CSS custom properties
     const root = document.documentElement;
     const accent = custom.accentColor || theme.primary;
+    const secondaryAccent = custom.secondaryAccentColor || theme.secondaryAccent;
     root.style.setProperty('--theme-primary', accent);
     root.style.setProperty('--theme-accent', theme.accent);
+    root.style.setProperty('--theme-secondary-accent', secondaryAccent);
     root.style.setProperty('--theme-warn', theme.warn);
 
     // Determine effective background
@@ -205,9 +212,11 @@ export class ThemeService {
       const dir = custom.gradientDirection || 'to bottom';
       root.style.setProperty('--bg-gradient', `linear-gradient(${dir}, ${bgPrimary}, ${custom.gradientEndColor})`);
       body.style.setProperty('background', `var(--bg-gradient)`);
+      body.classList.add('gradient-active');
     } else {
       root.style.removeProperty('--bg-gradient');
       body.style.removeProperty('background');
+      body.classList.remove('gradient-active');
     }
   }
 

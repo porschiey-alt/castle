@@ -28,6 +28,7 @@
   --user-bubble: #6366f1;
   --agent-bubble: #1a1a1a;
   --code-bg: #0d0d0d;
+  --theme-secondary-accent: #a855f7;
 
   // Fonts
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -133,6 +134,41 @@ a {
     }
   }
 
+  // Filled button (mat-flat-button) color overrides
+  .mat-mdc-unelevated-button.mat-primary {
+    --mdc-filled-button-container-color: var(--theme-primary);
+    --mdc-filled-button-label-text-color: white;
+  }
+
+  .mat-mdc-unelevated-button.mat-warn {
+    --mdc-filled-button-container-color: var(--theme-warn);
+    --mdc-filled-button-label-text-color: white;
+  }
+
+  // Raised button (mat-raised-button) color overrides
+  .mat-mdc-raised-button.mat-primary {
+    --mdc-protected-button-container-color: var(--theme-primary);
+    --mdc-protected-button-label-text-color: white;
+  }
+
+  // Outlined/stroked button color overrides
+  .mat-mdc-outlined-button.mat-primary {
+    --mdc-outlined-button-label-text-color: var(--theme-primary);
+    --mdc-outlined-button-outline-color: var(--theme-primary);
+  }
+
+  // Tab overrides
+  .mat-mdc-tab-group, .mat-mdc-tab-nav-bar {
+    --mdc-tab-indicator-active-indicator-color: var(--theme-secondary-accent);
+    --mat-tab-header-active-label-text-color: var(--theme-secondary-accent);
+    --mat-tab-header-active-focus-label-text-color: var(--theme-secondary-accent);
+    --mat-tab-header-active-hover-label-text-color: var(--theme-secondary-accent);
+    --mat-tab-header-inactive-label-text-color: var(--text-secondary);
+    --mat-tab-header-inactive-focus-label-text-color: var(--text-secondary);
+    --mat-tab-header-inactive-hover-label-text-color: var(--text-primary);
+    --mdc-secondary-navigation-tab-container-height: 44px;
+  }
+
   // Menu overrides
   .mat-mdc-menu-panel {
     background-color: var(--bg-secondary) !important;
@@ -233,6 +269,63 @@ a {
       warn: mat.define-palette(mat.$orange-palette),
     )
   )));
+
+  // Filled button (mat-flat-button) color overrides
+  .mat-mdc-unelevated-button.mat-primary {
+    --mdc-filled-button-container-color: var(--theme-primary);
+    --mdc-filled-button-label-text-color: white;
+  }
+
+  .mat-mdc-unelevated-button.mat-warn {
+    --mdc-filled-button-container-color: var(--theme-warn);
+    --mdc-filled-button-label-text-color: white;
+  }
+
+  // Raised button (mat-raised-button) color overrides
+  .mat-mdc-raised-button.mat-primary {
+    --mdc-protected-button-container-color: var(--theme-primary);
+    --mdc-protected-button-label-text-color: white;
+  }
+
+  // Outlined/stroked button color overrides
+  .mat-mdc-outlined-button.mat-primary {
+    --mdc-outlined-button-label-text-color: var(--theme-primary);
+    --mdc-outlined-button-outline-color: var(--theme-primary);
+  }
+
+  // Tab overrides
+  .mat-mdc-tab-group, .mat-mdc-tab-nav-bar {
+    --mdc-tab-indicator-active-indicator-color: var(--theme-secondary-accent);
+    --mat-tab-header-active-label-text-color: var(--theme-secondary-accent);
+    --mat-tab-header-active-focus-label-text-color: var(--theme-secondary-accent);
+    --mat-tab-header-active-hover-label-text-color: var(--theme-secondary-accent);
+    --mat-tab-header-inactive-label-text-color: var(--text-secondary);
+    --mat-tab-header-inactive-focus-label-text-color: var(--text-secondary);
+    --mat-tab-header-inactive-hover-label-text-color: var(--text-primary);
+    --mdc-secondary-navigation-tab-container-height: 44px;
+  }
+}
+
+// ============ Gradient Pass-through ============
+// When a background gradient is active, make panels transparent so the gradient shows through.
+
+body.gradient-active {
+  .app-container,
+  .landing-container,
+  .landing-toolbar,
+  .agent-sidebar,
+  .app-toolbar,
+  .conversation-panel,
+  .status-bar,
+  .chat-input-container {
+    background-color: transparent;
+    background: transparent;
+  }
+
+  // Material form-field text wrapper inside chat input
+  .chat-input-field .mat-mdc-text-field-wrapper {
+    background-color: transparent !important;
+  }
 }
 
 // ============ Utility Classes ============

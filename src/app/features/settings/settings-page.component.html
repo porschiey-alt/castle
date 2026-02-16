@@ -36,7 +36,7 @@
         Customize Colors
       </h3>
       <p class="section-description">
-        Adjust background and accent colors. Text color is automatically calculated for readability.
+        Adjust background, accent, and secondary accent colors. The secondary accent is used for tabs and highlights. Text color is automatically calculated for readability.
       </p>
 
       <div class="color-controls">
@@ -84,6 +84,30 @@
               (ngModelChange)="onCustomizationChange()"
               maxlength="7"
               placeholder="#6366f1"
+            />
+          </div>
+        </div>
+
+        <!-- Secondary Accent Color -->
+        <div class="color-row">
+          <label class="color-label">
+            <mat-icon>auto_awesome</mat-icon>
+            Secondary Accent
+          </label>
+          <div class="color-input-group">
+            <input
+              type="color"
+              class="color-picker"
+              [(ngModel)]="customSecondaryAccentColor"
+              (ngModelChange)="onCustomizationChange()"
+            />
+            <input
+              type="text"
+              class="color-hex"
+              [(ngModel)]="customSecondaryAccentColor"
+              (ngModelChange)="onCustomizationChange()"
+              maxlength="7"
+              placeholder="#a855f7"
             />
           </div>
         </div>
@@ -148,6 +172,7 @@
         <span class="preview-label">Preview</span>
         <div class="preview-box" [style.background]="getGradientPreview()">
           <span class="preview-text" [style.color]="getAutoTextColor()">Sample Text</span>
+          <span class="preview-accent" [style.background]="customSecondaryAccentColor">Secondary</span>
           <span class="preview-accent" [style.background]="customAccentColor">Accent</span>
         </div>
         <div class="contrast-info">

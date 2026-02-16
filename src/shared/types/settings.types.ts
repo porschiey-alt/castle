@@ -6,6 +6,7 @@ export interface ThemeCustomization {
   bgPrimary?: string;
   bgSecondary?: string;
   accentColor?: string;
+  secondaryAccentColor?: string;
   gradientEnabled?: boolean;
   gradientEndColor?: string;
   gradientDirection?: string;
