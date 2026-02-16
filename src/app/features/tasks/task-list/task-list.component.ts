@@ -146,20 +146,10 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   async onImplementRequested(event: TaskImplementEvent): Promise<void> {
     this.taskService.markImplementRunning(event.task.id);
-    // Switch to that agent's chat with the task context
+    // Navigate to agent chat so user can watch
     this.goToAgent.emit(event.agentId);
-
-    // Build implementation prompt with research context if available
-    const task = event.task;
-    let prompt = `Implement the following task:\n\nTitle: ${task.title}\n\nDescription:\n${task.description || '(none)'}`;
-    if (task.researchContent) {
-      prompt += `\n\nResearch Analysis:\n${task.researchContent}`;
-    }
-    prompt += `\n\nPlease implement the changes described above.`;
-
-    // Send message to the agent
-    await this.electronService.sendMessage(event.agentId, prompt);
-    this.taskService.clearImplementRunning(event.task.id);
+    // Run implementation via IPC (main process handles completion)
+    await this.taskService.runImplementation(event.task.id, event.agentId);
   }
 
   async onReviewSubmitted(event: TaskReviewSubmitEvent): Promise<void> {

@@ -46,6 +46,7 @@ export interface Task {
   projectPath?: string;
   researchContent?: string;
   researchAgentId?: string;
+  implementAgentId?: string;
   githubIssueNumber?: number;
   githubRepo?: string;
   closeReason?: BugCloseReason;
@@ -57,7 +58,7 @@ export type CreateTaskInput = Pick<Task, 'title' | 'description' | 'state' | 'ki
   labelIds?: string[];
 };
 
-export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId' | 'closeReason'>> & {
+export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId' | 'implementAgentId' | 'closeReason'>> & {
   labelIds?: string[];
 };
 

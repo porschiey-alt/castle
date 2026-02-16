@@ -64,6 +64,10 @@ export class TaskService {
         this.researchRunningIds.update(s => { const n = new Set(s); n.delete(msg.id); return n; });
         await this.refreshTask(msg.id);
       }
+      if (this.implementRunningIds().has(msg.id)) {
+        this.implementRunningIds.update(s => { const n = new Set(s); n.delete(msg.id); return n; });
+        await this.refreshTask(msg.id);
+      }
       if (this.reviewRunningIds().has(msg.id)) {
         this.reviewRunningIds.update(s => { const n = new Set(s); n.delete(msg.id); return n; });
         await this.refreshTask(msg.id);
@@ -193,6 +197,14 @@ export class TaskService {
     // Mark the task as having a research agent
     this.tasksSignal.update(tasks =>
       tasks.map(t => t.id === taskId ? { ...t, researchAgentId: agentId } : t)
+    );
+  }
+
+  async runImplementation(taskId: string, agentId: string): Promise<void> {
+    await this.electronService.runTaskImplementation(taskId, agentId);
+    // Mark the task as having an implementation agent
+    this.tasksSignal.update(tasks =>
+      tasks.map(t => t.id === taskId ? { ...t, implementAgentId: agentId } : t)
     );
   }
 

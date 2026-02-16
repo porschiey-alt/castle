@@ -254,6 +254,10 @@ export class ElectronService {
     return this.api.tasks.runResearch(taskId, agentId, outputPath);
   }
 
+  async runTaskImplementation(taskId: string, agentId: string): Promise<{ taskId: string } | null> {
+    return this.api.tasks.runImplementation(taskId, agentId);
+  }
+
   async submitResearchReview(taskId: string, comments: ResearchComment[], researchSnapshot: string): Promise<{ reviewId: string } | null> {
     return this.api.tasks.submitResearchReview(taskId, comments, researchSnapshot);
   }

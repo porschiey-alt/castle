@@ -265,6 +265,38 @@
   }
 }
 
+.implementation-complete {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  text-align: center;
+
+  .complete-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    color: #22c55e;
+  }
+
+  h3 {
+    margin: 8px 0 4px 0;
+    color: var(--text-primary);
+  }
+
+  p {
+    margin: 0 0 20px 0;
+    color: var(--text-secondary);
+    max-width: 400px;
+  }
+}
+
+.implementation-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .description-field {
   width: 100%;
 

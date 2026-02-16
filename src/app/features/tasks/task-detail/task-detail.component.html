@@ -295,10 +295,30 @@
               <mat-icon class="research-spinner">sync</mat-icon>
               <h3>Implementation in progress...</h3>
               <p>The agent is implementing this task. You can watch its progress live.</p>
-              <button mat-stroked-button color="primary" (click)="goToImplementer.emit(task()!.researchAgentId!)">
+              <button mat-stroked-button color="primary" (click)="goToImplementer.emit(task()!.implementAgentId || selectedImplementAgentId)">
                 <mat-icon>open_in_new</mat-icon>
                 Take me to the Agent
               </button>
+            </div>
+          } @else if (task()!.state === 'done' && task()!.implementAgentId) {
+            <div class="implementation-complete">
+              <mat-icon class="complete-icon">check_circle</mat-icon>
+              <h3>Implementation Complete</h3>
+              <p>The agent has finished implementing this task.</p>
+
+              <div class="implementation-actions">
+                <button mat-stroked-button color="primary"
+                        (click)="goToImplementer.emit(task()!.implementAgentId!)">
+                  <mat-icon>open_in_new</mat-icon>
+                  View Agent Conversation
+                </button>
+
+                <button mat-flat-button color="warn"
+                        (click)="requestRevision()">
+                  <mat-icon>replay</mat-icon>
+                  Request Revision
+                </button>
+              </div>
             </div>
           } @else {
             <div class="research-empty">

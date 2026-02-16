@@ -185,6 +185,11 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE tasks ADD COLUMN close_reason TEXT`);
     } catch { /* column already exists */ }
 
+    // Migration: add implement_agent_id column if missing
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN implement_agent_id TEXT`);
+    } catch { /* column already exists */ }
+
     // Research reviews table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS research_reviews (
@@ -772,6 +777,7 @@ export class DatabaseService {
     if (updates.researchContent !== undefined) { sets.push('research_content = ?'); params.push(updates.researchContent); }
     if (updates.researchAgentId !== undefined) { sets.push('research_agent_id = ?'); params.push(updates.researchAgentId); }
     if (updates.closeReason !== undefined) { sets.push('close_reason = ?'); params.push(updates.closeReason); }
+    if (updates.implementAgentId !== undefined) { sets.push('implement_agent_id = ?'); params.push(updates.implementAgentId); }
 
     if (sets.length > 0) {
       sets.push("updated_at = datetime('now')");
@@ -804,7 +810,7 @@ export class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
+      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
        FROM tasks WHERE id = ?`
     );
     stmt.bind([taskId]);
@@ -815,6 +821,7 @@ export class DatabaseService {
       id: string; title: string; description: string; state: string; kind: string;
       project_path: string | null;
       research_content: string | null; research_agent_id: string | null;
+      implement_agent_id: string | null;
       github_issue_number: number | null; github_repo: string | null;
       close_reason: string | null;
       created_at: string; updated_at: string;
@@ -833,6 +840,7 @@ export class DatabaseService {
       projectPath: row.project_path ?? undefined,
       researchContent: row.research_content ?? undefined,
       researchAgentId: row.research_agent_id ?? undefined,
+      implementAgentId: row.implement_agent_id ?? undefined,
       githubIssueNumber: row.github_issue_number ?? undefined,
       githubRepo: row.github_repo ?? undefined,
       closeReason: (row.close_reason as BugCloseReason) ?? undefined,
@@ -844,7 +852,7 @@ export class DatabaseService {
   async getTasks(stateFilter?: string, kindFilter?: string, projectPath?: string): Promise<Task[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
+    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
                FROM tasks`;
     const params: unknown[] = [];
     const conditions: string[] = [];
@@ -875,6 +883,7 @@ export class DatabaseService {
         id: string; title: string; description: string; state: string; kind: string;
         project_path: string | null;
         research_content: string | null; research_agent_id: string | null;
+        implement_agent_id: string | null;
         github_issue_number: number | null; github_repo: string | null;
         close_reason: string | null;
         created_at: string; updated_at: string;
@@ -890,6 +899,7 @@ export class DatabaseService {
         projectPath: row.project_path ?? undefined,
         researchContent: row.research_content ?? undefined,
         researchAgentId: row.research_agent_id ?? undefined,
+        implementAgentId: row.implement_agent_id ?? undefined,
         githubIssueNumber: row.github_issue_number ?? undefined,
         githubRepo: row.github_repo ?? undefined,
         closeReason: (row.close_reason as BugCloseReason) ?? undefined,

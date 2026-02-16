@@ -84,6 +84,7 @@ export interface ElectronAPI {
     createLabel: (name: string, color: string) => Promise<TaskLabel>;
     deleteLabel: (labelId: string) => Promise<void>;
     runResearch: (taskId: string, agentId: string, outputPath?: string) => Promise<{ taskId: string }>;
+    runImplementation: (taskId: string, agentId: string) => Promise<{ taskId: string }>;
     submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) => Promise<{ reviewId: string }>;
     deleteDiagnosisFile: (filePath: string) => Promise<{ deleted: boolean }>;
     onDiagnosisFileCleanup: (callback: (data: { taskId: string; filePath: string }) => void) => () => void;
@@ -215,6 +216,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_LABELS_DELETE, { labelId }),
     runResearch: (taskId: string, agentId: string, outputPath?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_RESEARCH, { taskId, agentId, outputPath }),
+    runImplementation: (taskId: string, agentId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, { taskId, agentId }),
     submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, { taskId, comments, researchSnapshot }),
     deleteDiagnosisFile: (filePath: string) =>

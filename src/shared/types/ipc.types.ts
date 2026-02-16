@@ -65,6 +65,7 @@ export const IPC_CHANNELS = {
   TASKS_LABELS_CREATE: 'tasks:labels:create',
   TASKS_LABELS_DELETE: 'tasks:labels:delete',
   TASKS_RUN_RESEARCH: 'tasks:runResearch',
+  TASKS_RUN_IMPLEMENTATION: 'tasks:runImplementation',
   TASKS_SUBMIT_RESEARCH_REVIEW: 'tasks:submitResearchReview',
   TASKS_DIAGNOSIS_FILE_CLEANUP: 'tasks:diagnosisFileCleanup',
   TASKS_DELETE_DIAGNOSIS_FILE: 'tasks:deleteDiagnosisFile',
@@ -215,6 +216,10 @@ export interface IPCPayloads {
   };
   [IPC_CHANNELS.TASKS_RUN_RESEARCH]: {
     request: { taskId: string; agentId: string; outputPath?: string };
+    response: { taskId: string };
+  };
+  [IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION]: {
+    request: { taskId: string; agentId: string };
     response: { taskId: string };
   };
   [IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW]: {

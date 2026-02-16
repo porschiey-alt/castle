@@ -529,6 +529,75 @@ export function registerIpcHandlers(services: IpcServices): void {
     return { taskId };
   });
 
+  // ============ Implementation Handler ============
+
+  handle(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, async (_event, { taskId, agentId }: { taskId: string; agentId: string }) => {
+    const task = await databaseService.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+
+    let agent: Agent | null | undefined = discoveredAgents.get(agentId);
+    if (!agent) agent = await databaseService.getAgent(agentId);
+    if (!agent) throw new Error(`Agent ${agentId} not found`);
+
+    const workingDirectory = directoryService.getCurrentDirectory();
+    if (!workingDirectory) throw new Error('No workspace directory selected');
+
+    // Ensure agent has a session
+    let sessionProcess = processManagerService.getSessionByAgentId(agentId);
+    if (!sessionProcess) {
+      const session = await processManagerService.startSession(agent, workingDirectory);
+      subscribeToSession(session.id, agentId);
+      sessionProcess = processManagerService.getSessionByAgentId(agentId);
+      if (!sessionProcess) throw new Error('Failed to start implementation agent session');
+    }
+
+    // Build implementation prompt
+    let prompt = `Implement the following task:\n\nTitle: ${task.title}\n\nDescription:\n${task.description || '(none)'}`;
+    if (task.researchContent) {
+      prompt += `\n\nResearch Analysis:\n${task.researchContent}`;
+    }
+    prompt += `\n\nPlease implement the changes described above.`;
+
+    // Save implementAgentId
+    await databaseService.updateTask(taskId, { implementAgentId: agentId });
+
+    // Listen for completion
+    const unsubscribeImpl = processManagerService.onComplete(sessionProcess.session.id, async () => {
+      unsubscribeImpl();
+
+      // Auto-transition task to done (with closeReason for bugs)
+      const currentTask = await databaseService.getTask(taskId);
+      if (currentTask && currentTask.state !== 'done') {
+        const updates: { state: 'done'; closeReason?: 'fixed' } = { state: 'done' };
+        if (currentTask.kind === 'bug') {
+          updates.closeReason = 'fixed';
+        }
+        await databaseService.updateTask(taskId, updates);
+        broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, {
+          action: 'updated',
+          task: await databaseService.getTask(taskId),
+        });
+      }
+
+      // Notify renderer that implementation is complete
+      broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
+        id: taskId,
+        agentId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+      });
+    });
+
+    // Send prompt (async — responses come via events)
+    processManagerService.sendMessage(sessionProcess.session.id, prompt).catch((error) => {
+      console.error('[Implementation] Error:', error);
+      broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+    });
+
+    return { taskId };
+  });
+
   // ============ Research Review Handler ============
 
   handle(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, async (_event, { taskId, comments, researchSnapshot }: { taskId: string; comments: ResearchComment[]; researchSnapshot: string }) => {

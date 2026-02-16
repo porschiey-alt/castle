@@ -294,4 +294,13 @@ export class TaskDetailComponent implements OnInit {
     this.pendingComments = [];
     this.reviewSubmitting = false;
   }
+
+  requestRevision(): void {
+    const t = this.task();
+    if (!t) return;
+    // Transition state back to in_progress
+    this.stateChanged.emit({ task: t, state: 'in_progress' });
+    // Navigate to the implementing agent's chat
+    this.goToImplementer.emit(t.implementAgentId!);
+  }
 }
