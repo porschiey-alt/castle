@@ -9,7 +9,7 @@ export const AGENTS_MD_FILENAMES = ['AGENTS.md', 'agents.md'];
 
 export const DEFAULT_WINDOW_WIDTH = 1200;
 export const DEFAULT_WINDOW_HEIGHT = 800;
-export const MIN_WINDOW_WIDTH = 800;
+export const MIN_WINDOW_WIDTH = 100;
 export const MIN_WINDOW_HEIGHT = 600;
 
 export const COPILOT_MODELS = [
