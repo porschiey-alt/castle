@@ -3,6 +3,8 @@
  */
 
 import { BrowserWindow, ipcMain } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 import { DatabaseService } from '../services/database.service';
 import { AgentDiscoveryService } from '../services/agent-discovery.service';
 import { ProcessManagerService } from '../services/process-manager.service';
@@ -10,6 +12,7 @@ import { DirectoryService } from '../services/directory.service';
 import { IPC_CHANNELS } from '../../shared/types/ipc.types';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../../shared/types/agent.types';
+import { Task } from '../../shared/types/task.types';
 
 export interface IpcServices {
   databaseService: DatabaseService;
@@ -218,13 +221,31 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // ============ Task Handlers ============
 
+  /** Read research content from the on-disk file if it exists, overriding the DB value */
+  function hydrateResearchFromFile(task: Task, workingDirectory: string | null): Task {
+    if (!workingDirectory) return task;
+    const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
+    const filePath = path.join(workingDirectory, 'research', `${safeTitle}.md`);
+    try {
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        return { ...task, researchContent: content };
+      }
+    } catch { /* file unreadable, fall back to DB value */ }
+    return task;
+  }
+
   ipcMain.handle(IPC_CHANNELS.TASKS_GET_ALL, async (_event, { state, kind } = {}) => {
     const projectPath = directoryService.getCurrentDirectory();
-    return databaseService.getTasks(state, kind, projectPath || undefined);
+    const tasks = await databaseService.getTasks(state, kind, projectPath || undefined);
+    return tasks.map(t => hydrateResearchFromFile(t, projectPath));
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_GET, async (_event, { taskId }) => {
-    return databaseService.getTask(taskId);
+    const task = await databaseService.getTask(taskId);
+    if (!task) return null;
+    const projectPath = directoryService.getCurrentDirectory();
+    return hydrateResearchFromFile(task, projectPath);
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_CREATE, async (_event, input) => {
@@ -284,8 +305,6 @@ export function registerIpcHandlers(services: IpcServices): void {
       await databaseService.updateTask(taskId, { researchContent: message.content });
 
       // Also save to file
-      const fs = require('fs');
-      const path = require('path');
       const researchDir = outputPath || path.join(workingDirectory, 'research');
       if (!fs.existsSync(researchDir)) {
         fs.mkdirSync(researchDir, { recursive: true });
