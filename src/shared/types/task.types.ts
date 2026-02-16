@@ -21,6 +21,15 @@ export const TASK_KINDS: { id: TaskKind; label: string; icon: string; color: str
   { id: 'spike', label: 'Spike', icon: 'science', color: '#8b5cf6' },
 ];
 
+export type BugCloseReason = 'no_repro' | 'wont_fix' | 'fixed' | 'duplicate';
+
+export const BUG_CLOSE_REASONS: { id: BugCloseReason; label: string; icon: string }[] = [
+  { id: 'fixed', label: 'Fixed', icon: 'check_circle' },
+  { id: 'no_repro', label: 'No Repro', icon: 'help_outline' },
+  { id: 'wont_fix', label: "Won't Fix", icon: 'do_not_disturb' },
+  { id: 'duplicate', label: 'Duplicate', icon: 'content_copy' },
+];
+
 export interface TaskLabel {
   id: string;
   name: string;
@@ -39,6 +48,7 @@ export interface Task {
   researchAgentId?: string;
   githubIssueNumber?: number;
   githubRepo?: string;
+  closeReason?: BugCloseReason;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +57,32 @@ export type CreateTaskInput = Pick<Task, 'title' | 'description' | 'state' | 'ki
   labelIds?: string[];
 };
 
-export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId'>> & {
+export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId' | 'closeReason'>> & {
   labelIds?: string[];
 };
+
+/** Anchor identifying which markdown section a comment is attached to */
+export interface ResearchCommentAnchor {
+  blockType: string;
+  blockIndex: number;
+  preview: string;
+}
+
+/** A single review comment on research output */
+export interface ResearchComment {
+  id: string;
+  anchor: ResearchCommentAnchor;
+  body: string;
+  createdAt: Date;
+}
+
+/** A batch of comments submitted as one review round */
+export interface ResearchReview {
+  id: string;
+  taskId: string;
+  comments: ResearchComment[];
+  researchSnapshot: string;
+  submittedAt: Date;
+  revisedContent?: string;
+  status: 'pending' | 'in_progress' | 'complete';
+}

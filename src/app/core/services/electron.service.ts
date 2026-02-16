@@ -8,7 +8,7 @@ import type { ElectronAPI } from '../../../preload/index';
 import type { Agent, AgentDiscoveryResult, AgentSession } from '../../../shared/types/agent.types';
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
 import type { AppSettings, PermissionSet, PermissionResponse } from '../../../shared/types/settings.types';
-import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput } from '../../../shared/types/task.types';
+import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
 
 @Injectable({
   providedIn: 'root'
@@ -130,6 +130,11 @@ export class ElectronService {
     return this.api.chat.clearHistory(agentId);
   }
 
+  async cancelMessage(agentId: string): Promise<void> {
+    if (!this.api) return;
+    return this.api.chat.cancelMessage(agentId);
+  }
+
   // ============ Permission Methods ============
 
   async getPermissions(agentId: string): Promise<PermissionSet | null> {
@@ -232,5 +237,10 @@ export class ElectronService {
   async runTaskResearch(taskId: string, agentId: string, outputPath?: string): Promise<{ taskId: string } | null> {
     if (!this.api) return null;
     return this.api.tasks.runResearch(taskId, agentId, outputPath);
+  }
+
+  async submitResearchReview(taskId: string, comments: ResearchComment[], researchSnapshot: string): Promise<{ reviewId: string } | null> {
+    if (!this.api) return null;
+    return this.api.tasks.submitResearchReview(taskId, comments, researchSnapshot);
   }
 }

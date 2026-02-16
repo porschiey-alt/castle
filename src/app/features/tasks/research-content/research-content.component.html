@@ -1,0 +1,50 @@
+<div class="research-sections">
+  @for (section of sections(); track section.index) {
+    <div class="research-section"
+         [class.has-comments]="getCommentsForSection(section.index).length > 0">
+      <!-- Rendered markdown block -->
+      <div class="section-content markdown-content" [innerHTML]="section.html"></div>
+
+      <!-- Comment button (appears on hover) -->
+      <button mat-icon-button class="comment-trigger"
+              matTooltip="Add comment"
+              (click)="openCommentInput(section.index)">
+        <mat-icon>add_comment</mat-icon>
+      </button>
+
+      <!-- Inline comments for this section -->
+      @for (comment of getCommentsForSection(section.index); track comment.id) {
+        <div class="inline-comment">
+          <mat-icon class="comment-icon">comment</mat-icon>
+          <span class="comment-body">{{ comment.body }}</span>
+          <button mat-icon-button (click)="commentRemoved.emit(comment.id)" matTooltip="Remove">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+
+      <!-- Comment input (when active) -->
+      @if (activeCommentSection === section.index) {
+        <div class="comment-input-area">
+          <mat-form-field appearance="outline" class="comment-field">
+            <mat-label>Your comment or suggestion</mat-label>
+            <textarea matInput [(ngModel)]="commentText"
+                      rows="2"
+                      placeholder="Suggest a change, ask a question..."
+                      (keydown.meta.enter)="submitComment(section)"
+                      (keydown.control.enter)="submitComment(section)"
+                      cdkFocusInitial></textarea>
+          </mat-form-field>
+          <div class="comment-actions">
+            <button mat-flat-button color="primary"
+                    [disabled]="!commentText.trim()"
+                    (click)="submitComment(section)">
+              Add Comment
+            </button>
+            <button mat-button (click)="cancelComment()">Cancel</button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

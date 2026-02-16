@@ -17,7 +17,7 @@ import {
 } from '../../shared/types';
 import { ChatMessage, MessageRole } from '../../shared/types/message.types';
 import { Agent } from '../../shared/types/agent.types';
-import { Task, TaskState, TaskKind, TaskLabel, CreateTaskInput, UpdateTaskInput } from '../../shared/types/task.types';
+import { Task, TaskState, TaskKind, TaskLabel, CreateTaskInput, UpdateTaskInput, BugCloseReason, ResearchReview, ResearchComment } from '../../shared/types/task.types';
 
 export class DatabaseService {
   private db: SqlJsDatabase | null = null;
@@ -178,6 +178,27 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE tasks ADD COLUMN project_path TEXT`);
     } catch { /* column already exists */ }
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tasks_project_path ON tasks(project_path)`);
+
+    // Migration: add close_reason column if missing
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN close_reason TEXT`);
+    } catch { /* column already exists */ }
+
+    // Research reviews table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS research_reviews (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        comments TEXT NOT NULL,
+        research_snapshot TEXT NOT NULL,
+        revised_content TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completed_at DATETIME,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      )
+    `);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_research_reviews_task_id ON research_reviews(task_id)`);
   }
 
   /**
@@ -534,6 +555,7 @@ export class DatabaseService {
     if (updates.kind !== undefined) { sets.push('kind = ?'); params.push(updates.kind); }
     if (updates.researchContent !== undefined) { sets.push('research_content = ?'); params.push(updates.researchContent); }
     if (updates.researchAgentId !== undefined) { sets.push('research_agent_id = ?'); params.push(updates.researchAgentId); }
+    if (updates.closeReason !== undefined) { sets.push('close_reason = ?'); params.push(updates.closeReason); }
 
     if (sets.length > 0) {
       sets.push("updated_at = datetime('now')");
@@ -566,7 +588,7 @@ export class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
+      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
        FROM tasks WHERE id = ?`
     );
     stmt.bind([taskId]);
@@ -578,6 +600,7 @@ export class DatabaseService {
       project_path: string | null;
       research_content: string | null; research_agent_id: string | null;
       github_issue_number: number | null; github_repo: string | null;
+      close_reason: string | null;
       created_at: string; updated_at: string;
     };
     stmt.free();
@@ -596,6 +619,7 @@ export class DatabaseService {
       researchAgentId: row.research_agent_id ?? undefined,
       githubIssueNumber: row.github_issue_number ?? undefined,
       githubRepo: row.github_repo ?? undefined,
+      closeReason: (row.close_reason as BugCloseReason) ?? undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
@@ -604,7 +628,7 @@ export class DatabaseService {
   async getTasks(stateFilter?: string, kindFilter?: string, projectPath?: string): Promise<Task[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, created_at, updated_at
+    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
                FROM tasks`;
     const params: unknown[] = [];
     const conditions: string[] = [];
@@ -636,6 +660,7 @@ export class DatabaseService {
         project_path: string | null;
         research_content: string | null; research_agent_id: string | null;
         github_issue_number: number | null; github_repo: string | null;
+        close_reason: string | null;
         created_at: string; updated_at: string;
       };
 
@@ -651,6 +676,7 @@ export class DatabaseService {
         researchAgentId: row.research_agent_id ?? undefined,
         githubIssueNumber: row.github_issue_number ?? undefined,
         githubRepo: row.github_repo ?? undefined,
+        closeReason: (row.close_reason as BugCloseReason) ?? undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
       });
@@ -704,6 +730,59 @@ export class DatabaseService {
     this.db.run(`DELETE FROM task_label_assignments WHERE label_id = ?`, [labelId]);
     this.db.run(`DELETE FROM task_labels WHERE id = ?`, [labelId]);
     this.saveDatabase();
+  }
+
+  // ============ Research Review Methods ============
+
+  async createResearchReview(review: { id: string; taskId: string; comments: ResearchComment[]; researchSnapshot: string; status: string }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    this.db.run(
+      `INSERT INTO research_reviews (id, task_id, comments, research_snapshot, status, submitted_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+      [review.id, review.taskId, JSON.stringify(review.comments), review.researchSnapshot, review.status]
+    );
+    this.saveDatabase();
+  }
+
+  async updateResearchReview(reviewId: string, updates: { status?: string; revisedContent?: string }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (updates.status !== undefined) { sets.push('status = ?'); params.push(updates.status); }
+    if (updates.revisedContent !== undefined) { sets.push('revised_content = ?'); params.push(updates.revisedContent); }
+    if (updates.status === 'complete') { sets.push("completed_at = datetime('now')"); }
+    if (sets.length > 0) {
+      params.push(reviewId);
+      this.db.run(`UPDATE research_reviews SET ${sets.join(', ')} WHERE id = ?`, params);
+      this.saveDatabase();
+    }
+  }
+
+  async getResearchReviews(taskId: string): Promise<ResearchReview[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const reviews: ResearchReview[] = [];
+    const stmt = this.db.prepare(
+      `SELECT id, task_id, comments, research_snapshot, revised_content, status, submitted_at
+       FROM research_reviews WHERE task_id = ? ORDER BY submitted_at DESC`
+    );
+    stmt.bind([taskId]);
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as {
+        id: string; task_id: string; comments: string; research_snapshot: string;
+        revised_content: string | null; status: string; submitted_at: string;
+      };
+      reviews.push({
+        id: row.id,
+        taskId: row.task_id,
+        comments: JSON.parse(row.comments),
+        researchSnapshot: row.research_snapshot,
+        revisedContent: row.revised_content ?? undefined,
+        status: row.status as 'pending' | 'in_progress' | 'complete',
+        submittedAt: new Date(row.submitted_at),
+      });
+    }
+    stmt.free();
+    return reviews;
   }
 
   // ============ Cleanup ============

@@ -5,7 +5,7 @@
 import { Agent, AgentDiscoveryResult, AgentSession } from './agent.types';
 import { ChatMessage, StreamingMessage } from './message.types';
 import { AppSettings, PermissionRequest, PermissionResponse, PermissionSet } from './settings.types';
-import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput } from './task.types';
+import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from './task.types';
 
 // IPC Channel names
 export const IPC_CHANNELS = {
@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   CHAT_CLEAR_HISTORY: 'chat:clearHistory',
   CHAT_STREAM_CHUNK: 'chat:streamChunk',
   CHAT_STREAM_COMPLETE: 'chat:streamComplete',
+  CHAT_CANCEL_MESSAGE: 'chat:cancelMessage',
   
   // Permission operations
   PERMISSION_REQUEST: 'permission:request',
@@ -58,6 +59,7 @@ export const IPC_CHANNELS = {
   TASKS_LABELS_CREATE: 'tasks:labels:create',
   TASKS_LABELS_DELETE: 'tasks:labels:delete',
   TASKS_RUN_RESEARCH: 'tasks:runResearch',
+  TASKS_SUBMIT_RESEARCH_REVIEW: 'tasks:submitResearchReview',
 } as const;
 
 // Type-safe IPC payload definitions
@@ -118,6 +120,10 @@ export interface IPCPayloads {
   [IPC_CHANNELS.CHAT_STREAM_COMPLETE]: {
     request: never;
     response: ChatMessage;
+  };
+  [IPC_CHANNELS.CHAT_CANCEL_MESSAGE]: {
+    request: { agentId: string };
+    response: void;
   };
   
   // Permissions
@@ -184,6 +190,10 @@ export interface IPCPayloads {
   [IPC_CHANNELS.TASKS_RUN_RESEARCH]: {
     request: { taskId: string; agentId: string; outputPath?: string };
     response: { taskId: string };
+  };
+  [IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW]: {
+    request: { taskId: string; comments: ResearchComment[]; researchSnapshot: string };
+    response: { reviewId: string };
   };
 }
 

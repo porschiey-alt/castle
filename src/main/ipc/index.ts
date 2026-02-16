@@ -12,7 +12,7 @@ import { DirectoryService } from '../services/directory.service';
 import { IPC_CHANNELS } from '../../shared/types/ipc.types';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../../shared/types/agent.types';
-import { Task } from '../../shared/types/task.types';
+import { Task, ResearchComment } from '../../shared/types/task.types';
 
 export interface IpcServices {
   databaseService: DatabaseService;
@@ -117,6 +117,10 @@ export function registerIpcHandlers(services: IpcServices): void {
     processManagerService.onError(sessionId, (error) => {
       mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error });
     });
+
+    processManagerService.onCancelled(sessionId, () => {
+      mainWindow.webContents.send(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, { agentId });
+    });
   }
 
   ipcMain.handle(IPC_CHANNELS.CHAT_SEND_MESSAGE, async (_event, { agentId, content }) => {
@@ -168,6 +172,10 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   ipcMain.handle(IPC_CHANNELS.CHAT_CLEAR_HISTORY, async (_event, { agentId }) => {
     await databaseService.clearHistory(agentId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, async (_event, { agentId }) => {
+    await processManagerService.cancelMessage(agentId);
   });
 
   // ============ Permission Handlers ============
@@ -367,6 +375,102 @@ export function registerIpcHandlers(services: IpcServices): void {
     });
 
     return { taskId };
+  });
+
+  // ============ Research Review Handler ============
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, async (_event, { taskId, comments, researchSnapshot }: { taskId: string; comments: ResearchComment[]; researchSnapshot: string }) => {
+    const task = await databaseService.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+    if (!task.researchAgentId) throw new Error('No research agent assigned to task');
+
+    const reviewId = uuidv4();
+    const agentId = task.researchAgentId;
+
+    // Persist the review
+    await databaseService.createResearchReview({
+      id: reviewId,
+      taskId,
+      comments,
+      researchSnapshot,
+      status: 'pending',
+    });
+
+    // Ensure agent has a session
+    let sessionProcess = processManagerService.getSessionByAgentId(agentId);
+    if (!sessionProcess) {
+      let agent: Agent | null | undefined = discoveredAgents.get(agentId);
+      if (!agent) agent = await databaseService.getAgent(agentId);
+      if (!agent) throw new Error(`Agent ${agentId} not found`);
+      const workDir = directoryService.getCurrentDirectory();
+      if (!workDir) throw new Error('No workspace directory');
+      const session = await processManagerService.startSession(agent, workDir);
+      subscribeToSession(session.id, agentId);
+      sessionProcess = processManagerService.getSessionByAgentId(agentId);
+      if (!sessionProcess) throw new Error('Failed to start research agent session');
+    }
+
+    // Build revision prompt
+    const commentBlock = comments.map((c: ResearchComment, i: number) =>
+      `${i + 1}. [${c.anchor.blockType}: "${c.anchor.preview}..."]\n   Comment: ${c.body}`
+    ).join('\n\n');
+
+    const revisionPrompt = [
+      `You previously produced the following research document for the task "${task.title}":`,
+      ``,
+      `---BEGIN RESEARCH---`,
+      researchSnapshot,
+      `---END RESEARCH---`,
+      ``,
+      `The reviewer has left the following comments requesting changes:`,
+      ``,
+      commentBlock,
+      ``,
+      `Please produce an updated version of the research document that addresses each comment.`,
+      `Output ONLY the revised markdown document content. Do not include meta-commentary about the changes.`,
+    ].join('\n');
+
+    await databaseService.updateResearchReview(reviewId, { status: 'in_progress' });
+
+    // Listen for completion to save revised content
+    const onComplete = async (message: { content: string }) => {
+      await databaseService.updateTask(taskId, { researchContent: message.content });
+      await databaseService.updateResearchReview(reviewId, {
+        status: 'complete',
+        revisedContent: message.content,
+      });
+
+      // Also update the file on disk for non-bug tasks
+      if (task.kind !== 'bug') {
+        const workDir = directoryService.getCurrentDirectory();
+        if (workDir) {
+          const researchDir = path.join(workDir, 'research');
+          if (!fs.existsSync(researchDir)) {
+            fs.mkdirSync(researchDir, { recursive: true });
+          }
+          const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
+          const filePath = path.join(researchDir, `${safeTitle}.md`);
+          fs.writeFileSync(filePath, message.content, 'utf-8');
+        }
+      }
+
+      mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
+        id: taskId,
+        agentId,
+        role: 'assistant',
+        content: message.content,
+        timestamp: new Date(),
+      });
+    };
+
+    processManagerService.onComplete(sessionProcess.session.id, onComplete);
+    processManagerService.sendMessage(sessionProcess.session.id, revisionPrompt).catch((error) => {
+      console.error('[Research Review] Error:', error);
+      databaseService.updateResearchReview(reviewId, { status: 'pending' });
+      mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+    });
+
+    return { reviewId };
   });
 
   console.log('IPC handlers registered');

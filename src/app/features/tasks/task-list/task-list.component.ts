@@ -14,8 +14,8 @@ import { Subscription } from 'rxjs';
 import { TaskService } from '../../../core/services/task.service';
 import { AgentService } from '../../../core/services/agent.service';
 import { ElectronService } from '../../../core/services/electron.service';
-import { TaskDetailComponent, type TaskSaveEvent, type TaskResearchEvent, type TaskImplementEvent } from '../task-detail/task-detail.component';
-import { TASK_STATES, TASK_KINDS, type Task, type TaskState, type TaskKind } from '../../../../shared/types/task.types';
+import { TaskDetailComponent, type TaskSaveEvent, type TaskResearchEvent, type TaskImplementEvent, type TaskReviewSubmitEvent } from '../task-detail/task-detail.component';
+import { TASK_STATES, TASK_KINDS, type Task, type TaskState, type TaskKind, type BugCloseReason } from '../../../../shared/types/task.types';
 
 @Component({
   selector: 'app-task-list',
@@ -51,6 +51,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
   creating = false;
   researchRunningTaskIds = new Set<string>();
   implementRunningTaskIds = new Set<string>();
+  reviewRunningTaskIds = new Set<string>();
 
   /** Emitted when user clicks "Take me to the Researcher/Agent" */
   goToAgent = output<string>();
@@ -67,6 +68,13 @@ export class TaskListComponent implements OnInit, OnDestroy {
       if (this.researchRunningTaskIds.has(msg.id)) {
         this.researchRunningTaskIds.delete(msg.id);
         await this.taskService.refreshTask(msg.id);
+      }
+      // Check if this is a review revision completion
+      if (this.reviewRunningTaskIds.has(msg.id)) {
+        this.reviewRunningTaskIds.delete(msg.id);
+        await this.taskService.refreshTask(msg.id);
+        // Signal the detail component to clear its pending comments
+        this._reviewCompleteTaskId = msg.id;
       }
     });
   }
@@ -129,8 +137,12 @@ export class TaskListComponent implements OnInit, OnDestroy {
     }
   }
 
-  async onStateChange(event: { task: Task; state: TaskState }): Promise<void> {
-    await this.taskService.updateTask(event.task.id, { state: event.state });
+  async onStateChange(event: { task: Task; state: TaskState; closeReason?: BugCloseReason }): Promise<void> {
+    const updates: { state: TaskState; closeReason?: BugCloseReason } = { state: event.state };
+    if (event.closeReason) {
+      updates.closeReason = event.closeReason;
+    }
+    await this.taskService.updateTask(event.task.id, updates);
   }
 
   async deleteTask(task: Task): Promise<void> {
@@ -168,5 +180,17 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   isImplementRunning(taskId: string): boolean {
     return this.implementRunningTaskIds.has(taskId);
+  }
+
+  isReviewRunning(taskId: string): boolean {
+    return this.reviewRunningTaskIds.has(taskId);
+  }
+
+  /** Tracks the last task whose review completed, so the detail can react */
+  _reviewCompleteTaskId: string | null = null;
+
+  async onReviewSubmitted(event: TaskReviewSubmitEvent): Promise<void> {
+    this.reviewRunningTaskIds.add(event.taskId);
+    await this.taskService.submitResearchReview(event.taskId, event.comments, event.researchSnapshot);
   }
 }

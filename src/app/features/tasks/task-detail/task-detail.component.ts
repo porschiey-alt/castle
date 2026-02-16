@@ -17,8 +17,9 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTabsModule } from '@angular/material/tabs';
 import { marked } from 'marked';
 
-import { TASK_STATES, TASK_KINDS, type Task, type TaskLabel, type TaskState, type TaskKind } from '../../../../shared/types/task.types';
+import { TASK_STATES, TASK_KINDS, BUG_CLOSE_REASONS, type Task, type TaskLabel, type TaskState, type TaskKind, type BugCloseReason, type ResearchComment, type ResearchCommentAnchor } from '../../../../shared/types/task.types';
 import type { Agent } from '../../../../shared/types/agent.types';
+import { ResearchContentComponent } from '../research-content/research-content.component';
 
 marked.setOptions({ breaks: true, gfm: true });
 
@@ -41,6 +42,12 @@ export interface TaskImplementEvent {
   agentId: string;
 }
 
+export interface TaskReviewSubmitEvent {
+  taskId: string;
+  comments: ResearchComment[];
+  researchSnapshot: string;
+}
+
 @Component({
   selector: 'app-task-detail',
   standalone: true,
@@ -56,6 +63,7 @@ export interface TaskImplementEvent {
     MatInputModule,
     MatSelectModule,
     MatTabsModule,
+    ResearchContentComponent,
   ],
   templateUrl: './task-detail.component.html',
   styleUrl: './task-detail.component.scss'
@@ -76,15 +84,17 @@ export class TaskDetailComponent implements OnInit {
 
   saved = output<TaskSaveEvent>();
   deleteRequested = output<Task>();
-  stateChanged = output<{ task: Task; state: TaskState }>();
+  stateChanged = output<{ task: Task; state: TaskState; closeReason?: BugCloseReason }>();
   researchRequested = output<TaskResearchEvent>();
   implementRequested = output<TaskImplementEvent>();
+  reviewSubmitted = output<TaskReviewSubmitEvent>();
   goToResearcher = output<string>();
   goToImplementer = output<string>();
   closed = output<void>();
 
   states = TASK_STATES;
   kinds = TASK_KINDS;
+  closeReasons = BUG_CLOSE_REASONS;
   editing = false;
   activeTab = 0;
 
@@ -99,6 +109,9 @@ export class TaskDetailComponent implements OnInit {
   selectedResearchAgentId = '';
   // Implementation agent picker
   selectedImplementAgentId = '';
+  // Research review comments
+  pendingComments: ResearchComment[] = [];
+  reviewSubmitting = false;
 
   get isCreating(): boolean {
     return !this.task();
@@ -210,6 +223,17 @@ export class TaskDetailComponent implements OnInit {
     }
   }
 
+  onCloseBugWithReason(reason: BugCloseReason): void {
+    const t = this.task();
+    if (t) {
+      this.stateChanged.emit({ task: t, state: 'done', closeReason: reason });
+    }
+  }
+
+  getCloseReasonInfo(reason: BugCloseReason) {
+    return BUG_CLOSE_REASONS.find(r => r.id === reason);
+  }
+
   startResearch(): void {
     const t = this.task();
     if (!t || !this.selectedResearchAgentId) return;
@@ -230,5 +254,34 @@ export class TaskDetailComponent implements OnInit {
 
   getAgentById(id: string): Agent | undefined {
     return this.agents().find(a => a.id === id);
+  }
+
+  addComment(event: { anchor: ResearchCommentAnchor; body: string }): void {
+    this.pendingComments = [...this.pendingComments, {
+      id: crypto.randomUUID(),
+      anchor: event.anchor,
+      body: event.body,
+      createdAt: new Date(),
+    }];
+  }
+
+  removeComment(commentId: string): void {
+    this.pendingComments = this.pendingComments.filter(c => c.id !== commentId);
+  }
+
+  submitReview(): void {
+    const t = this.task();
+    if (!t || this.pendingComments.length === 0) return;
+    this.reviewSubmitting = true;
+    this.reviewSubmitted.emit({
+      taskId: t.id,
+      comments: [...this.pendingComments],
+      researchSnapshot: t.researchContent || '',
+    });
+  }
+
+  onReviewComplete(): void {
+    this.pendingComments = [];
+    this.reviewSubmitting = false;
   }
 }

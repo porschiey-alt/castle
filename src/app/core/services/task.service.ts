@@ -4,7 +4,7 @@
 
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { ElectronService } from './electron.service';
-import type { Task, TaskLabel, TaskState, TaskKind, CreateTaskInput, UpdateTaskInput } from '../../../shared/types/task.types';
+import type { Task, TaskLabel, TaskState, TaskKind, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
 
 @Injectable({
   providedIn: 'root'
@@ -134,5 +134,9 @@ export class TaskService {
         tasks.map(t => t.id === taskId ? task : t)
       );
     }
+  }
+
+  async submitResearchReview(taskId: string, comments: ResearchComment[], researchSnapshot: string): Promise<void> {
+    await this.electronService.submitResearchReview(taskId, comments, researchSnapshot);
   }
 }

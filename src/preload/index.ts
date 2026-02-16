@@ -8,7 +8,7 @@ import { IPC_CHANNELS } from '../shared/types/ipc.types';
 import { AppSettings, PermissionSet, PermissionResponse } from '../shared/types/settings.types';
 import { Agent, AgentDiscoveryResult, AgentSession } from '../shared/types/agent.types';
 import { ChatMessage, StreamingMessage } from '../shared/types/message.types';
-import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput } from '../shared/types/task.types';
+import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../shared/types/task.types';
 
 // Type definitions for the exposed API
 export interface ElectronAPI {
@@ -32,6 +32,7 @@ export interface ElectronAPI {
     sendMessage: (agentId: string, content: string) => Promise<ChatMessage>;
     getHistory: (agentId: string, limit?: number, offset?: number) => Promise<ChatMessage[]>;
     clearHistory: (agentId: string) => Promise<void>;
+    cancelMessage: (agentId: string) => Promise<void>;
     onStreamChunk: (callback: (message: StreamingMessage) => void) => () => void;
     onStreamComplete: (callback: (message: ChatMessage) => void) => () => void;
   };
@@ -75,6 +76,7 @@ export interface ElectronAPI {
     createLabel: (name: string, color: string) => Promise<TaskLabel>;
     deleteLabel: (labelId: string) => Promise<void>;
     runResearch: (taskId: string, agentId: string, outputPath?: string) => Promise<{ taskId: string }>;
+    submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) => Promise<{ reviewId: string }>;
   };
 }
 
@@ -104,6 +106,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_HISTORY, { agentId, limit, offset }),
     clearHistory: (agentId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLEAR_HISTORY, { agentId }),
+    cancelMessage: (agentId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, { agentId }),
     onStreamChunk: (callback: (message: StreamingMessage) => void) => {
       const handler = (_event: IpcRendererEvent, message: StreamingMessage) => callback(message);
       ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_CHUNK, handler);
@@ -175,6 +179,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_LABELS_DELETE, { labelId }),
     runResearch: (taskId: string, agentId: string, outputPath?: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_RESEARCH, { taskId, agentId, outputPath }),
+    submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, { taskId, comments, researchSnapshot }),
   }
 };
 

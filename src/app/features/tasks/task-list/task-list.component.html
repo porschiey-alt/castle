@@ -21,6 +21,7 @@
         (stateChanged)="onStateChange($event)"
         (researchRequested)="onResearchRequested($event)"
         (implementRequested)="onImplementRequested($event)"
+        (reviewSubmitted)="onReviewSubmitted($event)"
         (goToResearcher)="goToAgent.emit($event)"
         (goToImplementer)="goToAgent.emit($event)"
         (closed)="deselectTask()"

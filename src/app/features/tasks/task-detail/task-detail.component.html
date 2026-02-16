@@ -81,12 +81,35 @@
       </button>
       <mat-menu #stateMenu="matMenu">
         @for (s of states; track s.id) {
-          <button mat-menu-item (click)="onStateChange(s.id)">
-            <mat-icon [style.color]="s.color">{{ s.icon }}</mat-icon>
-            <span>{{ s.label }}</span>
+          @if (s.id === 'done' && task()!.kind === 'bug') {
+            <button mat-menu-item [matMenuTriggerFor]="closeReasonMenu">
+              <mat-icon [style.color]="s.color">{{ s.icon }}</mat-icon>
+              <span>{{ s.label }}</span>
+            </button>
+          } @else {
+            <button mat-menu-item (click)="onStateChange(s.id)">
+              <mat-icon [style.color]="s.color">{{ s.icon }}</mat-icon>
+              <span>{{ s.label }}</span>
+            </button>
+          }
+        }
+      </mat-menu>
+      <mat-menu #closeReasonMenu="matMenu">
+        @for (r of closeReasons; track r.id) {
+          <button mat-menu-item (click)="onCloseBugWithReason(r.id)">
+            <mat-icon>{{ r.icon }}</mat-icon>
+            <span>{{ r.label }}</span>
           </button>
         }
       </mat-menu>
+
+      <!-- Close reason badge (bugs only) -->
+      @if (task()!.kind === 'bug' && task()!.state === 'done' && task()!.closeReason) {
+        <span class="close-reason-badge">
+          <mat-icon>{{ getCloseReasonInfo(task()!.closeReason!)?.icon }}</mat-icon>
+          {{ getCloseReasonInfo(task()!.closeReason!)?.label }}
+        </span>
+      }
 
       <!-- Kind badge -->
       <span class="kind-badge"
@@ -140,7 +163,49 @@
         </ng-template>
         <div class="tab-body">
           @if (task()!.researchContent) {
-            <div class="markdown-content" [innerHTML]="renderMarkdown(task()!.researchContent!)"></div>
+            <app-research-content
+              [content]="task()!.researchContent!"
+              [pendingComments]="pendingComments"
+              (commentAdded)="addComment($event)"
+              (commentRemoved)="removeComment($event)" />
+
+            <!-- Comment summary / review panel -->
+            @if (pendingComments.length > 0) {
+              <div class="review-panel">
+                <div class="review-panel-header">
+                  <mat-icon>rate_review</mat-icon>
+                  <span>{{ pendingComments.length }} pending comment{{ pendingComments.length > 1 ? 's' : '' }}</span>
+                </div>
+
+                <div class="review-comments-list">
+                  @for (comment of pendingComments; track comment.id) {
+                    <div class="review-comment-item">
+                      <span class="comment-anchor-label">
+                        {{ comment.anchor.blockType }}: "{{ comment.anchor.preview }}"
+                      </span>
+                      <span class="comment-body">{{ comment.body }}</span>
+                      <button mat-icon-button (click)="removeComment(comment.id)">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+                  }
+                </div>
+
+                <div class="review-panel-actions">
+                  <button mat-flat-button color="primary"
+                          [disabled]="reviewSubmitting"
+                          (click)="submitReview()">
+                    <mat-icon>send</mat-icon>
+                    Submit Review
+                  </button>
+                  <button mat-button
+                          [disabled]="reviewSubmitting"
+                          (click)="pendingComments = []">
+                    Discard All
+                  </button>
+                </div>
+              </div>
+            }
           } @else if (researchRunning()) {
             <div class="research-running">
               <mat-icon class="research-spinner">sync</mat-icon>
