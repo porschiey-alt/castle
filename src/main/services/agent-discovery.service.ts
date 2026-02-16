@@ -265,58 +265,6 @@ export class AgentDiscoveryService {
       },
       {
         id: uuidv4(),
-        name: 'Code Reviewer',
-        description: 'Reviews code for issues and improvements',
-        icon: '👀',
-        color: BUILTIN_AGENT_COLORS[1],
-        systemPrompt: `You are a code reviewer. Focus on:
-- Code quality and best practices
-- Security vulnerabilities
-- Performance issues
-- Maintainability and readability`,
-        source: 'builtin'
-      },
-      {
-        id: uuidv4(),
-        name: 'Test Writer',
-        description: 'Writes tests for your code',
-        icon: '🧪',
-        color: BUILTIN_AGENT_COLORS[2],
-        systemPrompt: `You are a test writing specialist. Focus on:
-- Unit tests with high coverage
-- Integration tests
-- E2E tests when appropriate
-- Test edge cases and error conditions`,
-        source: 'builtin'
-      },
-      {
-        id: uuidv4(),
-        name: 'Documentation',
-        description: 'Writes and updates documentation',
-        icon: '📝',
-        color: BUILTIN_AGENT_COLORS[3],
-        systemPrompt: `You are a documentation specialist. Focus on:
-- Clear and concise documentation
-- API documentation
-- README files
-- Code comments where helpful`,
-        source: 'builtin'
-      },
-      {
-        id: uuidv4(),
-        name: 'Refactorer',
-        description: 'Improves code structure',
-        icon: '♻️',
-        color: BUILTIN_AGENT_COLORS[4],
-        systemPrompt: `You are a refactoring specialist. Focus on:
-- Improving code structure
-- Reducing complexity
-- Applying design patterns
-- Eliminating code duplication`,
-        source: 'builtin'
-      },
-      {
-        id: uuidv4(),
         name: 'Researcher',
         description: 'Researches tasks and produces detailed analysis documents',
         icon: '🔬',

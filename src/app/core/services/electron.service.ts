@@ -91,6 +91,11 @@ export class ElectronService {
     return this.api.directory.getRecent();
   }
 
+  async setCurrentDirectory(dirPath: string): Promise<void> {
+    if (!this.api) return;
+    return this.api.directory.setCurrent(dirPath);
+  }
+
   // ============ Agent Methods ============
 
   async discoverAgents(workspacePath: string): Promise<AgentDiscoveryResult | null> {
@@ -242,5 +247,15 @@ export class ElectronService {
   async submitResearchReview(taskId: string, comments: ResearchComment[], researchSnapshot: string): Promise<{ reviewId: string } | null> {
     if (!this.api) return null;
     return this.api.tasks.submitResearchReview(taskId, comments, researchSnapshot);
+  }
+
+  async deleteDiagnosisFile(filePath: string): Promise<{ deleted: boolean } | null> {
+    if (!this.api) return null;
+    return this.api.tasks.deleteDiagnosisFile(filePath);
+  }
+
+  onDiagnosisFileCleanup(callback: (data: { taskId: string; filePath: string }) => void): () => void {
+    if (!this.api) return () => {};
+    return this.api.tasks.onDiagnosisFileCleanup(callback);
   }
 }

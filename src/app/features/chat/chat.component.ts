@@ -60,7 +60,15 @@ export class ChatComponent implements OnInit, OnChanges {
       await this.chatService.sendMessage(agentId, content);
     } catch (error) {
       console.error('Failed to send message:', error);
-      // TODO: Show error notification
+    }
+  }
+
+  async onStopProcessing(): Promise<void> {
+    const agentId = this.agent().id;
+    try {
+      await this.chatService.cancelMessage(agentId);
+    } catch (error) {
+      console.error('Failed to cancel message:', error);
     }
   }
 }

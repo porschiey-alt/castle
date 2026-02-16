@@ -113,6 +113,16 @@ export class ChatService {
   }
 
   /**
+   * Cancel the in-progress message for an agent
+   */
+  async cancelMessage(agentId: string): Promise<void> {
+    await this.electronService.cancelMessage(agentId);
+    this.clearStreamingMessage(agentId);
+    this.setLoading(agentId, false);
+    this.agentService.updateSessionStatus(agentId, 'stopped');
+  }
+
+  /**
    * Clear chat history for an agent
    */
   async clearHistory(agentId: string): Promise<void> {

@@ -48,6 +48,10 @@ export function registerIpcHandlers(services: IpcServices): void {
     return directoryService.getRecentDirectories();
   });
 
+  ipcMain.handle(IPC_CHANNELS.DIRECTORY_SET_CURRENT, async (_event, { path }) => {
+    await directoryService.setCurrentDirectory(path);
+  });
+
   // ============ Agent Handlers ============
 
   ipcMain.handle(IPC_CHANNELS.AGENTS_DISCOVER, async (_event, { workspacePath }) => {
@@ -229,17 +233,28 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // ============ Task Handlers ============
 
-  /** Read research content from the on-disk file if it exists, overriding the DB value */
+  /** Compute the on-disk research/diagnosis file path for a task */
+  function getResearchFilePath(task: Task, workingDirectory: string): string {
+    const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
+    const subDir = task.kind === 'bug' ? path.join('research', 'diagnosis') : 'research';
+    return path.join(workingDirectory, subDir, `${safeTitle}.md`);
+  }
+
+  /** Read research content from the on-disk file. If the file is missing, clear stale DB values. */
   function hydrateResearchFromFile(task: Task, workingDirectory: string | null): Task {
     if (!workingDirectory) return task;
-    const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
-    const filePath = path.join(workingDirectory, 'research', `${safeTitle}.md`);
+    const filePath = getResearchFilePath(task, workingDirectory);
     try {
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf-8');
         return { ...task, researchContent: content };
       }
-    } catch { /* file unreadable, fall back to DB value */ }
+    } catch { /* file unreadable, treat as missing */ }
+    // File doesn't exist — clear stale DB research so the UI
+    // prompts the user to run research again.
+    if (task.researchContent) {
+      return { ...task, researchContent: undefined, researchAgentId: undefined };
+    }
     return task;
   }
 
@@ -262,11 +277,41 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_UPDATE, async (_event, { taskId, updates }) => {
-    return databaseService.updateTask(taskId, updates);
+    const updatedTask = await databaseService.updateTask(taskId, updates);
+
+    // When a bug is marked done, notify the renderer so it can prompt to delete
+    // the diagnosis file.
+    if (updates.state === 'done' && updatedTask && updatedTask.kind === 'bug') {
+      const projectPath = directoryService.getCurrentDirectory();
+      if (projectPath) {
+        const diagPath = getResearchFilePath(updatedTask, projectPath);
+        if (fs.existsSync(diagPath)) {
+          mainWindow.webContents.send(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, {
+            taskId,
+            filePath: diagPath,
+          });
+        }
+      }
+    }
+
+    return updatedTask;
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_DELETE, async (_event, { taskId }) => {
     return databaseService.deleteTask(taskId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.TASKS_DELETE_DIAGNOSIS_FILE, async (_event, { filePath }: { filePath: string }) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`[Diagnosis] Deleted file: ${filePath}`);
+        return { deleted: true };
+      }
+    } catch (error) {
+      console.error(`[Diagnosis] Failed to delete file:`, error);
+    }
+    return { deleted: false };
   });
 
   ipcMain.handle(IPC_CHANNELS.TASKS_LABELS_GET_ALL, async () => {
@@ -302,6 +347,13 @@ export function registerIpcHandlers(services: IpcServices): void {
     }
 
     // Build the research prompt based on task kind
+    const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
+    const researchDir = outputPath || path.join(workingDirectory, 'research');
+    const diagnosisDir = path.join(researchDir, 'diagnosis');
+    const expectedFilePath = task.kind === 'bug'
+      ? path.join(diagnosisDir, `${safeTitle}.md`)
+      : path.join(researchDir, `${safeTitle}.md`);
+
     let researchPrompt: string;
 
     if (task.kind === 'bug') {
@@ -316,10 +368,22 @@ export function registerIpcHandlers(services: IpcServices): void {
         `Systematically analyze this bug. Identify the root cause and propose a concrete fix.`,
         `Structure your output under a "## Diagnosis and Suggested Fix" heading with subsections`,
         `for: Symptoms, Root Cause Analysis, Suggested Fix, and Verification Steps.`,
-        `Output ONLY the markdown content starting with the ## heading.`,
+        ``,
+        `Write the diagnosis to the file: ${expectedFilePath}`,
       ].join('\n');
     } else {
-      researchPrompt = `Research the following task and produce a detailed analysis document in Markdown format.\n\nTask: ${task.title}\n\nDescription:\n${task.description || '(no description provided)'}\n\nPlease provide a thorough research document covering technical analysis, proposed approach, considerations, and implementation guidance. Output ONLY the markdown document content.`;
+      researchPrompt = [
+        `Research the following task and produce a detailed analysis document in Markdown format.`,
+        ``,
+        `Task: ${task.title}`,
+        ``,
+        `Description:`,
+        task.description || '(no description provided)',
+        ``,
+        `Please provide a thorough research document covering technical analysis, proposed approach, considerations, and implementation guidance.`,
+        ``,
+        `Write the research document to the file: ${expectedFilePath}`,
+      ].join('\n');
     }
 
     // Save agentId to task immediately
@@ -327,60 +391,52 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     // Record start time to detect agent-created files
     const researchStartTime = Date.now();
-    const researchDir = outputPath || path.join(workingDirectory, 'research');
-    const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
-    const expectedFilePath = path.join(researchDir, `${safeTitle}.md`);
 
-    // Listen for completion to save research content
-    const onComplete = async (message: { content: string }) => {
-      if (task.kind === 'bug') {
-        // For bugs, append/replace diagnosis in the task description
-        const marker = '## Diagnosis and Suggested Fix';
-        const existingIdx = (task.description || '').indexOf(marker);
-        const baseDescription = existingIdx >= 0
-          ? task.description!.substring(0, existingIdx).trimEnd()
-          : (task.description || '');
-        const separator = baseDescription ? '\n\n' : '';
-        const updatedDescription = baseDescription + separator + message.content;
+    /** Send a follow-up prompt telling the agent to write the file */
+    const promptAgentToWriteFile = () => {
+      const followUp = `Your research output was not saved to disk. Please write the content you just produced to the file: ${expectedFilePath}`;
+      const unsubFollowUp = processManagerService.onComplete(sessionProcess!.session.id, () => {
+        unsubFollowUp();
+        notifyComplete();
+      });
+      processManagerService.sendMessage(sessionProcess!.session.id, followUp).catch((error) => {
+        console.error(`[Research] Follow-up error:`, error);
+        mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+      });
+    };
 
-        await databaseService.updateTask(taskId, {
-          description: updatedDescription,
-          researchContent: message.content,
-        });
-      } else {
-        // Check if the agent already wrote the research file during execution
-        let researchContent = message.content;
-        try {
-          if (fs.existsSync(expectedFilePath)) {
-            const stat = fs.statSync(expectedFilePath);
-            if (stat.mtimeMs >= researchStartTime) {
-              // Agent created/modified this file — use its content, not the chat response
-              researchContent = fs.readFileSync(expectedFilePath, 'utf-8');
-            }
-          }
-        } catch { /* fall back to message.content */ }
-
-        // Save to task in database
-        await databaseService.updateTask(taskId, { researchContent });
-
-        // Write to disk only if agent didn't already create the file
-        if (!fs.existsSync(expectedFilePath) || fs.statSync(expectedFilePath).mtimeMs < researchStartTime) {
-          if (!fs.existsSync(researchDir)) {
-            fs.mkdirSync(researchDir, { recursive: true });
-          }
-          fs.writeFileSync(expectedFilePath, researchContent, 'utf-8');
-        }
-        console.log(`[Research] Saved research to ${expectedFilePath}`);
-      }
-
-      // Notify renderer that research is complete
+    /** Notify the renderer that research is complete */
+    const notifyComplete = () => {
       mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
         id: taskId,
         agentId,
         role: 'assistant',
-        content: message.content,
+        content: '',
         timestamp: new Date()
       });
+    };
+
+    // Listen for completion
+    const onComplete = async (message: { content: string }) => {
+      // Check if the agent wrote the file during execution
+      let agentWroteFile = false;
+      try {
+        if (fs.existsSync(expectedFilePath)) {
+          const stat = fs.statSync(expectedFilePath);
+          if (stat.mtimeMs >= researchStartTime) {
+            agentWroteFile = true;
+          }
+        }
+      } catch { /* treat as not written */ }
+
+      if (agentWroteFile) {
+        console.log(`[Research] Agent wrote file: ${expectedFilePath}`);
+        notifyComplete();
+      } else {
+        // Agent didn't write the file — prompt it again
+        console.log(`[Research] Agent did not write file, sending follow-up prompt`);
+        promptAgentToWriteFile();
+      }
     };
 
     const unsubscribeResearch = processManagerService.onComplete(sessionProcess.session.id, (message) => {
@@ -435,6 +491,9 @@ export function registerIpcHandlers(services: IpcServices): void {
       `${i + 1}. [${c.anchor.blockType}: "${c.anchor.preview}..."]\n   Comment: ${c.body}`
     ).join('\n\n');
 
+    const workDir = directoryService.getCurrentDirectory();
+    const revisionFilePath = workDir ? getResearchFilePath(task, workDir) : null;
+
     const revisionPrompt = [
       `You previously produced the following research document for the task "${task.title}":`,
       ``,
@@ -447,32 +506,19 @@ export function registerIpcHandlers(services: IpcServices): void {
       commentBlock,
       ``,
       `Please produce an updated version of the research document that addresses each comment.`,
-      `Output ONLY the revised markdown document content. Do not include meta-commentary about the changes.`,
+      revisionFilePath
+        ? `Write the revised document to the file: ${revisionFilePath}`
+        : `Output ONLY the revised markdown document content. Do not include meta-commentary about the changes.`,
     ].join('\n');
 
     await databaseService.updateResearchReview(reviewId, { status: 'in_progress' });
 
     // Listen for completion to save revised content
     const onComplete = async (message: { content: string }) => {
-      await databaseService.updateTask(taskId, { researchContent: message.content });
       await databaseService.updateResearchReview(reviewId, {
         status: 'complete',
         revisedContent: message.content,
       });
-
-      // Also update the file on disk for non-bug tasks
-      if (task.kind !== 'bug') {
-        const workDir = directoryService.getCurrentDirectory();
-        if (workDir) {
-          const researchDir = path.join(workDir, 'research');
-          if (!fs.existsSync(researchDir)) {
-            fs.mkdirSync(researchDir, { recursive: true });
-          }
-          const safeTitle = task.title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase();
-          const filePath = path.join(researchDir, `${safeTitle}.md`);
-          fs.writeFileSync(filePath, message.content, 'utf-8');
-        }
-      }
 
       mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
         id: taskId,

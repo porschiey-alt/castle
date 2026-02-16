@@ -13,5 +13,6 @@
     [isLoading]="isLoading()"
     [disabled]="isInitializing() || !agent().session || agent().session?.status !== 'ready'"
     (messageSent)="onSendMessage($event)"
+    (stopRequested)="onStopProcessing()"
   />
 </div>

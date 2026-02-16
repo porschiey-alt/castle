@@ -65,6 +65,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   
   currentDirectory: string | null = null;
   activeView: 'chat' | 'tasks' = 'chat';
+  recentDirectories: string[] = [];
 
   async ngOnInit(): Promise<void> {
     // Listen for permission requests from Copilot
@@ -78,6 +79,8 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     // Discover agents if directory is set (this auto-selects and starts session for first agent)
     if (this.currentDirectory) {
       await this.agentService.discoverAgents(this.currentDirectory);
+    } else {
+      this.recentDirectories = await this.electronService.getRecentDirectories();
     }
   }
 
@@ -114,6 +117,23 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
         this.taskService.loadTasks();
       }
     }
+  }
+
+  async openRecentDirectory(dirPath: string): Promise<void> {
+    await this.electronService.setCurrentDirectory(dirPath);
+    this.currentDirectory = dirPath;
+    await this.agentService.discoverAgents(dirPath);
+    if (this.statusBar) {
+      this.statusBar.updateDirectory(dirPath);
+    }
+    if (this.activeView === 'tasks') {
+      this.taskService.loadTasks();
+    }
+  }
+
+  getDirectoryName(dirPath: string): string {
+    const parts = dirPath.split(/[/\\]/);
+    return parts[parts.length - 1] || dirPath;
   }
 
   setTheme(themeId: string): void {

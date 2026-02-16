@@ -56,6 +56,8 @@ export class TaskListComponent implements OnInit, OnDestroy {
   /** Emitted when user clicks "Take me to the Researcher/Agent" */
   goToAgent = output<string>();
 
+  private diagnosisCleanupUnsub?: () => void;
+
   async ngOnInit(): Promise<void> {
     await Promise.all([
       this.taskService.loadTasks(),
@@ -77,10 +79,18 @@ export class TaskListComponent implements OnInit, OnDestroy {
         this._reviewCompleteTaskId = msg.id;
       }
     });
+
+    // Listen for diagnosis file cleanup prompts
+    this.diagnosisCleanupUnsub = this.electronService.onDiagnosisFileCleanup(async (data) => {
+      if (confirm(`This bug has a diagnosis file:\n${data.filePath}\n\nWould you like to delete it?`)) {
+        await this.electronService.deleteDiagnosisFile(data.filePath);
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.completeSub?.unsubscribe();
+    this.diagnosisCleanupUnsub?.();
   }
 
   getStateInfo(state: TaskState) {

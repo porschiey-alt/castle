@@ -59,7 +59,7 @@ This creates distributable packages in the `release/` directory.
 2. Click "Open a Project" or use the menu
 3. Select a directory containing your code
 4. Castle will discover agents from:
-   - Built-in agents (General Assistant, Code Reviewer, etc.)
+   - Built-in agents (General Assistant, Researcher, Debugger)
    - Your project's `AGENTS.md` file (if present)
 
 ### Chatting with Agents
@@ -99,10 +99,8 @@ agents:
 | Agent | Icon | Description |
 |-------|------|-------------|
 | General Assistant | 🤖 | All-purpose coding help |
-| Code Reviewer | 👀 | Reviews code for issues |
-| Test Writer | 🧪 | Writes tests for your code |
-| Documentation | 📝 | Writes and updates docs |
-| Refactorer | ♻️ | Improves code structure |
+| Researcher | 🔬 | Researches tasks and produces detailed analysis |
+| Debugger | 🐛 | Diagnoses bugs and suggests fixes |
 
 ## Configuration
 

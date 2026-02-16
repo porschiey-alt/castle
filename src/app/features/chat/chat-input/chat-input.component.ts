@@ -36,6 +36,7 @@ export class ChatInputComponent {
 
   // Outputs
   messageSent = output<string>();
+  stopRequested = output<void>();
 
   // Local state
   message = '';
@@ -55,6 +56,10 @@ export class ChatInputComponent {
       this.messageSent.emit(trimmedMessage);
       this.message = '';
     }
+  }
+
+  onStop(): void {
+    this.stopRequested.emit();
   }
 
   onKeydown(event: KeyboardEvent): void {

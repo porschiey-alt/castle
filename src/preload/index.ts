@@ -17,6 +17,7 @@ export interface ElectronAPI {
     select: () => Promise<string | null>;
     getCurrent: () => Promise<string | null>;
     getRecent: () => Promise<string[]>;
+    setCurrent: (dirPath: string) => Promise<void>;
   };
 
   // Agent operations
@@ -77,6 +78,8 @@ export interface ElectronAPI {
     deleteLabel: (labelId: string) => Promise<void>;
     runResearch: (taskId: string, agentId: string, outputPath?: string) => Promise<{ taskId: string }>;
     submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) => Promise<{ reviewId: string }>;
+    deleteDiagnosisFile: (filePath: string) => Promise<{ deleted: boolean }>;
+    onDiagnosisFileCleanup: (callback: (data: { taskId: string; filePath: string }) => void) => () => void;
   };
 }
 
@@ -85,7 +88,8 @@ const electronAPI: ElectronAPI = {
   directory: {
     select: () => ipcRenderer.invoke(IPC_CHANNELS.DIRECTORY_SELECT),
     getCurrent: () => ipcRenderer.invoke(IPC_CHANNELS.DIRECTORY_GET_CURRENT),
-    getRecent: () => ipcRenderer.invoke(IPC_CHANNELS.DIRECTORY_GET_RECENT)
+    getRecent: () => ipcRenderer.invoke(IPC_CHANNELS.DIRECTORY_GET_RECENT),
+    setCurrent: (dirPath: string) => ipcRenderer.invoke(IPC_CHANNELS.DIRECTORY_SET_CURRENT, { path: dirPath })
   },
 
   agents: {
@@ -181,6 +185,13 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_RESEARCH, { taskId, agentId, outputPath }),
     submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, { taskId, comments, researchSnapshot }),
+    deleteDiagnosisFile: (filePath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_DELETE_DIAGNOSIS_FILE, { filePath }),
+    onDiagnosisFileCleanup: (callback: (data: { taskId: string; filePath: string }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { taskId: string; filePath: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, handler);
+    },
   }
 };
 

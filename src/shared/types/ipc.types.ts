@@ -13,6 +13,7 @@ export const IPC_CHANNELS = {
   DIRECTORY_SELECT: 'directory:select',
   DIRECTORY_GET_CURRENT: 'directory:getCurrent',
   DIRECTORY_GET_RECENT: 'directory:getRecent',
+  DIRECTORY_SET_CURRENT: 'directory:setCurrent',
   
   // Agent operations
   AGENTS_DISCOVER: 'agents:discover',
@@ -60,6 +61,8 @@ export const IPC_CHANNELS = {
   TASKS_LABELS_DELETE: 'tasks:labels:delete',
   TASKS_RUN_RESEARCH: 'tasks:runResearch',
   TASKS_SUBMIT_RESEARCH_REVIEW: 'tasks:submitResearchReview',
+  TASKS_DIAGNOSIS_FILE_CLEANUP: 'tasks:diagnosisFileCleanup',
+  TASKS_DELETE_DIAGNOSIS_FILE: 'tasks:deleteDiagnosisFile',
 } as const;
 
 // Type-safe IPC payload definitions
@@ -76,6 +79,10 @@ export interface IPCPayloads {
   [IPC_CHANNELS.DIRECTORY_GET_RECENT]: {
     request: void;
     response: string[];
+  };
+  [IPC_CHANNELS.DIRECTORY_SET_CURRENT]: {
+    request: { path: string };
+    response: void;
   };
   
   // Agents

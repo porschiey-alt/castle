@@ -84,6 +84,22 @@
           <h2>Welcome to Castle</h2>
           <p>Select an agent from the sidebar to start chatting</p>
           @if (!currentDirectory) {
+            @if (recentDirectories.length > 0) {
+              <div class="recent-projects">
+                <h3>Recent Projects</h3>
+                <div class="recent-list">
+                  @for (dir of recentDirectories; track dir) {
+                    <button class="recent-item" (click)="openRecentDirectory(dir)">
+                      <mat-icon>folder</mat-icon>
+                      <div class="recent-item-text">
+                        <span class="recent-name">{{ getDirectoryName(dir) }}</span>
+                        <span class="recent-path">{{ dir }}</span>
+                      </div>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
             <button mat-raised-button color="primary" (click)="openDirectory()">
               <mat-icon>folder_open</mat-icon>
               Open a Project

@@ -14,7 +14,13 @@
     
     <div matSuffix class="input-actions">
       @if (isLoading()) {
-        <mat-spinner diameter="24"></mat-spinner>
+        <button 
+          mat-icon-button 
+          class="stop-button"
+          (click)="onStop()"
+          title="Stop processing">
+          <mat-icon>stop_circle</mat-icon>
+        </button>
       } @else {
         <button 
           mat-icon-button 

@@ -389,6 +389,45 @@ export class ProcessManagerService {
   }
 
   /**
+   * Cancel the in-progress message for an agent session.
+   * Kills the child process, clears buffers, and removes the session
+   * so it will be auto-restarted on the next message.
+   */
+  async cancelMessage(agentId: string): Promise<void> {
+    const sessionProcess = this.getSessionByAgentId(agentId);
+    if (!sessionProcess) return;
+
+    // Kill the child process to abort any in-flight ACP prompt
+    if (sessionProcess.process.pid) {
+      sessionProcess.process.kill('SIGTERM');
+    }
+
+    // Clear buffers
+    sessionProcess.contentBuffer = '';
+    sessionProcess.thinkingBuffer = '';
+    sessionProcess.toolCalls.clear();
+
+    // Emit a cancellation event so the UI can clean up
+    sessionProcess.eventEmitter.emit('cancelled', { agentId });
+
+    // Remove the session; it will be auto-started on next message
+    this.sessions.delete(sessionProcess.session.id);
+  }
+
+  /**
+   * Subscribe to session cancellation
+   */
+  onCancelled(sessionId: string, callback: (data: { agentId: string }) => void): () => void {
+    const sessionProcess = this.sessions.get(sessionId);
+    if (!sessionProcess) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+
+    sessionProcess.eventEmitter.on('cancelled', callback);
+    return () => { sessionProcess.eventEmitter.off('cancelled', callback); };
+  }
+
+  /**
    * Stop a session
    */
   async stopSession(sessionId: string): Promise<void> {

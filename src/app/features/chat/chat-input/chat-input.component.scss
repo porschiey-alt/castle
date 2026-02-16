@@ -48,6 +48,10 @@
     }
   }
 
+  .stop-button {
+    color: var(--theme-warn, #f44336);
+  }
+
   mat-spinner {
     margin: 0 12px;
   }
