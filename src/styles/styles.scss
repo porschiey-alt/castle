@@ -117,6 +117,8 @@ a {
     --mdc-outlined-text-field-outline-color: var(--border-color);
     --mdc-outlined-text-field-focus-outline-color: var(--theme-primary);
     --mdc-outlined-text-field-hover-outline-color: var(--text-muted);
+    --mdc-outlined-text-field-label-text-color: var(--text-secondary);
+    --mdc-outlined-text-field-focus-label-text-color: var(--theme-primary);
   }
 
   // Button overrides

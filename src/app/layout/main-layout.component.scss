@@ -2,7 +2,7 @@
   display: flex;
   height: 100dvh;
   width: 100vw;
-  background-color: var(--bg-primary);
+  background: var(--bg-gradient, var(--bg-primary));
   color: var(--text-primary);
 }
 

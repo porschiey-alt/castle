@@ -16,7 +16,7 @@
 
   &.selected {
     border-radius: 16px;
-    background-color: var(--agent-color);
+    background-color: var(--theme-primary);
 
     &::before {
       content: '';
