@@ -39,6 +39,10 @@ export const IPC_CHANNELS = {
   // Settings operations
   SETTINGS_GET: 'settings:get',
   SETTINGS_UPDATE: 'settings:update',
+
+  // Tailscale / remote access
+  TAILSCALE_RESTART: 'tailscale:restart',
+  TAILSCALE_STATUS: 'tailscale:status',
   
   // Window operations
   WINDOW_MINIMIZE: 'window:minimize',
@@ -63,6 +67,11 @@ export const IPC_CHANNELS = {
   TASKS_SUBMIT_RESEARCH_REVIEW: 'tasks:submitResearchReview',
   TASKS_DIAGNOSIS_FILE_CLEANUP: 'tasks:diagnosisFileCleanup',
   TASKS_DELETE_DIAGNOSIS_FILE: 'tasks:deleteDiagnosisFile',
+
+  // Cross-device sync push events
+  SYNC_TASKS_CHANGED: 'sync:tasksChanged',
+  SYNC_CHAT_MESSAGE_ADDED: 'sync:chatMessageAdded',
+  SYNC_PERMISSION_RESPONDED: 'sync:permissionResponded',
 } as const;
 
 // Type-safe IPC payload definitions

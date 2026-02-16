@@ -1,0 +1,65 @@
+<div class="settings-dialog">
+  <div class="settings-header">
+    <mat-icon>settings</mat-icon>
+    <h2>Settings</h2>
+  </div>
+
+  <div class="settings-content">
+    <!-- Remote Access Section -->
+    <div class="settings-section">
+      <h3>
+        <mat-icon>lan</mat-icon>
+        Remote Access
+      </h3>
+      <p class="section-description">
+        Serve the Castle UI over HTTP so you can access it from other devices on your network or Tailscale tailnet.
+      </p>
+
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>Enable remote access</span>
+        </div>
+        <mat-slide-toggle
+          [(ngModel)]="tailscaleEnabled"
+          (change)="onToggle()"
+          [disabled]="saving">
+        </mat-slide-toggle>
+      </div>
+
+      @if (tailscaleEnabled) {
+        <div class="setting-row port-row">
+          <mat-form-field appearance="outline" class="port-field">
+            <mat-label>Port</mat-label>
+            <input matInput type="number" [(ngModel)]="tailscalePort" min="1024" max="65535">
+          </mat-form-field>
+          <button mat-stroked-button (click)="applyPort()" [disabled]="saving">
+            Apply
+          </button>
+        </div>
+
+        <div class="status-row">
+          @if (tailscaleRunning) {
+            <mat-icon class="status-icon running">check_circle</mat-icon>
+            <span class="status-text running">
+              Running on <code>http://localhost:{{ tailscalePort }}</code>
+            </span>
+          } @else {
+            <mat-icon class="status-icon stopped">radio_button_unchecked</mat-icon>
+            <span class="status-text stopped">Not running</span>
+          }
+        </div>
+
+        @if (tailscaleError) {
+          <div class="error-row">
+            <mat-icon>error</mat-icon>
+            <span>{{ tailscaleError }}</span>
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  <div class="settings-footer">
+    <button mat-button (click)="close()">Close</button>
+  </div>
+</div>

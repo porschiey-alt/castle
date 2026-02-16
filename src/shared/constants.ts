@@ -46,3 +46,5 @@ export const PERMISSION_LABELS: Record<string, string> = {
   networkAccess: 'Make network requests',
   gitOperations: 'Perform Git operations'
 };
+
+export const DEFAULT_TAILSCALE_PORT = 39417;

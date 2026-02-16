@@ -9,6 +9,7 @@ import { DatabaseService } from '../services/database.service';
 import { AgentDiscoveryService } from '../services/agent-discovery.service';
 import { ProcessManagerService } from '../services/process-manager.service';
 import { DirectoryService } from '../services/directory.service';
+import { EventBroadcaster } from '../services/event-broadcaster';
 import { IPC_CHANNELS } from '../../shared/types/ipc.types';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../../shared/types/agent.types';
@@ -20,10 +21,14 @@ export interface IpcServices {
   processManagerService: ProcessManagerService;
   directoryService: DirectoryService;
   mainWindow: BrowserWindow;
+  broadcaster: EventBroadcaster;
 }
 
 // In-memory cache of discovered agents
 let discoveredAgents: Map<string, Agent> = new Map();
+
+/** Registry of IPC handlers that can be invoked from both Electron IPC and WebSocket */
+export const ipcHandlerRegistry = new Map<string, (payload: any) => Promise<any>>();
 
 export function registerIpcHandlers(services: IpcServices): void {
   const {
@@ -31,30 +36,37 @@ export function registerIpcHandlers(services: IpcServices): void {
     agentDiscoveryService,
     processManagerService,
     directoryService,
-    mainWindow
+    mainWindow,
+    broadcaster
   } = services;
+
+  /** Register a handler for both Electron IPC and the shared registry */
+  function handle(channel: string, handler: (event: any, payload: any) => any): void {
+    ipcMain.handle(channel, handler);
+    ipcHandlerRegistry.set(channel, (payload: any) => handler(null, payload));
+  }
 
   // ============ Directory Handlers ============
 
-  ipcMain.handle(IPC_CHANNELS.DIRECTORY_SELECT, async () => {
+  handle(IPC_CHANNELS.DIRECTORY_SELECT, async () => {
     return directoryService.selectDirectory(mainWindow);
   });
 
-  ipcMain.handle(IPC_CHANNELS.DIRECTORY_GET_CURRENT, () => {
+  handle(IPC_CHANNELS.DIRECTORY_GET_CURRENT, () => {
     return directoryService.getCurrentDirectory();
   });
 
-  ipcMain.handle(IPC_CHANNELS.DIRECTORY_GET_RECENT, async () => {
+  handle(IPC_CHANNELS.DIRECTORY_GET_RECENT, async () => {
     return directoryService.getRecentDirectories();
   });
 
-  ipcMain.handle(IPC_CHANNELS.DIRECTORY_SET_CURRENT, async (_event, { path }) => {
+  handle(IPC_CHANNELS.DIRECTORY_SET_CURRENT, async (_event, { path }) => {
     await directoryService.setCurrentDirectory(path);
   });
 
   // ============ Agent Handlers ============
 
-  ipcMain.handle(IPC_CHANNELS.AGENTS_DISCOVER, async (_event, { workspacePath }) => {
+  handle(IPC_CHANNELS.AGENTS_DISCOVER, async (_event, { workspacePath }) => {
     const result = await agentDiscoveryService.discoverAgents(workspacePath);
     
     // Cache discovered agents and save to database
@@ -68,7 +80,13 @@ export function registerIpcHandlers(services: IpcServices): void {
     return result;
   });
 
-  ipcMain.handle(IPC_CHANNELS.AGENTS_START_SESSION, async (_event, { agentId, workingDirectory }) => {
+  handle(IPC_CHANNELS.AGENTS_START_SESSION, async (_event, { agentId, workingDirectory }) => {
+    // Reuse existing session if one is already running for this agent
+    const existing = processManagerService.getSessionByAgentId(agentId);
+    if (existing && existing.session.status !== 'stopped' && existing.session.status !== 'error') {
+      return existing.session;
+    }
+
     // First try to get from in-memory cache
     let agent: Agent | null | undefined = discoveredAgents.get(agentId);
     
@@ -86,11 +104,11 @@ export function registerIpcHandlers(services: IpcServices): void {
     return session;
   });
 
-  ipcMain.handle(IPC_CHANNELS.AGENTS_STOP_SESSION, async (_event, { sessionId }) => {
+  handle(IPC_CHANNELS.AGENTS_STOP_SESSION, async (_event, { sessionId }) => {
     await processManagerService.stopSession(sessionId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.AGENTS_GET_SESSION, (_event, { agentId }) => {
+  handle(IPC_CHANNELS.AGENTS_GET_SESSION, (_event, { agentId }) => {
     const sessionProcess = processManagerService.getSessionByAgentId(agentId);
     return sessionProcess?.session || null;
   });
@@ -100,7 +118,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   // Helper to wire up output/complete/error/permission listeners for a session
   function subscribeToSession(sessionId: string, agentId: string): void {
     processManagerService.onOutput(sessionId, (message) => {
-      mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, message);
+      broadcaster.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, message);
     });
 
     processManagerService.onComplete(sessionId, async (message) => {
@@ -111,23 +129,25 @@ export function registerIpcHandlers(services: IpcServices): void {
         content: message.content,
         timestamp: new Date()
       });
-      mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, assistantMessage);
+      broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, assistantMessage);
+      // Notify all devices to reload chat history
+      broadcaster.send(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, assistantMessage);
     });
 
     processManagerService.onPermissionRequest(sessionId, (data) => {
-      mainWindow.webContents.send(IPC_CHANNELS.PERMISSION_REQUEST, data);
+      broadcaster.send(IPC_CHANNELS.PERMISSION_REQUEST, data);
     });
 
     processManagerService.onError(sessionId, (error) => {
-      mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error });
+      broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error });
     });
 
     processManagerService.onCancelled(sessionId, () => {
-      mainWindow.webContents.send(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, { agentId });
+      broadcaster.send(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, { agentId });
     });
   }
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_SEND_MESSAGE, async (_event, { agentId, content }) => {
+  handle(IPC_CHANNELS.CHAT_SEND_MESSAGE, async (_event, { agentId, content }) => {
     // Save user message
     const userMessage = await databaseService.saveMessage({
       agentId,
@@ -135,6 +155,9 @@ export function registerIpcHandlers(services: IpcServices): void {
       content,
       timestamp: new Date()
     });
+
+    // Broadcast the user message so other devices see it
+    broadcaster.send(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, userMessage);
 
     // Get session for agent, auto-starting one if needed
     let sessionProcess = processManagerService.getSessionByAgentId(agentId);
@@ -164,46 +187,54 @@ export function registerIpcHandlers(services: IpcServices): void {
     // Send message to Copilot CLI via ACP — runs async, responses come via events
     processManagerService.sendMessage(sessionProcess.session.id, content).catch((error) => {
       console.error(`[Agent ${agentId}] sendMessage error:`, error);
-      mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+      broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
     });
 
     return userMessage;
   });
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_GET_HISTORY, async (_event, { agentId, limit, offset }) => {
+  handle(IPC_CHANNELS.CHAT_GET_HISTORY, async (_event, { agentId, limit, offset }) => {
     return databaseService.getMessages(agentId, limit, offset);
   });
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_CLEAR_HISTORY, async (_event, { agentId }) => {
+  handle(IPC_CHANNELS.CHAT_CLEAR_HISTORY, async (_event, { agentId }) => {
     await databaseService.clearHistory(agentId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, async (_event, { agentId }) => {
+  handle(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, async (_event, { agentId }) => {
     await processManagerService.cancelMessage(agentId);
   });
 
   // ============ Permission Handlers ============
 
-  ipcMain.handle(IPC_CHANNELS.PERMISSION_GET, async (_event, { agentId }) => {
+  handle(IPC_CHANNELS.PERMISSION_GET, async (_event, { agentId }) => {
     return databaseService.getPermissions(agentId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.PERMISSION_SET, async (_event, { agentId, permission, granted }) => {
+  handle(IPC_CHANNELS.PERMISSION_SET, async (_event, { agentId, permission, granted }) => {
     await databaseService.setPermission(agentId, permission, granted);
   });
 
   // Handle permission response from renderer
   ipcMain.on(IPC_CHANNELS.PERMISSION_RESPONSE, (_event, { requestId, agentId, optionId }) => {
     processManagerService.respondToPermission(agentId, requestId, optionId);
+    // Notify all devices to dismiss the permission dialog
+    broadcaster.send(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, { requestId });
+  });
+  // Also register in handler registry so WebSocket clients can respond
+  ipcHandlerRegistry.set(IPC_CHANNELS.PERMISSION_RESPONSE, async (payload: any) => {
+    const { requestId, agentId, optionId } = payload;
+    processManagerService.respondToPermission(agentId, requestId, optionId);
+    broadcaster.send(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, { requestId });
   });
 
   // ============ Settings Handlers ============
 
-  ipcMain.handle(IPC_CHANNELS.SETTINGS_GET, async () => {
+  handle(IPC_CHANNELS.SETTINGS_GET, async () => {
     return databaseService.getSettings();
   });
 
-  ipcMain.handle(IPC_CHANNELS.SETTINGS_UPDATE, async (_event, updates) => {
+  handle(IPC_CHANNELS.SETTINGS_UPDATE, async (_event, updates) => {
     return databaseService.updateSettings(updates);
   });
 
@@ -227,7 +258,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // ============ App Handlers ============
 
-  ipcMain.handle(IPC_CHANNELS.APP_GET_ACTIVE_MODEL, () => {
+  handle(IPC_CHANNELS.APP_GET_ACTIVE_MODEL, () => {
     return processManagerService.getActiveModel();
   });
 
@@ -258,25 +289,27 @@ export function registerIpcHandlers(services: IpcServices): void {
     return task;
   }
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_GET_ALL, async (_event, { state, kind } = {}) => {
+  handle(IPC_CHANNELS.TASKS_GET_ALL, async (_event, { state, kind } = {}) => {
     const projectPath = directoryService.getCurrentDirectory();
     const tasks = await databaseService.getTasks(state, kind, projectPath || undefined);
     return tasks.map(t => hydrateResearchFromFile(t, projectPath));
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_GET, async (_event, { taskId }) => {
+  handle(IPC_CHANNELS.TASKS_GET, async (_event, { taskId }) => {
     const task = await databaseService.getTask(taskId);
     if (!task) return null;
     const projectPath = directoryService.getCurrentDirectory();
     return hydrateResearchFromFile(task, projectPath);
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_CREATE, async (_event, input) => {
+  handle(IPC_CHANNELS.TASKS_CREATE, async (_event, input) => {
     const projectPath = directoryService.getCurrentDirectory();
-    return databaseService.createTask(input, projectPath || undefined);
+    const task = await databaseService.createTask(input, projectPath || undefined);
+    broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'created', task });
+    return task;
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_UPDATE, async (_event, { taskId, updates }) => {
+  handle(IPC_CHANNELS.TASKS_UPDATE, async (_event, { taskId, updates }) => {
     const updatedTask = await databaseService.updateTask(taskId, updates);
 
     // When a bug is marked done, notify the renderer so it can prompt to delete
@@ -286,7 +319,7 @@ export function registerIpcHandlers(services: IpcServices): void {
       if (projectPath) {
         const diagPath = getResearchFilePath(updatedTask, projectPath);
         if (fs.existsSync(diagPath)) {
-          mainWindow.webContents.send(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, {
+          broadcaster.send(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, {
             taskId,
             filePath: diagPath,
           });
@@ -294,14 +327,17 @@ export function registerIpcHandlers(services: IpcServices): void {
       }
     }
 
+    broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'updated', task: updatedTask });
+
     return updatedTask;
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_DELETE, async (_event, { taskId }) => {
-    return databaseService.deleteTask(taskId);
+  handle(IPC_CHANNELS.TASKS_DELETE, async (_event, { taskId }) => {
+    await databaseService.deleteTask(taskId);
+    broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'deleted', taskId });
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_DELETE_DIAGNOSIS_FILE, async (_event, { filePath }: { filePath: string }) => {
+  handle(IPC_CHANNELS.TASKS_DELETE_DIAGNOSIS_FILE, async (_event, { filePath }: { filePath: string }) => {
     try {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
@@ -314,19 +350,19 @@ export function registerIpcHandlers(services: IpcServices): void {
     return { deleted: false };
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_LABELS_GET_ALL, async () => {
+  handle(IPC_CHANNELS.TASKS_LABELS_GET_ALL, async () => {
     return databaseService.getTaskLabels();
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_LABELS_CREATE, async (_event, { name, color }) => {
+  handle(IPC_CHANNELS.TASKS_LABELS_CREATE, async (_event, { name, color }) => {
     return databaseService.createTaskLabel(name, color);
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_LABELS_DELETE, async (_event, { labelId }) => {
+  handle(IPC_CHANNELS.TASKS_LABELS_DELETE, async (_event, { labelId }) => {
     return databaseService.deleteTaskLabel(labelId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_RUN_RESEARCH, async (_event, { taskId, agentId, outputPath }) => {
+  handle(IPC_CHANNELS.TASKS_RUN_RESEARCH, async (_event, { taskId, agentId, outputPath }) => {
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
@@ -401,13 +437,13 @@ export function registerIpcHandlers(services: IpcServices): void {
       });
       processManagerService.sendMessage(sessionProcess!.session.id, followUp).catch((error) => {
         console.error(`[Research] Follow-up error:`, error);
-        mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+        broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
       });
     };
 
     /** Notify the renderer that research is complete */
     const notifyComplete = () => {
-      mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
+      broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
         id: taskId,
         agentId,
         role: 'assistant',
@@ -447,7 +483,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     // Send the prompt (async — responses come via events)
     processManagerService.sendMessage(sessionProcess.session.id, researchPrompt).catch((error) => {
       console.error(`[Research] Error:`, error);
-      mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+      broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
     });
 
     return { taskId };
@@ -455,7 +491,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // ============ Research Review Handler ============
 
-  ipcMain.handle(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, async (_event, { taskId, comments, researchSnapshot }: { taskId: string; comments: ResearchComment[]; researchSnapshot: string }) => {
+  handle(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, async (_event, { taskId, comments, researchSnapshot }: { taskId: string; comments: ResearchComment[]; researchSnapshot: string }) => {
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
     if (!task.researchAgentId) throw new Error('No research agent assigned to task');
@@ -520,7 +556,7 @@ export function registerIpcHandlers(services: IpcServices): void {
         revisedContent: message.content,
       });
 
-      mainWindow.webContents.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
+      broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
         id: taskId,
         agentId,
         role: 'assistant',
@@ -536,7 +572,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     processManagerService.sendMessage(sessionProcess.session.id, revisionPrompt).catch((error) => {
       console.error('[Research Review] Error:', error);
       databaseService.updateResearchReview(reviewId, { status: 'pending' });
-      mainWindow.webContents.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+      broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
     });
 
     return { reviewId };

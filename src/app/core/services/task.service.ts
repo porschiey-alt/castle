@@ -20,6 +20,11 @@ export class TaskService {
   private filterStateSignal = signal<TaskState | null>(null);
   private filterKindSignal = signal<TaskKind | null>(null);
 
+  // Running state tracking (survives navigation)
+  private researchRunningIds = signal(new Set<string>());
+  private implementRunningIds = signal(new Set<string>());
+  private reviewRunningIds = signal(new Set<string>());
+
   // Public signals
   readonly tasks = this.tasksSignal.asReadonly();
   readonly labels = this.labelsSignal.asReadonly();
@@ -52,6 +57,67 @@ export class TaskService {
     return all;
   });
 
+  constructor() {
+    // Listen for stream completions globally (survives component destruction)
+    this.electronService.streamComplete$.subscribe(async (msg) => {
+      if (this.researchRunningIds().has(msg.id)) {
+        this.researchRunningIds.update(s => { const n = new Set(s); n.delete(msg.id); return n; });
+        await this.refreshTask(msg.id);
+      }
+      if (this.reviewRunningIds().has(msg.id)) {
+        this.reviewRunningIds.update(s => { const n = new Set(s); n.delete(msg.id); return n; });
+        await this.refreshTask(msg.id);
+      }
+    });
+
+    // Cross-device sync: another device created/updated/deleted a task
+    this.electronService.tasksChanged$.subscribe((data) => {
+      if (data.action === 'created' && data.task) {
+        this.tasksSignal.update(tasks => {
+          if (tasks.some(t => t.id === data.task!.id)) return tasks;
+          return [data.task!, ...tasks];
+        });
+      } else if (data.action === 'updated' && data.task) {
+        this.tasksSignal.update(tasks =>
+          tasks.map(t => t.id === data.task!.id ? data.task! : t)
+        );
+      } else if (data.action === 'deleted' && data.taskId) {
+        this.tasksSignal.update(tasks => tasks.filter(t => t.id !== data.taskId));
+        if (this.selectedTaskIdSignal() === data.taskId) {
+          this.selectedTaskIdSignal.set(null);
+        }
+      }
+    });
+  }
+
+  isResearchRunning(taskId: string): boolean {
+    return this.researchRunningIds().has(taskId);
+  }
+
+  isImplementRunning(taskId: string): boolean {
+    return this.implementRunningIds().has(taskId);
+  }
+
+  isReviewRunning(taskId: string): boolean {
+    return this.reviewRunningIds().has(taskId);
+  }
+
+  markResearchRunning(taskId: string): void {
+    this.researchRunningIds.update(s => { const n = new Set(s); n.add(taskId); return n; });
+  }
+
+  markImplementRunning(taskId: string): void {
+    this.implementRunningIds.update(s => { const n = new Set(s); n.add(taskId); return n; });
+  }
+
+  clearImplementRunning(taskId: string): void {
+    this.implementRunningIds.update(s => { const n = new Set(s); n.delete(taskId); return n; });
+  }
+
+  markReviewRunning(taskId: string): void {
+    this.reviewRunningIds.update(s => { const n = new Set(s); n.add(taskId); return n; });
+  }
+
   async loadTasks(): Promise<void> {
     this.loadingSignal.set(true);
     try {
@@ -82,7 +148,11 @@ export class TaskService {
   async createTask(input: CreateTaskInput): Promise<Task | null> {
     const task = await this.electronService.createTask(input);
     if (task) {
-      this.tasksSignal.update(tasks => [task, ...tasks]);
+      // Dedup — the SYNC_TASKS_CHANGED broadcast may have already added it
+      this.tasksSignal.update(tasks => {
+        if (tasks.some(t => t.id === task.id)) return tasks;
+        return [task, ...tasks];
+      });
     }
     return task;
   }

@@ -4,9 +4,23 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent, AgentDiscoveryResult } from '../../shared/types/agent.types';
 import { AGENTS_MD_FILENAMES, BUILTIN_AGENT_COLORS } from '../../shared/constants';
+
+/** Generate a deterministic UUID v4-format ID from a stable key (name + source) */
+function stableAgentId(name: string, source: string): string {
+  const hash = crypto.createHash('sha256').update(`${source}:${name}`).digest('hex');
+  // Format as UUID v4: 8-4-4-4-12
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    '4' + hash.slice(13, 16),   // version nibble
+    ((parseInt(hash[16], 16) & 0x3) | 0x8).toString(16) + hash.slice(17, 20), // variant
+    hash.slice(20, 32)
+  ].join('-');
+}
 
 interface CastleAgentConfig {
   name: string;
@@ -117,7 +131,7 @@ export class AgentDiscoveryService {
           for (let i = 0; i < config.agents.length; i++) {
             const agentConfig = config.agents[i];
             agents.push({
-              id: uuidv4(),
+              id: stableAgentId(agentConfig.name, source),
               name: agentConfig.name,
               description: agentConfig.description || `${agentConfig.name} agent`,
               icon: agentConfig.icon,
@@ -134,9 +148,10 @@ export class AgentDiscoveryService {
 
     // If no Castle config found, create a default agent from the file
     if (agents.length === 0) {
+      const fallbackName = source === 'builtin' ? 'General Assistant' : 'Workspace Agent';
       agents.push({
-        id: uuidv4(),
-        name: source === 'builtin' ? 'General Assistant' : 'Workspace Agent',
+        id: stableAgentId(fallbackName, source),
+        name: fallbackName,
         description: source === 'builtin' 
           ? 'General purpose coding assistant' 
           : 'Agent configured for this workspace',
@@ -256,7 +271,7 @@ export class AgentDiscoveryService {
   private getDefaultAgents(): Agent[] {
     return [
       {
-        id: uuidv4(),
+        id: stableAgentId('General Assistant', 'builtin'),
         name: 'General Assistant',
         description: 'All-purpose coding help',
         icon: '🤖',
@@ -264,7 +279,7 @@ export class AgentDiscoveryService {
         source: 'builtin'
       },
       {
-        id: uuidv4(),
+        id: stableAgentId('Researcher', 'builtin'),
         name: 'Researcher',
         description: 'Researches tasks and produces detailed analysis documents',
         icon: '🔬',
@@ -283,7 +298,7 @@ headings, bullet points, and code references. Be thorough but concise.`,
         source: 'builtin'
       },
       {
-        id: uuidv4(),
+        id: stableAgentId('Debugger', 'builtin'),
         name: 'Debugger',
         description: 'Diagnoses bugs and suggests fixes',
         icon: '🐛',

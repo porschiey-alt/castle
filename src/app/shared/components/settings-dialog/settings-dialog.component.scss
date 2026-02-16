@@ -1,0 +1,146 @@
+.settings-dialog {
+  padding: 24px;
+  color: var(--text-primary);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+
+  mat-icon {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    color: var(--theme-primary);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+  }
+}
+
+.settings-content {
+  .settings-section {
+    h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 500;
+
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+        color: var(--text-muted);
+      }
+    }
+
+    .section-description {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin: 0 0 16px 0;
+      line-height: 1.5;
+    }
+  }
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+
+  .setting-label span {
+    font-size: 14px;
+  }
+}
+
+.port-row {
+  gap: 12px;
+  justify-content: flex-start;
+
+  .port-field {
+    width: 120px;
+  }
+
+  button {
+    margin-top: -16px;
+  }
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  margin-top: 8px;
+
+  .status-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+
+    &.running {
+      color: #22c55e;
+    }
+
+    &.stopped {
+      color: var(--text-muted);
+    }
+  }
+
+  .status-text {
+    font-size: 13px;
+
+    &.running {
+      color: var(--text-secondary);
+    }
+
+    &.stopped {
+      color: var(--text-muted);
+    }
+
+    code {
+      background: var(--bg-secondary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  }
+}
+
+.error-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  margin-top: 8px;
+  color: #ef4444;
+  font-size: 13px;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+
+  button {
+    color: var(--theme-primary);
+  }
+}

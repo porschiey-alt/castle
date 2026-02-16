@@ -19,6 +19,7 @@ import { ChatComponent } from '../features/chat/chat.component';
 import { TaskListComponent } from '../features/tasks/task-list/task-list.component';
 import { StatusBarComponent } from '../shared/components/status-bar/status-bar.component';
 import { AboutDialogComponent } from '../shared/components/about-dialog/about-dialog.component';
+import { SettingsDialogComponent } from '../shared/components/settings-dialog/settings-dialog.component';
 import { PermissionDialogComponent } from '../shared/components/permission-dialog/permission-dialog.component';
 
 import { ElectronService } from '../core/services/electron.service';
@@ -55,6 +56,8 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private taskService = inject(TaskService);
   private dialog = inject(MatDialog);
   private permissionSub?: Subscription;
+  private permissionRespondedSub?: Subscription;
+  private openPermissionDialogs = new Map<string, import('@angular/material/dialog').MatDialogRef<any>>();
 
   @ViewChild(StatusBarComponent) statusBar!: StatusBarComponent;
 
@@ -74,6 +77,15 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       this.showPermissionDialog(request);
     });
 
+    // Listen for permission responses from other devices — dismiss local dialog
+    this.permissionRespondedSub = this.electronService.permissionResponded$.subscribe(({ requestId }) => {
+      const dialogRef = this.openPermissionDialogs.get(requestId);
+      if (dialogRef) {
+        dialogRef.close(); // close without emitting a response
+        this.openPermissionDialogs.delete(requestId);
+      }
+    });
+
     // Load current directory
     this.currentDirectory = await this.electronService.getCurrentDirectory();
     
@@ -87,6 +99,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.permissionSub?.unsubscribe();
+    this.permissionRespondedSub?.unsubscribe();
   }
 
   private showPermissionDialog(request: any): void {
@@ -97,7 +110,10 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       panelClass: 'permission-dialog'
     });
 
+    this.openPermissionDialogs.set(request.requestId, dialogRef);
+
     dialogRef.afterClosed().subscribe((optionId: string) => {
+      this.openPermissionDialogs.delete(request.requestId);
       if (optionId) {
         this.electronService.respondToPermissionRequest(request.requestId, request.agentId, optionId);
       }
@@ -145,6 +161,13 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.dialog.open(AboutDialogComponent, {
       width: '400px',
       panelClass: 'about-dialog'
+    });
+  }
+
+  openSettingsDialog(): void {
+    this.dialog.open(SettingsDialogComponent, {
+      width: '480px',
+      panelClass: 'settings-dialog'
     });
   }
 

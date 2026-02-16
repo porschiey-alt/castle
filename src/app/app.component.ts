@@ -13,7 +13,7 @@ import { RouterOutlet } from '@angular/router';
   styles: [`
     :host {
       display: block;
-      height: 100vh;
+      height: 100dvh;
       width: 100vw;
       overflow: hidden;
     }

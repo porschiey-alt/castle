@@ -10,6 +10,8 @@ export interface AppSettings {
   fontSize: number;
   recentDirectories: string[];
   windowBounds?: WindowBounds;
+  tailscaleEnabled: boolean;
+  tailscalePort: number;
 }
 
 export interface WindowBounds {
@@ -49,7 +51,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoStartAgents: false,
   showToolCalls: true,
   fontSize: 14,
-  recentDirectories: []
+  recentDirectories: [],
+  tailscaleEnabled: false,
+  tailscalePort: 39417
 };
 
 export const DEFAULT_PERMISSIONS: PermissionSet = {

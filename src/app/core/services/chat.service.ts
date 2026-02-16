@@ -76,7 +76,7 @@ export class ChatService {
 
     // Listen for stream completion
     this.electronService.streamComplete$.subscribe((message: ChatMessage) => {
-      this.addMessage(message.agentId, message);
+      this.addMessageIfNew(message.agentId, message);
       this.clearStreamingMessage(message.agentId);
       this.setLoading(message.agentId, false);
       
@@ -85,6 +85,11 @@ export class ChatService {
       
       // Increment unread count if not the selected agent
       this.agentService.incrementUnreadCount(message.agentId);
+    });
+
+    // Cross-device sync: a message was added from another device — reload full history
+    this.electronService.chatMessageAdded$.subscribe((message: ChatMessage) => {
+      this.loadHistory(message.agentId);
     });
   }
 
@@ -119,7 +124,8 @@ export class ChatService {
     try {
       const userMessage = await this.electronService.sendMessage(agentId, content);
       if (userMessage) {
-        this.addMessage(agentId, userMessage);
+        // Use dedup — the SYNC_CHAT_MESSAGE_ADDED broadcast may have already added it
+        this.addMessageIfNew(agentId, userMessage);
       }
     } catch (error) {
       this.setLoading(agentId, false);
@@ -174,6 +180,14 @@ export class ChatService {
     });
     
     this.chatStatesSignal.set(states);
+  }
+
+  /** Add a message only if it isn't already in the list (for cross-device sync) */
+  private addMessageIfNew(agentId: string, message: ChatMessage): void {
+    const states = this.chatStatesSignal();
+    const currentState = states.get(agentId);
+    if (currentState?.messages.some(m => m.id === message.id)) return;
+    this.addMessage(agentId, message);
   }
 
   /**

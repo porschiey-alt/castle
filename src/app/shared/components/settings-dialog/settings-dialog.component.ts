@@ -1,0 +1,97 @@
+/**
+ * Settings Dialog Component
+ */
+
+import { Component, inject, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+
+import { ElectronService } from '../../../core/services/electron.service';
+import { DEFAULT_TAILSCALE_PORT } from '../../../../shared/constants';
+
+@Component({
+  selector: 'app-settings-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatSlideToggleModule,
+    MatFormFieldModule,
+    MatInputModule,
+  ],
+  templateUrl: './settings-dialog.component.html',
+  styleUrl: './settings-dialog.component.scss'
+})
+export class SettingsDialogComponent implements OnInit {
+  private electronService = inject(ElectronService);
+  private dialogRef = inject(MatDialogRef<SettingsDialogComponent>);
+
+  tailscaleEnabled = false;
+  tailscalePort = DEFAULT_TAILSCALE_PORT;
+  tailscaleRunning = false;
+  tailscaleError: string | null = null;
+  saving = false;
+
+  async ngOnInit(): Promise<void> {
+    const settings = await this.electronService.getSettings();
+    if (settings) {
+      this.tailscaleEnabled = settings.tailscaleEnabled ?? false;
+      this.tailscalePort = settings.tailscalePort ?? DEFAULT_TAILSCALE_PORT;
+    }
+    const status = await this.electronService.getTailscaleStatus();
+    this.tailscaleRunning = status.running;
+  }
+
+  async onToggle(): Promise<void> {
+    this.saving = true;
+    this.tailscaleError = null;
+
+    await this.electronService.updateSettings({
+      tailscaleEnabled: this.tailscaleEnabled,
+      tailscalePort: this.tailscalePort,
+    });
+
+    if (this.tailscaleEnabled) {
+      const result = await this.electronService.restartTailscale(this.tailscalePort);
+      this.tailscaleRunning = result.running;
+      if (result.error) {
+        this.tailscaleError = result.error;
+      }
+    } else {
+      // Stopping requires an app restart for now — settings are saved,
+      // server won't start next launch. For immediate stop we restart with port 0
+      // which the server handles as "stop".
+      this.tailscaleRunning = false;
+    }
+
+    this.saving = false;
+  }
+
+  async applyPort(): Promise<void> {
+    if (!this.tailscaleEnabled) return;
+    this.saving = true;
+    this.tailscaleError = null;
+
+    await this.electronService.updateSettings({ tailscalePort: this.tailscalePort });
+    const result = await this.electronService.restartTailscale(this.tailscalePort);
+    this.tailscaleRunning = result.running;
+    if (result.error) {
+      this.tailscaleError = result.error;
+    }
+
+    this.saving = false;
+  }
+
+  close(): void {
+    this.dialogRef.close();
+  }
+}

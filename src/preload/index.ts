@@ -52,6 +52,12 @@ export interface ElectronAPI {
     update: (updates: Partial<AppSettings>) => Promise<AppSettings>;
   };
 
+  // Tailscale / remote access
+  tailscale: {
+    restart: (port: number) => Promise<{ running: boolean; port?: number; error?: string }>;
+    status: () => Promise<{ running: boolean; port: number | null }>;
+  };
+
   // Window operations
   window: {
     minimize: () => void;
@@ -80,6 +86,13 @@ export interface ElectronAPI {
     submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) => Promise<{ reviewId: string }>;
     deleteDiagnosisFile: (filePath: string) => Promise<{ deleted: boolean }>;
     onDiagnosisFileCleanup: (callback: (data: { taskId: string; filePath: string }) => void) => () => void;
+  };
+
+  // Cross-device sync events
+  sync: {
+    onTasksChanged: (callback: (data: { action: string; task?: Task; taskId?: string }) => void) => () => void;
+    onChatMessageAdded: (callback: (message: ChatMessage) => void) => () => void;
+    onPermissionResponded: (callback: (data: { requestId: string }) => void) => () => void;
   };
 }
 
@@ -144,6 +157,13 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_UPDATE, updates)
   },
 
+  tailscale: {
+    restart: (port: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TAILSCALE_RESTART, { port }),
+    status: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.TAILSCALE_STATUS),
+  },
+
   window: {
     minimize: () => ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE),
     maximize: () => ipcRenderer.send(IPC_CHANNELS.WINDOW_MAXIMIZE),
@@ -191,6 +211,24 @@ const electronAPI: ElectronAPI = {
       const handler = (_event: Electron.IpcRendererEvent, data: { taskId: string; filePath: string }) => callback(data);
       ipcRenderer.on(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, handler);
+    },
+  },
+
+  sync: {
+    onTasksChanged: (callback: (data: { action: string; task?: Task; taskId?: string }) => void) => {
+      const handler = (_event: IpcRendererEvent, data: { action: string; task?: Task; taskId?: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.SYNC_TASKS_CHANGED, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC_TASKS_CHANGED, handler);
+    },
+    onChatMessageAdded: (callback: (message: ChatMessage) => void) => {
+      const handler = (_event: IpcRendererEvent, message: ChatMessage) => callback(message);
+      ipcRenderer.on(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, handler);
+    },
+    onPermissionResponded: (callback: (data: { requestId: string }) => void) => {
+      const handler = (_event: IpcRendererEvent, data: { requestId: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, handler);
     },
   }
 };

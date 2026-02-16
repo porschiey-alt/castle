@@ -28,6 +28,7 @@
     "@angular/platform-browser": "^17.3.0",
     "@angular/platform-browser-dynamic": "^17.3.0",
     "@angular/router": "^17.3.0",
+    "@types/ws": "^8.18.1",
     "electron-store": "^8.1.0",
     "highlight.js": "^11.9.0",
     "marked": "^12.0.0",
@@ -36,6 +37,7 @@
     "sql.js": "^1.10.0",
     "tslib": "^2.6.2",
     "uuid": "^9.0.1",
+    "ws": "^8.19.0",
     "zone.js": "^0.14.4"
   },
   "devDependencies": {

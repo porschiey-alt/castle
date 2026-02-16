@@ -1,48 +1,51 @@
 /**
  * Electron Service - Bridge to Electron IPC API
+ *
+ * Uses ApiService to automatically select between native Electron IPC
+ * (when running in the Electron shell) and a WebSocket bridge (when
+ * loaded from a remote browser over Tailscale).
  */
 
-import { Injectable, NgZone } from '@angular/core';
+import { Injectable, NgZone, inject } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import type { ElectronAPI } from '../../../preload/index';
 import type { Agent, AgentDiscoveryResult, AgentSession } from '../../../shared/types/agent.types';
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
 import type { AppSettings, PermissionSet, PermissionResponse } from '../../../shared/types/settings.types';
 import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
+import { ApiService } from './api.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ElectronService {
-  private api: ElectronAPI | null = null;
+  private api: ElectronAPI;
+  private apiService = inject(ApiService);
   
   // Subjects for streaming events
   private streamChunkSubject = new Subject<StreamingMessage>();
   private streamCompleteSubject = new Subject<ChatMessage>();
   private errorSubject = new Subject<{ agentId?: string; error: string }>();
   private permissionRequestSubject = new Subject<any>();
+  private tasksChangedSubject = new Subject<{ action: string; task?: Task; taskId?: string }>();
+  private chatMessageAddedSubject = new Subject<ChatMessage>();
+  private permissionRespondedSubject = new Subject<{ requestId: string }>();
 
   // Observables
   readonly streamChunk$ = this.streamChunkSubject.asObservable();
   readonly streamComplete$ = this.streamCompleteSubject.asObservable();
   readonly error$ = this.errorSubject.asObservable();
   readonly permissionRequest$ = this.permissionRequestSubject.asObservable();
+  readonly tasksChanged$ = this.tasksChangedSubject.asObservable();
+  readonly chatMessageAdded$ = this.chatMessageAddedSubject.asObservable();
+  readonly permissionResponded$ = this.permissionRespondedSubject.asObservable();
 
   constructor(private ngZone: NgZone) {
-    this.initializeApi();
-  }
-
-  private initializeApi(): void {
-    if (typeof window !== 'undefined' && window.electronAPI) {
-      this.api = window.electronAPI;
-      this.setupEventListeners();
-    } else {
-      console.warn('Electron API not available - running in browser mode');
-    }
+    this.api = this.apiService.api;
+    this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
-    if (!this.api) return;
 
     // Subscribe to streaming events
     this.api.chat.onStreamChunk((message) => {
@@ -68,82 +71,87 @@ export class ElectronService {
         this.permissionRequestSubject.next(request);
       });
     });
+
+    this.api.sync.onTasksChanged((data) => {
+      this.ngZone.run(() => {
+        this.tasksChangedSubject.next(data);
+      });
+    });
+
+    this.api.sync.onChatMessageAdded((message) => {
+      this.ngZone.run(() => {
+        this.chatMessageAddedSubject.next(message);
+      });
+    });
+
+    this.api.sync.onPermissionResponded((data) => {
+      this.ngZone.run(() => {
+        this.permissionRespondedSubject.next(data);
+      });
+    });
   }
 
   get isElectron(): boolean {
-    return this.api !== null;
+    return this.apiService.isElectron;
   }
 
   // ============ Directory Methods ============
 
   async selectDirectory(): Promise<string | null> {
-    if (!this.api) return null;
     return this.api.directory.select();
   }
 
   async getCurrentDirectory(): Promise<string | null> {
-    if (!this.api) return null;
     return this.api.directory.getCurrent();
   }
 
   async getRecentDirectories(): Promise<string[]> {
-    if (!this.api) return [];
     return this.api.directory.getRecent();
   }
 
   async setCurrentDirectory(dirPath: string): Promise<void> {
-    if (!this.api) return;
     return this.api.directory.setCurrent(dirPath);
   }
 
   // ============ Agent Methods ============
 
   async discoverAgents(workspacePath: string): Promise<AgentDiscoveryResult | null> {
-    if (!this.api) return null;
     return this.api.agents.discover(workspacePath);
   }
 
   async startAgentSession(agentId: string, workingDirectory: string): Promise<AgentSession | null> {
-    if (!this.api) return null;
     return this.api.agents.startSession(agentId, workingDirectory);
   }
 
   async stopAgentSession(sessionId: string): Promise<void> {
-    if (!this.api) return;
     return this.api.agents.stopSession(sessionId);
   }
 
   async getAgentSession(agentId: string): Promise<AgentSession | null> {
-    if (!this.api) return null;
     return this.api.agents.getSession(agentId);
   }
 
   // ============ Chat Methods ============
 
   async sendMessage(agentId: string, content: string): Promise<ChatMessage | null> {
-    if (!this.api) return null;
     return this.api.chat.sendMessage(agentId, content);
   }
 
   async getChatHistory(agentId: string, limit?: number, offset?: number): Promise<ChatMessage[]> {
-    if (!this.api) return [];
     return this.api.chat.getHistory(agentId, limit, offset);
   }
 
   async clearChatHistory(agentId: string): Promise<void> {
-    if (!this.api) return;
     return this.api.chat.clearHistory(agentId);
   }
 
   async cancelMessage(agentId: string): Promise<void> {
-    if (!this.api) return;
     return this.api.chat.cancelMessage(agentId);
   }
 
   // ============ Permission Methods ============
 
   async getPermissions(agentId: string): Promise<PermissionSet | null> {
-    if (!this.api) return null;
     return this.api.permissions.get(agentId);
   }
 
@@ -152,110 +160,100 @@ export class ElectronService {
     permission: keyof PermissionSet, 
     granted: boolean
   ): Promise<void> {
-    if (!this.api) return;
     return this.api.permissions.set(agentId, permission, granted);
   }
 
   respondToPermissionRequest(requestId: string, agentId: string, optionId: string): void {
-    if (!this.api) return;
     this.api.permissions.respond(requestId, agentId, optionId);
   }
 
   // ============ Settings Methods ============
 
   async getSettings(): Promise<AppSettings | null> {
-    if (!this.api) return null;
     return this.api.settings.get();
   }
 
   async updateSettings(updates: Partial<AppSettings>): Promise<AppSettings | null> {
-    if (!this.api) return null;
     return this.api.settings.update(updates);
+  }
+
+  // ============ Tailscale Methods ============
+
+  async restartTailscale(port: number): Promise<{ running: boolean; port?: number; error?: string }> {
+    return this.api.tailscale.restart(port);
+  }
+
+  async getTailscaleStatus(): Promise<{ running: boolean; port: number | null }> {
+    return this.api.tailscale.status();
   }
 
   // ============ Window Methods ============
 
   minimizeWindow(): void {
-    if (!this.api) return;
     this.api.window.minimize();
   }
 
   maximizeWindow(): void {
-    if (!this.api) return;
     this.api.window.maximize();
   }
 
   closeWindow(): void {
-    if (!this.api) return;
     this.api.window.close();
   }
 
   // ============ App Methods ============
 
   async getActiveModel(): Promise<string | null> {
-    if (!this.api) return null;
     return this.api.app.getActiveModel();
   }
 
   // ============ Task Methods ============
 
   async getTasks(state?: string): Promise<Task[]> {
-    if (!this.api) return [];
     return this.api.tasks.getAll(state);
   }
 
   async getTask(taskId: string): Promise<Task | null> {
-    if (!this.api) return null;
     return this.api.tasks.get(taskId);
   }
 
   async createTask(input: CreateTaskInput): Promise<Task | null> {
-    if (!this.api) return null;
     return this.api.tasks.create(input);
   }
 
   async updateTask(taskId: string, updates: UpdateTaskInput): Promise<Task | null> {
-    if (!this.api) return null;
     return this.api.tasks.update(taskId, updates);
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    if (!this.api) return;
     return this.api.tasks.delete(taskId);
   }
 
   async getTaskLabels(): Promise<TaskLabel[]> {
-    if (!this.api) return [];
     return this.api.tasks.getLabels();
   }
 
   async createTaskLabel(name: string, color: string): Promise<TaskLabel | null> {
-    if (!this.api) return null;
     return this.api.tasks.createLabel(name, color);
   }
 
   async deleteTaskLabel(labelId: string): Promise<void> {
-    if (!this.api) return;
     return this.api.tasks.deleteLabel(labelId);
   }
 
   async runTaskResearch(taskId: string, agentId: string, outputPath?: string): Promise<{ taskId: string } | null> {
-    if (!this.api) return null;
     return this.api.tasks.runResearch(taskId, agentId, outputPath);
   }
 
   async submitResearchReview(taskId: string, comments: ResearchComment[], researchSnapshot: string): Promise<{ reviewId: string } | null> {
-    if (!this.api) return null;
     return this.api.tasks.submitResearchReview(taskId, comments, researchSnapshot);
   }
 
   async deleteDiagnosisFile(filePath: string): Promise<{ deleted: boolean } | null> {
-    if (!this.api) return null;
     return this.api.tasks.deleteDiagnosisFile(filePath);
   }
 
   onDiagnosisFileCleanup(callback: (data: { taskId: string; filePath: string }) => void): () => void {
-    if (!this.api) return () => {};
     return this.api.tasks.onDiagnosisFileCleanup(callback);
   }
 }

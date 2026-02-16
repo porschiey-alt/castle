@@ -9,7 +9,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
-import { Subscription } from 'rxjs';
 
 import { TaskService } from '../../../core/services/task.service';
 import { AgentService } from '../../../core/services/agent.service';
@@ -33,10 +32,9 @@ import { TASK_STATES, TASK_KINDS, type Task, type TaskState, type TaskKind, type
   styleUrl: './task-list.component.scss'
 })
 export class TaskListComponent implements OnInit, OnDestroy {
-  private taskService = inject(TaskService);
+  taskService = inject(TaskService);
   private agentService = inject(AgentService);
   private electronService = inject(ElectronService);
-  private completeSub?: Subscription;
 
   states = TASK_STATES;
   kinds = TASK_KINDS;
@@ -49,9 +47,6 @@ export class TaskListComponent implements OnInit, OnDestroy {
   filterKind = this.taskService.filterKind;
 
   creating = false;
-  researchRunningTaskIds = new Set<string>();
-  implementRunningTaskIds = new Set<string>();
-  reviewRunningTaskIds = new Set<string>();
 
   /** Emitted when user clicks "Take me to the Researcher/Agent" */
   goToAgent = output<string>();
@@ -64,20 +59,6 @@ export class TaskListComponent implements OnInit, OnDestroy {
       this.taskService.loadLabels(),
     ]);
 
-    // Listen for stream completions to detect research finishing
-    this.completeSub = this.electronService.streamComplete$.subscribe(async (msg) => {
-      // Check if this is a research completion for a task we're tracking
-      if (this.researchRunningTaskIds.has(msg.id)) {
-        this.researchRunningTaskIds.delete(msg.id);
-        await this.taskService.refreshTask(msg.id);
-      }
-      // Check if this is a review revision completion
-      if (this.reviewRunningTaskIds.has(msg.id)) {
-        this.reviewRunningTaskIds.delete(msg.id);
-        await this.taskService.refreshTask(msg.id);
-      }
-    });
-
     // Listen for diagnosis file cleanup prompts
     this.diagnosisCleanupUnsub = this.electronService.onDiagnosisFileCleanup(async (data) => {
       if (confirm(`This bug has a diagnosis file:\n${data.filePath}\n\nWould you like to delete it?`)) {
@@ -87,7 +68,6 @@ export class TaskListComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.completeSub?.unsubscribe();
     this.diagnosisCleanupUnsub?.();
   }
 
@@ -160,12 +140,12 @@ export class TaskListComponent implements OnInit, OnDestroy {
   }
 
   async onResearchRequested(event: TaskResearchEvent): Promise<void> {
-    this.researchRunningTaskIds.add(event.task.id);
+    this.taskService.markResearchRunning(event.task.id);
     await this.taskService.runResearch(event.task.id, event.agentId, event.outputPath);
   }
 
   async onImplementRequested(event: TaskImplementEvent): Promise<void> {
-    this.implementRunningTaskIds.add(event.task.id);
+    this.taskService.markImplementRunning(event.task.id);
     // Switch to that agent's chat with the task context
     this.goToAgent.emit(event.agentId);
 
@@ -179,23 +159,11 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
     // Send message to the agent
     await this.electronService.sendMessage(event.agentId, prompt);
-    this.implementRunningTaskIds.delete(event.task.id);
-  }
-
-  isResearchRunning(taskId: string): boolean {
-    return this.researchRunningTaskIds.has(taskId);
-  }
-
-  isImplementRunning(taskId: string): boolean {
-    return this.implementRunningTaskIds.has(taskId);
-  }
-
-  isReviewRunning(taskId: string): boolean {
-    return this.reviewRunningTaskIds.has(taskId);
+    this.taskService.clearImplementRunning(event.task.id);
   }
 
   async onReviewSubmitted(event: TaskReviewSubmitEvent): Promise<void> {
-    this.reviewRunningTaskIds.add(event.taskId);
+    this.taskService.markReviewRunning(event.taskId);
     await this.taskService.submitResearchReview(event.taskId, event.comments, event.researchSnapshot);
   }
 }

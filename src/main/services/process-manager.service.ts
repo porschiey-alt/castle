@@ -140,6 +140,9 @@ export class ProcessManagerService {
       todoItems: []
     };
 
+    // Register immediately so concurrent calls find it (status is 'starting')
+    this.sessions.set(sessionId, sessionProcess);
+
     // Create ACP client handler
     const client: import('@agentclientprotocol/sdk').Client = {
       async requestPermission(params) {
@@ -234,8 +237,6 @@ export class ProcessManagerService {
     const connection = new acp.ClientSideConnection((_agent: any) => client, stream);
     sessionProcess.connection = connection;
 
-    this.sessions.set(sessionId, sessionProcess);
-
     try {
       // Initialize ACP protocol
       await connection.initialize({
@@ -260,6 +261,7 @@ export class ProcessManagerService {
     } catch (error) {
       console.error(`[Agent ${agent.name}] ACP initialization failed:`, error);
       session.status = 'error';
+      this.sessions.delete(sessionId);
       throw error;
     }
 
