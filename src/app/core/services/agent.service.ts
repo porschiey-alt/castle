@@ -4,6 +4,7 @@
 
 import { Injectable, signal, computed } from '@angular/core';
 import { ElectronService } from './electron.service';
+import { LoggerService } from './logger.service';
 import type { Agent, AgentWithSession, AgentSession, CastleAgentConfig } from '../../../shared/types/agent.types';
 
 @Injectable({
@@ -51,7 +52,7 @@ export class AgentService {
     return this.agentsWithSessions().find(a => a.id === selectedId) || null;
   });
 
-  constructor(private electronService: ElectronService) {}
+  constructor(private electronService: ElectronService, private logger: LoggerService) {}
 
   /**
    * Discover and load agents for a workspace
@@ -94,7 +95,7 @@ export class AgentService {
       try {
         await this.startSession(agentId, this.workspacePath);
       } catch (e) {
-        console.error(`Failed to auto-start session for agent ${agentId}:`, e);
+        this.logger.error('Agent', `Failed to auto-start session for agent ${agentId}`, e);
       } finally {
         const done = new Set(this.sessionInitializingSignal());
         done.delete(agentId);

@@ -15,6 +15,9 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type * as http from 'http';
 import type { EventSink } from './event-broadcaster';
+import { createLogger } from './logger.service';
+
+const log = createLogger('WsBridge');
 
 interface WSRequest {
   id: string;
@@ -53,7 +56,7 @@ export class WsBridgeService implements EventSink {
     this.wss = new WebSocketServer({ server: httpServer });
 
     this.wss.on('connection', (ws, req) => {
-      console.log(`[WsBridge] Client connected from ${req.socket.remoteAddress}`);
+      log.info(`Client connected from ${req.socket.remoteAddress}`);
       this.clients.add(ws);
 
       ws.on('message', (data) => {
@@ -62,16 +65,16 @@ export class WsBridgeService implements EventSink {
 
       ws.on('close', () => {
         this.clients.delete(ws);
-        console.log('[WsBridge] Client disconnected');
+        log.info('Client disconnected');
       });
 
       ws.on('error', (err) => {
-        console.error('[WsBridge] Client error:', err);
+        log.error('Client error', err);
         this.clients.delete(ws);
       });
     });
 
-    console.log('[WsBridge] WebSocket bridge attached to HTTP server');
+    log.info('WebSocket bridge attached to HTTP server');
   }
 
   stop(): void {

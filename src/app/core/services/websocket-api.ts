@@ -13,6 +13,10 @@ import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment
 import type { Conversation, CreateConversationInput, UpdateConversationInput } from '../../../shared/types/conversation.types';
 import { IPC_CHANNELS } from '../../../shared/types/ipc.types';
 
+function logMsg(level: string, msg: string): string {
+  return `[${new Date().toISOString()}] [${level}] [WebSocketAPI] ${msg}`;
+}
+
 type EventCallback = (...args: any[]) => void;
 
 /** Generate a unique ID without requiring a secure context (crypto.randomUUID needs HTTPS) */
@@ -42,7 +46,7 @@ export class WebSocketAPI implements ElectronAPI {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        console.log('[WebSocketAPI] Connected');
+        console.log(logMsg('INFO', 'Connected'));
         resolve();
       };
 
@@ -51,12 +55,12 @@ export class WebSocketAPI implements ElectronAPI {
       };
 
       this.ws.onclose = () => {
-        console.log('[WebSocketAPI] Disconnected, reconnecting...');
+        console.log(logMsg('INFO', 'Disconnected, reconnecting...'));
         this.reconnectTimer = setTimeout(() => this.connect(), 2000);
       };
 
       this.ws.onerror = (err) => {
-        console.error('[WebSocketAPI] Error:', err);
+        console.error(logMsg('ERROR', 'Connection error'), err);
       };
     });
   }

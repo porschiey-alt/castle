@@ -470,7 +470,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     try {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
-        console.log(`[Diagnosis] Deleted file: ${filePath}`);
+        log.info(`Deleted file: ${filePath}`);
         return { deleted: true };
       }
     } catch (error) {
