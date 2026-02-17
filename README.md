@@ -2,6 +2,8 @@
 
 A Discord-like desktop application for GitHub Copilot CLI agents. Castle provides a beautiful, intuitive interface for managing multiple AI coding agents, each running its own GitHub Copilot CLI session — accessible from your desktop, phone, or any device on your network.
 
+![Castle screenshot](docs/images/screenshot1.PNG)
+
 ## Features
 
 - **📱 Use from Your Phone**: Built-in Tailscale-powered web server lets you chat with your agents from any device — phone, tablet, or another computer — right in the browser
@@ -18,6 +20,8 @@ A Discord-like desktop application for GitHub Copilot CLI agents. Castle provide
 ## 📱 Access from Your Phone
 
 Castle includes a built-in web server that lets you interact with your agents from any device on your [Tailscale](https://tailscale.com/) network — no extra apps needed, just a browser.
+
+![Remote access](docs/images/remoteAccess.PNG)
 
 ### How It Works
 
