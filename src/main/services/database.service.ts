@@ -21,6 +21,16 @@ import { Agent } from '../../shared/types/agent.types';
 import { Conversation, CreateConversationInput, UpdateConversationInput } from '../../shared/types/conversation.types';
 import { Task, TaskState, TaskKind, TaskLabel, TaskPRState, CreateTaskInput, UpdateTaskInput, BugCloseReason, ResearchReview, ResearchComment } from '../../shared/types/task.types';
 
+/** Parse a date string from SQLite as UTC, handling both ISO 8601 (with Z) and SQLite datetime() (without Z) formats. */
+function parseUtcDate(dateStr: string): Date {
+  if (dateStr.endsWith('Z') || dateStr.includes('+') || dateStr.includes('T')) {
+    return new Date(dateStr);
+  }
+  // SQLite datetime('now') returns 'YYYY-MM-DD HH:MM:SS' in UTC but without timezone indicator.
+  // Appending 'Z' ensures it's parsed as UTC rather than local time.
+  return new Date(dateStr + 'Z');
+}
+
 export class DatabaseService {
   private db: SqlJsDatabase | null = null;
   private dbPath: string;
@@ -461,8 +471,8 @@ export class DatabaseService {
     // Update conversation's updated_at timestamp
     if (message.conversationId) {
       this.db.run(
-        `UPDATE conversations SET updated_at = datetime('now') WHERE id = ?`,
-        [message.conversationId]
+        `UPDATE conversations SET updated_at = ? WHERE id = ?`,
+        [new Date().toISOString(), message.conversationId]
       );
     }
 
@@ -598,8 +608,8 @@ export class DatabaseService {
       taskId: row.task_id || undefined,
       title: row.title || undefined,
       workingDirectory: row.working_directory || undefined,
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at),
+      createdAt: parseUtcDate(row.created_at),
+      updatedAt: parseUtcDate(row.updated_at),
       messageCount: row.message_count,
       lastMessage: row.last_message || undefined,
     };
@@ -633,8 +643,8 @@ export class DatabaseService {
         taskId: row.task_id || undefined,
         title: row.title || undefined,
         workingDirectory: row.working_directory || undefined,
-        createdAt: new Date(row.created_at),
-        updatedAt: new Date(row.updated_at),
+        createdAt: parseUtcDate(row.created_at),
+        updatedAt: parseUtcDate(row.updated_at),
         messageCount: row.message_count,
         lastMessage: row.last_message || undefined,
       });
@@ -653,7 +663,8 @@ export class DatabaseService {
     if (updates.acpSessionId !== undefined) { sets.push('acp_session_id = ?'); params.push(updates.acpSessionId); }
 
     if (sets.length > 0) {
-      sets.push("updated_at = datetime('now')");
+      sets.push('updated_at = ?');
+      params.push(new Date().toISOString());
       params.push(conversationId);
       this.db.run(`UPDATE conversations SET ${sets.join(', ')} WHERE id = ?`, params);
       this.saveDatabase();
@@ -910,7 +921,8 @@ export class DatabaseService {
     if (updates.prState !== undefined) { sets.push('pr_state = ?'); params.push(updates.prState); }
 
     if (sets.length > 0) {
-      sets.push("updated_at = datetime('now')");
+      sets.push('updated_at = ?');
+      params.push(new Date().toISOString());
       params.push(taskId);
       this.db.run(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`, params);
     }
@@ -981,8 +993,8 @@ export class DatabaseService {
       prUrl: row.pr_url ?? undefined,
       prNumber: row.pr_number ?? undefined,
       prState: (row.pr_state as TaskPRState) ?? undefined,
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at),
+      createdAt: parseUtcDate(row.created_at),
+      updatedAt: parseUtcDate(row.updated_at),
     };
   }
 
@@ -1047,8 +1059,8 @@ export class DatabaseService {
         prUrl: row.pr_url ?? undefined,
         prNumber: row.pr_number ?? undefined,
         prState: (row.pr_state as TaskPRState) ?? undefined,
-        createdAt: new Date(row.created_at),
-        updatedAt: new Date(row.updated_at),
+        createdAt: parseUtcDate(row.created_at),
+        updatedAt: parseUtcDate(row.updated_at),
       });
     }
     stmt.free();
