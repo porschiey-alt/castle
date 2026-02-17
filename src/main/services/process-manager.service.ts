@@ -31,6 +31,8 @@ interface SessionProcess {
   todoItems: TodoItem[];
   segments: MessageSegment[];
   currentOperation: string;
+  systemPrompt?: string;
+  systemPromptSent: boolean;
   capabilities: {
     canLoadSession: boolean;
     canResumeSession: boolean;
@@ -154,6 +156,8 @@ export class ProcessManagerService {
       todoItems: [],
       segments: [],
       currentOperation: 'spawning',
+      systemPrompt: agent.systemPrompt,
+      systemPromptSent: false,
       capabilities: { canLoadSession: false, canResumeSession: false, canListSessions: false }
     };
 
@@ -427,11 +431,19 @@ export class ProcessManagerService {
     sessionProcess.segments = [];
 
     try {
+      // Build prompt content blocks, prepending system prompt on first message
+      const promptBlocks: Array<{ type: 'text'; text: string }> = [];
+      if (sessionProcess.systemPrompt && !sessionProcess.systemPromptSent) {
+        promptBlocks.push({ type: 'text', text: sessionProcess.systemPrompt });
+        sessionProcess.systemPromptSent = true;
+      }
+      promptBlocks.push({ type: 'text', text: content });
+
       // Send prompt and wait for full response
       sessionProcess.currentOperation = 'prompt';
       const response = await sessionProcess.connection.prompt({
         sessionId: sessionProcess.acpSessionId,
-        prompt: [{ type: 'text', text: content }]
+        prompt: promptBlocks
       });
 
       // Emit final complete message
