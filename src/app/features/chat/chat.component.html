@@ -35,7 +35,7 @@
   <app-chat-input
     [agentName]="agent().name"
     [isLoading]="isLoading()"
-    [disabled]="isInitializing() || !agent().session || agent().session?.status !== 'ready'"
+    [disabled]="isInitializing() || !agent().session || (agent().session?.status !== 'ready' && agent().session?.status !== 'busy')"
     (messageSent)="onSendMessage($event)"
     (stopRequested)="onStopProcessing()"
   />
