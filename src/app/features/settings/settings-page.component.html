@@ -357,6 +357,30 @@
 
     <mat-divider />
 
+    <!-- Logging Section -->
+    <section class="settings-section">
+      <h3>
+        <mat-icon>terminal</mat-icon>
+        Logging
+      </h3>
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>Log level</span>
+          <span class="setting-hint">Set to Debug for verbose output (IPC calls, tool call details)</span>
+        </div>
+        <mat-form-field appearance="outline" class="small-field" style="width: 120px">
+          <mat-select [(ngModel)]="logLevel" (selectionChange)="saveLogLevel()">
+            <mat-option value="debug">Debug</mat-option>
+            <mat-option value="info">Info</mat-option>
+            <mat-option value="warn">Warn</mat-option>
+            <mat-option value="error">Error</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+    </section>
+
+    <mat-divider />
+
     <!-- About Section -->
     <section class="settings-section about-section">
       <h3>

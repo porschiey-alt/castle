@@ -83,6 +83,9 @@ export class SettingsPageComponent implements OnInit {
   worktreeAutoInstallDeps = true;
   worktreeDraftPR = false;
 
+  // Logging state
+  logLevel: 'debug' | 'info' | 'warn' | 'error' = 'info';
+
   // Permission grants state
   permissionGrants: PermissionGrant[] = [];
   currentProjectPath: string | null = null;
@@ -96,6 +99,7 @@ export class SettingsPageComponent implements OnInit {
       this.worktreeMaxConcurrent = settings.worktreeMaxConcurrent ?? 5;
       this.worktreeAutoInstallDeps = settings.worktreeAutoInstallDeps !== false;
       this.worktreeDraftPR = settings.worktreeDraftPR ?? false;
+      this.logLevel = settings.logLevel ?? 'info';
 
       // Load existing customization
       const c = settings.themeCustomization;
@@ -218,6 +222,10 @@ export class SettingsPageComponent implements OnInit {
       worktreeAutoInstallDeps: this.worktreeAutoInstallDeps,
       worktreeDraftPR: this.worktreeDraftPR,
     });
+  }
+
+  async saveLogLevel(): Promise<void> {
+    await this.electronService.updateSettings({ logLevel: this.logLevel });
   }
 
   resetCustomization(): void {
