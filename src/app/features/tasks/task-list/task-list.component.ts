@@ -165,8 +165,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   async onResearchRequested(event: TaskResearchEvent): Promise<void> {
     this.taskService.markResearchRunning(event.task.id);
-    // Navigate to agent chat with a fresh "Research: <name>" conversation
-    const convId = await this.createAndNavigateToConversation(event.agentId, `Research: ${event.task.title}`);
+    const convId = await this.createAndNavigateToConversation(event.agentId, event.task.title);
     await this.taskService.runResearch(event.task.id, event.agentId, event.outputPath, convId);
   }
 
@@ -176,8 +175,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
     if (event.task.state !== 'in_progress' && event.task.state !== 'done') {
       await this.taskService.updateTask(event.task.id, { state: 'in_progress' });
     }
-    // Navigate to agent chat with a fresh "CODE: <name>" conversation
-    const convId = await this.createAndNavigateToConversation(event.agentId, `CODE: ${event.task.title}`);
+    const convId = await this.createAndNavigateToConversation(event.agentId, event.task.title);
     // Run implementation via IPC (main process handles completion)
     await this.taskService.runImplementation(event.task.id, event.agentId, convId);
   }
