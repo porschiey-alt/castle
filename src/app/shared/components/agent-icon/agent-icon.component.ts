@@ -22,7 +22,7 @@ import { isMatIcon, getMatIconName } from '../../../../shared/utils/icon.utils';
   `,
   styles: [`
     :host { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
-    mat-icon { color: inherit; }
+    mat-icon { color: currentColor !important; --mat-icon-color: currentColor; }
     .emoji-icon { line-height: 1; }
   `]
 })

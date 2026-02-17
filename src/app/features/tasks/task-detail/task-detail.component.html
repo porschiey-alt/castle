@@ -238,6 +238,11 @@
                 <mat-form-field appearance="outline" class="agent-picker">
                   <mat-label>Agent</mat-label>
                   <mat-select [(ngModel)]="selectedResearchAgentId">
+                    <mat-select-trigger>
+                      @if (getAgentById(selectedResearchAgentId); as agent) {
+                        <span class="agent-option"><app-agent-icon [icon]="agent.icon" /> {{ agent.name }}</span>
+                      }
+                    </mat-select-trigger>
                     @if (task()!.kind === 'bug' && debugAgents.length > 0) {
                       <mat-optgroup label="Debug Agents">
                         @for (a of debugAgents; track a.id) {
@@ -429,6 +434,11 @@
                 <mat-form-field appearance="outline" class="agent-picker">
                   <mat-label>Agent</mat-label>
                   <mat-select [(ngModel)]="selectedImplementAgentId">
+                    <mat-select-trigger>
+                      @if (getAgentById(selectedImplementAgentId); as agent) {
+                        <span class="agent-option"><app-agent-icon [icon]="agent.icon" /> {{ agent.name }}</span>
+                      }
+                    </mat-select-trigger>
                     @if (codingAgents.length > 0) {
                       <mat-optgroup label="Coding Agents">
                         @for (a of codingAgents; track a.id) {
