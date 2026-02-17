@@ -16,6 +16,8 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface MessageMetadata {
   toolCalls?: ToolCall[];
+  /** Preserved segment history so tool calls and intermediate text survive after streaming ends */
+  segments?: MessageSegment[];
   model?: string;
   tokens?: {
     input: number;
@@ -36,6 +38,11 @@ export interface ToolCall {
 
 export type ToolCallStatus = 'pending' | 'running' | 'success' | 'error';
 
+/** A chronologically-ordered segment of an assistant turn */
+export type MessageSegment =
+  | { type: 'text'; content: string }
+  | { type: 'tool-calls'; toolCalls: ToolCall[] };
+
 export interface TodoItem {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
@@ -50,6 +57,8 @@ export interface StreamingMessage {
   isComplete: boolean;
   toolCalls?: ToolCall[];
   todoItems?: TodoItem[];
+  /** Chronologically-ordered segments of text and tool-call groups */
+  segments?: MessageSegment[];
 }
 
 export interface AgentBusMessage {

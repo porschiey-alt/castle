@@ -5,6 +5,7 @@
 import { Component, input, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ScrollingModule } from '@angular/cdk/scrolling';
+import { MatIconModule } from '@angular/material/icon';
 
 import { MessageBubbleComponent } from '../message-bubble/message-bubble.component';
 import type { ChatMessage, StreamingMessage } from '../../../../shared/types/message.types';
@@ -15,6 +16,7 @@ import type { ChatMessage, StreamingMessage } from '../../../../shared/types/mes
   imports: [
     CommonModule,
     ScrollingModule,
+    MatIconModule,
     MessageBubbleComponent
   ],
   templateUrl: './message-list.component.html',
@@ -26,6 +28,7 @@ export class MessageListComponent implements AfterViewChecked {
   // Inputs
   messages = input<ChatMessage[]>([]);
   streamingMessage = input<StreamingMessage | null>(null);
+  latestThinking = input<string>('');
   agentName = input<string>('Agent');
   agentIcon = input<string | undefined>(undefined);
 

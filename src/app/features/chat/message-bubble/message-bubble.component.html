@@ -19,62 +19,98 @@
       }
     </div>
 
-    <!-- Thinking -->
-    @if (thinking) {
-      <div class="thinking-block">
-        <mat-icon class="thinking-icon">psychology</mat-icon>
-        <span class="thinking-text">{{ thinking }}</span>
-      </div>
-    }
-
-    <!-- Tool calls (streaming or completed) -->
-    @if (activeToolCalls.length > 0) {
-      <div class="tool-calls-list">
-        @if (hiddenToolCallCount > 0) {
-          <div class="tool-calls-collapsed">
-            <mat-icon>more_horiz</mat-icon>
-            <span>{{ hiddenToolCallCount }} earlier tool call{{ hiddenToolCallCount > 1 ? 's' : '' }}</span>
+    <!-- Interleaved segments (streaming with segment data, or historical with saved segments) -->
+    @if (hasSegments) {
+      @for (segment of resolvedSegments; track $index) {
+        @if (segment.type === 'tool-calls') {
+          <div class="tool-calls-list">
+            @if (segment.hiddenCount > 0) {
+              <div class="tool-calls-collapsed">
+                <mat-icon>more_horiz</mat-icon>
+                <span>{{ segment.hiddenCount }} earlier tool call{{ segment.hiddenCount > 1 ? 's' : '' }}</span>
+              </div>
+            }
+            @for (tool of segment.visibleToolCalls; track tool.id) {
+              <div class="tool-call-item" [class]="'tool-' + tool.status">
+                <mat-icon class="tool-status-icon">
+                  @switch (tool.status) {
+                    @case ('pending') { hourglass_empty }
+                    @case ('running') { sync }
+                    @case ('success') { check_circle }
+                    @case ('error') { error }
+                  }
+                </mat-icon>
+                <span class="tool-name">{{ tool.name }}</span>
+              </div>
+            }
           </div>
-        }
-        @for (tool of visibleToolCalls; track tool.id) {
-          <div class="tool-call-item" [class]="'tool-' + tool.status">
-            <mat-icon class="tool-status-icon">
-              @switch (tool.status) {
-                @case ('pending') { hourglass_empty }
-                @case ('running') { sync }
-                @case ('success') { check_circle }
-                @case ('error') { error }
+        } @else {
+          <div class="message-body">
+            @for (part of segment.parsedContent; track $index) {
+              @if (part.type === 'text') {
+                <div class="text-content" [innerHTML]="renderMarkdown(part.content)"></div>
+              } @else {
+                <app-code-block
+                  [code]="part.content"
+                  [language]="part.language || 'plaintext'"
+                />
               }
-            </mat-icon>
-            <span class="tool-name">{{ tool.name }}</span>
+            }
           </div>
         }
-      </div>
-    }
-
-    <!-- Message body -->
-    @if (content) {
-      <div class="message-body">
-        @for (part of parsedContent; track $index) {
-          @if (part.type === 'text') {
-            <div class="text-content" [innerHTML]="renderMarkdown(part.content)"></div>
-          } @else {
-            <app-code-block 
-              [code]="part.content" 
-              [language]="part.language || 'plaintext'" 
-            />
+      }
+      @if (isStreaming()) {
+        <span class="cursor">▊</span>
+      }
+    } @else {
+      <!-- Legacy layout: tool calls then content (non-streaming / historical messages) -->
+      @if (activeToolCalls.length > 0) {
+        <div class="tool-calls-list">
+          @if (hiddenToolCallCount > 0) {
+            <div class="tool-calls-collapsed">
+              <mat-icon>more_horiz</mat-icon>
+              <span>{{ hiddenToolCallCount }} earlier tool call{{ hiddenToolCallCount > 1 ? 's' : '' }}</span>
+            </div>
           }
-        }
+          @for (tool of visibleToolCalls; track tool.id) {
+            <div class="tool-call-item" [class]="'tool-' + tool.status">
+              <mat-icon class="tool-status-icon">
+                @switch (tool.status) {
+                  @case ('pending') { hourglass_empty }
+                  @case ('running') { sync }
+                  @case ('success') { check_circle }
+                  @case ('error') { error }
+                }
+              </mat-icon>
+              <span class="tool-name">{{ tool.name }}</span>
+            </div>
+          }
+        </div>
+      }
 
-        @if (isStreaming()) {
-          <span class="cursor">▊</span>
-        }
-      </div>
-    } @else if (isStreaming()) {
-      <!-- Processing indicator when no content yet -->
-      <div class="processing-indicator">
-        <div class="processing-shimmer"></div>
-      </div>
+      @if (content) {
+        <div class="message-body">
+          @for (part of parsedContent; track $index) {
+            @if (part.type === 'text') {
+              <div class="text-content" [innerHTML]="renderMarkdown(part.content)"></div>
+            } @else {
+              <app-code-block
+                [code]="part.content"
+                [language]="part.language || 'plaintext'"
+              />
+            }
+          }
+
+          @if (isStreaming()) {
+            <span class="cursor">▊</span>
+          }
+        </div>
+      } @else if (isStreaming()) {
+        <!-- Processing indicator when no content yet -->
+        <div class="processing-indicator">
+          <div class="processing-shimmer"></div>
+        </div>
+      }
     }
   </div>
 </div>

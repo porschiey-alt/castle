@@ -73,37 +73,6 @@
   color: var(--text-muted);
 }
 
-// Thinking block
-.thinking-block {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  border-radius: 6px;
-  background-color: color-mix(in srgb, var(--theme-primary, #7c3aed) 10%, transparent);
-  border-left: 3px solid var(--theme-primary, #7c3aed);
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-style: italic;
-
-  .thinking-icon {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-    color: var(--theme-primary, #7c3aed);
-    flex-shrink: 0;
-    margin-top: 2px;
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  .thinking-text {
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.4;
-  }
-}
-
 // Tool calls list
 .tool-calls-list {
   display: flex;
@@ -310,11 +279,6 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
 }
 
 @keyframes shimmer {

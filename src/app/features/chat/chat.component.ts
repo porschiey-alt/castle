@@ -39,6 +39,7 @@ export class ChatComponent implements OnInit, OnChanges {
   streamingMessage = this.chatService.streamingMessage;
   isLoading = this.chatService.isLoading;
   todoItems = this.chatService.todoItems;
+  latestThinking = this.chatService.latestThinking;
 
   constructor() {
     // Reload history when active conversation changes

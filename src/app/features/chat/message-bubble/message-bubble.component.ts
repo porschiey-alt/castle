@@ -8,13 +8,28 @@ import { MatIconModule } from '@angular/material/icon';
 import { marked } from 'marked';
 
 import { CodeBlockComponent } from '../code-block/code-block.component';
-import type { ChatMessage, ToolCall } from '../../../../shared/types/message.types';
+import type { ChatMessage, ToolCall, MessageSegment } from '../../../../shared/types/message.types';
 
 // Configure marked for chat rendering
 marked.setOptions({
   breaks: true,
   gfm: true,
 });
+
+/** Resolved tool-calls segment with visible/hidden split */
+interface ResolvedToolCallsSegment {
+  type: 'tool-calls';
+  visibleToolCalls: ToolCall[];
+  hiddenCount: number;
+}
+
+/** Resolved text segment with parsed content blocks */
+interface ResolvedTextSegment {
+  type: 'text';
+  parsedContent: Array<{ type: 'text' | 'code'; content: string; language?: string }>;
+}
+
+export type ResolvedSegment = ResolvedToolCallsSegment | ResolvedTextSegment;
 
 @Component({
   selector: 'app-message-bubble',
@@ -31,13 +46,13 @@ export class MessageBubbleComponent {
   // Inputs
   message = input<ChatMessage | undefined>(undefined);
   streamingContent = input<string>('');
-  streamingThinking = input<string>('');
   streamingToolCalls = input<ToolCall[] | undefined>(undefined);
+  streamingSegments = input<MessageSegment[] | undefined>(undefined);
   isStreaming = input<boolean>(false);
   agentName = input<string>('Agent');
   agentIcon = input<string | undefined>(undefined);
 
-  /** Max visible tool calls when streaming; older ones are collapsed */
+  /** Max visible tool calls per segment; older ones are collapsed */
   private readonly MAX_VISIBLE_TOOLS = 5;
 
   get isUser(): boolean {
@@ -51,22 +66,45 @@ export class MessageBubbleComponent {
     return this.message()?.content || '';
   }
 
-  get thinking(): string {
-    if (this.isStreaming()) {
-      return this.streamingThinking();
-    }
-    return '';
-  }
-
   get timestamp(): Date | undefined {
     return this.message()?.timestamp;
   }
 
+  /** Whether we have segment data to render interleaved layout */
+  get hasSegments(): boolean {
+    if (this.isStreaming()) {
+      return (this.streamingSegments() || []).length > 0;
+    }
+    return (this.message()?.metadata?.segments || []).length > 0;
+  }
+
+  /** Resolved segments for interleaved rendering */
+  get resolvedSegments(): ResolvedSegment[] {
+    const segments = this.isStreaming()
+      ? (this.streamingSegments() || [])
+      : (this.message()?.metadata?.segments || []);
+    return segments.map(seg => {
+      if (seg.type === 'tool-calls') {
+        const all = seg.toolCalls;
+        const visible = all.length <= this.MAX_VISIBLE_TOOLS
+          ? all
+          : all.slice(all.length - this.MAX_VISIBLE_TOOLS);
+        return {
+          type: 'tool-calls' as const,
+          visibleToolCalls: visible,
+          hiddenCount: Math.max(0, all.length - this.MAX_VISIBLE_TOOLS)
+        };
+      }
+      return {
+        type: 'text' as const,
+        parsedContent: this.parseContent(seg.content)
+      };
+    });
+  }
+
+  // Legacy accessors for non-streaming (historical) messages
   get activeToolCalls(): ToolCall[] {
-    const calls = this.isStreaming()
-      ? (this.streamingToolCalls() || [])
-      : (this.message()?.metadata?.toolCalls || []);
-    return calls;
+    return this.message()?.metadata?.toolCalls || [];
   }
 
   get visibleToolCalls(): ToolCall[] {
@@ -82,21 +120,25 @@ export class MessageBubbleComponent {
 
   /** True when the agent is working but has no text content yet */
   get isProcessing(): boolean {
-    return this.isStreaming() && !this.content && (this.activeToolCalls.length > 0 || !!this.thinking);
+    if (!this.isStreaming()) return false;
+    const hasToolCalls = (this.streamingToolCalls() || []).length > 0;
+    return !this.content && hasToolCalls;
   }
 
   // Parse content for code blocks
   get parsedContent(): Array<{ type: 'text' | 'code'; content: string; language?: string }> {
-    const content = this.content;
+    return this.parseContent(this.content);
+  }
+
+  /** Parse a content string into text and code block parts */
+  private parseContent(content: string): Array<{ type: 'text' | 'code'; content: string; language?: string }> {
     const parts: Array<{ type: 'text' | 'code'; content: string; language?: string }> = [];
-    
-    // Regex to match code blocks
+
     const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
     let lastIndex = 0;
     let match;
 
     while ((match = codeBlockRegex.exec(content)) !== null) {
-      // Add text before code block
       if (match.index > lastIndex) {
         const text = content.slice(lastIndex, match.index).trim();
         if (text) {
@@ -104,7 +146,6 @@ export class MessageBubbleComponent {
         }
       }
 
-      // Add code block
       parts.push({
         type: 'code',
         content: match[2].trim(),
@@ -114,7 +155,6 @@ export class MessageBubbleComponent {
       lastIndex = match.index + match[0].length;
     }
 
-    // Add remaining text
     if (lastIndex < content.length) {
       const text = content.slice(lastIndex).trim();
       if (text) {
@@ -122,7 +162,6 @@ export class MessageBubbleComponent {
       }
     }
 
-    // If no parts, return the whole content as text
     if (parts.length === 0 && content) {
       parts.push({ type: 'text', content });
     }

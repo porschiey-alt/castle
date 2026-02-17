@@ -12,12 +12,29 @@
       </div>
     }
 
-    <!-- Streaming message -->
+    <!-- Standalone thinking bubble (only during streaming) -->
     @if (streamingMessage(); as streaming) {
+      @if (latestThinking()) {
+        <div class="thinking-bubble">
+          <div class="avatar">
+            @if (agentIcon()) {
+              <span class="agent-icon">{{ agentIcon() }}</span>
+            } @else {
+              <mat-icon>psychology</mat-icon>
+            }
+          </div>
+          <div class="thinking-content">
+            <mat-icon class="thinking-pulse-icon">psychology</mat-icon>
+            <span class="thinking-text">{{ latestThinking() }}</span>
+          </div>
+        </div>
+      }
+
+      <!-- Streaming message (segments + content, no thinking) -->
       <app-message-bubble
         [streamingContent]="streaming.content"
-        [streamingThinking]="streaming.thinking"
         [streamingToolCalls]="streaming.toolCalls"
+        [streamingSegments]="streaming.segments"
         [isStreaming]="true"
         [agentName]="agentName()"
         [agentIcon]="agentIcon()"

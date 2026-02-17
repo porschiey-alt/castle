@@ -13,6 +13,10 @@ interface ChatState {
   streamingMessage: StreamingMessage | null;
   isLoading: boolean;
   todoItems: TodoItem[];
+  /** Only the most recent thinking chunk (not accumulated) */
+  latestThinking: string;
+  /** Length of accumulated thinking as of last chunk – used to compute delta */
+  previousThinkingLength: number;
 }
 
 @Injectable({
@@ -35,7 +39,9 @@ export class ChatService {
       messages: [],
       streamingMessage: null,
       isLoading: false,
-      todoItems: []
+      todoItems: [],
+      latestThinking: '',
+      previousThinkingLength: 0
     };
   });
 
@@ -53,6 +59,11 @@ export class ChatService {
 
   readonly todoItems = computed<TodoItem[]>(() => {
     return this.currentChatState()?.todoItems || [];
+  });
+
+  /** Only the most recent thinking chunk from the streaming agent */
+  readonly latestThinking = computed<string>(() => {
+    return this.currentChatState()?.latestThinking || '';
   });
 
   constructor() {
@@ -78,6 +89,13 @@ export class ChatService {
 
     // Listen for stream completion
     this.electronService.streamComplete$.subscribe((message: ChatMessage) => {
+      // Capture streaming segments before clearing so they persist in the saved message
+      const currentState = this.chatStatesSignal().get(message.agentId);
+      const segments = currentState?.streamingMessage?.segments;
+      if (segments && segments.length > 0) {
+        message.metadata = { ...message.metadata, segments };
+      }
+
       this.addMessageIfNew(message.agentId, message);
       this.clearStreamingMessage(message.agentId);
       this.setLoading(message.agentId, false);
@@ -114,7 +132,9 @@ export class ChatService {
       messages: [],
       streamingMessage: null,
       isLoading: false,
-      todoItems: []
+      todoItems: [],
+      latestThinking: '',
+      previousThinkingLength: 0
     };
     
     states.set(agentId, {
@@ -188,7 +208,9 @@ export class ChatService {
       messages: [],
       streamingMessage: null,
       isLoading: false,
-      todoItems: []
+      todoItems: [],
+      latestThinking: '',
+      previousThinkingLength: 0
     };
     
     states.set(agentId, {
@@ -216,12 +238,23 @@ export class ChatService {
       messages: [],
       streamingMessage: null,
       isLoading: true,
-      todoItems: []
+      todoItems: [],
+      latestThinking: '',
+      previousThinkingLength: 0
     };
+
+    // Compute latest thinking chunk (delta since last update)
+    const prevLen = currentState.previousThinkingLength;
+    const fullThinking = message.thinking || '';
+    const latestThinking = fullThinking.length > prevLen
+      ? fullThinking.substring(prevLen).trim()
+      : currentState.latestThinking;
     
     states.set(agentId, {
       ...currentState,
-      streamingMessage: message
+      streamingMessage: message,
+      latestThinking: latestThinking || currentState.latestThinking,
+      previousThinkingLength: fullThinking.length
     });
     
     this.chatStatesSignal.set(states);
@@ -237,7 +270,9 @@ export class ChatService {
     if (currentState) {
       states.set(agentId, {
         ...currentState,
-        streamingMessage: null
+        streamingMessage: null,
+        latestThinking: '',
+        previousThinkingLength: 0
       });
       this.chatStatesSignal.set(states);
     }
@@ -252,7 +287,9 @@ export class ChatService {
       messages: [],
       streamingMessage: null,
       isLoading: false,
-      todoItems: []
+      todoItems: [],
+      latestThinking: '',
+      previousThinkingLength: 0
     };
     
     states.set(agentId, {
@@ -272,7 +309,9 @@ export class ChatService {
       messages: [],
       streamingMessage: null,
       isLoading: false,
-      todoItems: []
+      todoItems: [],
+      latestThinking: '',
+      previousThinkingLength: 0
     };
     
     states.set(agentId, {
