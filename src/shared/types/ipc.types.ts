@@ -80,6 +80,10 @@ export const IPC_CHANNELS = {
   WORKTREE_LIST: 'worktree:list',
   WORKTREE_STATUS: 'worktree:status',
   WORKTREE_CREATE_PR: 'worktree:createPR',
+  WORKTREE_GET_DIFF: 'worktree:getDiff',
+  WORKTREE_COMMIT: 'worktree:commit',
+  WORKTREE_CHECK_GIT: 'worktree:checkGit',
+  WORKTREE_LIFECYCLE: 'worktree:lifecycle',
 
   // Cross-device sync push events
   SYNC_TASKS_CHANGED: 'sync:tasksChanged',
@@ -288,7 +292,7 @@ export interface IPCPayloads {
 
   // Worktree
   [IPC_CHANNELS.WORKTREE_CREATE]: {
-    request: { repoPath: string; taskTitle: string; taskId: string };
+    request: { repoPath: string; taskTitle: string; taskId: string; kind?: string };
     response: { worktreePath: string; branchName: string };
   };
   [IPC_CHANNELS.WORKTREE_REMOVE]: {
@@ -304,8 +308,20 @@ export interface IPCPayloads {
     response: { exists: boolean; branch?: string; hasChanges?: boolean };
   };
   [IPC_CHANNELS.WORKTREE_CREATE_PR]: {
-    request: { worktreePath: string; title: string; body: string };
-    response: { success: boolean; url?: string; error?: string };
+    request: { worktreePath: string; title: string; body: string; draft?: boolean };
+    response: { success: boolean; url?: string; prNumber?: number; error?: string };
+  };
+  [IPC_CHANNELS.WORKTREE_GET_DIFF]: {
+    request: { worktreePath: string };
+    response: { summary: string; diff: string };
+  };
+  [IPC_CHANNELS.WORKTREE_COMMIT]: {
+    request: { worktreePath: string; message: string };
+    response: { committed: boolean };
+  };
+  [IPC_CHANNELS.WORKTREE_CHECK_GIT]: {
+    request: { repoPath: string };
+    response: { isGitRepo: boolean; hasUncommittedChanges: boolean; currentBranch: string | null };
   };
 }
 

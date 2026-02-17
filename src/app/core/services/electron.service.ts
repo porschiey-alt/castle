@@ -328,8 +328,8 @@ export class ElectronService {
 
   // ============ Worktree Methods ============
 
-  async createWorktree(repoPath: string, taskTitle: string, taskId: string): Promise<{ worktreePath: string; branchName: string }> {
-    return this.api.worktree.create(repoPath, taskTitle, taskId);
+  async createWorktree(repoPath: string, taskTitle: string, taskId: string, kind?: string): Promise<{ worktreePath: string; branchName: string }> {
+    return this.api.worktree.create(repoPath, taskTitle, taskId, kind);
   }
 
   async removeWorktree(worktreePath: string, deleteBranch?: boolean): Promise<void> {
@@ -344,7 +344,23 @@ export class ElectronService {
     return this.api.worktree.status(worktreePath);
   }
 
-  async createPullRequest(worktreePath: string, title: string, body: string): Promise<{ success: boolean; url?: string; error?: string }> {
-    return this.api.worktree.createPR(worktreePath, title, body);
+  async createPullRequest(worktreePath: string, title: string, body: string, draft?: boolean): Promise<{ success: boolean; url?: string; prNumber?: number; error?: string }> {
+    return this.api.worktree.createPR(worktreePath, title, body, draft);
+  }
+
+  async getWorktreeDiff(worktreePath: string): Promise<{ summary: string; diff: string }> {
+    return this.api.worktree.getDiff(worktreePath);
+  }
+
+  async commitWorktree(worktreePath: string, message: string): Promise<{ committed: boolean }> {
+    return this.api.worktree.commit(worktreePath, message);
+  }
+
+  async checkGit(repoPath: string): Promise<{ isGitRepo: boolean; hasUncommittedChanges: boolean; currentBranch: string | null }> {
+    return this.api.worktree.checkGit(repoPath);
+  }
+
+  onWorktreeLifecycle(callback: (event: { taskId: string; phase: string; message?: string }) => void): void {
+    this.api.worktree.onLifecycle(callback);
   }
 }

@@ -361,6 +361,119 @@
   }
 }
 
+.pr-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-size: 13px;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.lifecycle-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  font-size: 12px;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.lifecycle-steps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 11px;
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.3);
+    transition: all 0.2s;
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    &.active {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      mat-icon { animation: spin 1s linear infinite; }
+    }
+
+    &.done {
+      color: #22c55e;
+    }
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.diff-preview {
+  margin-top: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+
+  .diff-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 13px;
+
+    button { margin-left: auto; }
+  }
+
+  .diff-summary {
+    padding: 12px;
+    margin: 0;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+
 .description-field {
   width: 100%;
 

@@ -3,11 +3,16 @@
  *
  * Creates isolated working directories so multiple agents can implement
  * tasks concurrently on separate branches without conflicting.
+ *
+ * Uses execFile (not exec/execSync) to avoid shell injection vulnerabilities.
  */
 
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const execFileAsync = promisify(execFile);
 
 export interface WorktreeInfo {
   path: string;
@@ -24,22 +29,134 @@ export interface WorktreeResult {
 export interface PullRequestResult {
   success: boolean;
   url?: string;
+  prNumber?: number;
   error?: string;
+}
+
+/** Provider-agnostic PR creation interface for future GitLab/Azure DevOps support */
+export interface PullRequestProvider {
+  readonly name: string;
+  matchesRemote(remoteUrl: string): boolean;
+  isAuthenticated(cwd: string): Promise<boolean>;
+  createPR(cwd: string, options: PRCreateOptions): Promise<PullRequestResult>;
+  pushToExistingPR(cwd: string, prNumber: number): Promise<void>;
+  getPRComments(cwd: string, prNumber: number): Promise<PRComment[]>;
+}
+
+export interface PRComment {
+  id: string;
+  author: string;
+  body: string;
+  path?: string;
+  line?: number;
+  createdAt: string;
+}
+
+export interface PRCreateOptions {
+  title: string;
+  body: string;
+  baseBranch?: string;
+  draft?: boolean;
+}
+
+/** GitHub provider using `gh` CLI */
+class GitHubProvider implements PullRequestProvider {
+  readonly name = 'github';
+
+  matchesRemote(remoteUrl: string): boolean {
+    return /github\.com/i.test(remoteUrl);
+  }
+
+  async isAuthenticated(cwd: string): Promise<boolean> {
+    try {
+      await execFileAsync('gh', ['auth', 'status'], { cwd });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async createPR(cwd: string, options: PRCreateOptions): Promise<PullRequestResult> {
+    try {
+      const args = ['pr', 'create', '--title', options.title, '--body', options.body];
+      if (options.baseBranch) args.push('--base', options.baseBranch);
+      if (options.draft) args.push('--draft');
+
+      const { stdout } = await execFileAsync('gh', args, { cwd });
+      const url = stdout.trim();
+      const prNumber = parseInt(url.split('/').pop() || '0', 10);
+      return { success: true, url, prNumber: prNumber || undefined };
+    } catch (error: any) {
+      return { success: false, error: error.stderr || error.message || String(error) };
+    }
+  }
+
+  async pushToExistingPR(cwd: string, _prNumber: number): Promise<void> {
+    // For GitHub, pushing to the branch auto-updates the PR
+    const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd });
+    await execFileAsync('git', ['push', 'origin', stdout.trim()], { cwd });
+  }
+
+  async getPRComments(cwd: string, prNumber: number): Promise<PRComment[]> {
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'pr', 'view', String(prNumber),
+        '--json', 'reviews',
+        '--jq', '.reviews[] | .body'
+      ], { cwd });
+
+      // Parse review comments from gh CLI output
+      const comments: PRComment[] = [];
+      const lines = stdout.trim().split('\n').filter(Boolean);
+      for (let i = 0; i < lines.length; i++) {
+        comments.push({
+          id: `review-${i}`,
+          author: '',
+          body: lines[i],
+          createdAt: new Date().toISOString(),
+        });
+      }
+      return comments;
+    } catch {
+      return [];
+    }
+  }
+}
+
+/** Safe git command executor — no shell, no injection */
+async function gitExec(args: string[], cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync('git', args, { cwd });
+  return stdout.trim();
+}
+
+/** Read-only git command — uses --no-optional-locks to avoid contention */
+async function gitExecReadOnly(args: string[], cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync('git', ['--no-optional-locks', ...args], { cwd });
+  return stdout.trim();
+}
+
+function gitExecSync(args: string[], cwd: string): string {
+  const { execFileSync } = require('child_process');
+  return (execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }) as string).trim();
 }
 
 export class GitWorktreeService {
   private static readonly WORKTREE_DIR = '.castle-worktrees';
+  private static readonly MAX_CONCURRENT_DEFAULT = 5;
+
+  private providers: PullRequestProvider[] = [new GitHubProvider()];
+  private maxConcurrent = GitWorktreeService.MAX_CONCURRENT_DEFAULT;
+
+  setMaxConcurrent(max: number): void {
+    this.maxConcurrent = Math.max(1, max);
+  }
 
   /**
    * Check if a directory is inside a git repository.
    */
   isGitRepo(repoPath: string): boolean {
     try {
-      execSync('git rev-parse --is-inside-work-tree', {
-        cwd: repoPath,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      gitExecSync(['rev-parse', '--is-inside-work-tree'], repoPath);
       return true;
     } catch {
       return false;
@@ -50,55 +167,61 @@ export class GitWorktreeService {
    * Get the root of the git repository.
    */
   getRepoRoot(repoPath: string): string {
-    return execSync('git rev-parse --show-toplevel', {
-      cwd: repoPath,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+    return gitExecSync(['rev-parse', '--show-toplevel'], repoPath);
   }
 
   /**
    * Get the current branch name.
    */
   getCurrentBranch(repoPath: string): string {
-    return execSync('git rev-parse --abbrev-ref HEAD', {
-      cwd: repoPath,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+    return gitExecSync(['rev-parse', '--abbrev-ref', 'HEAD'], repoPath);
+  }
+
+  /**
+   * Check for uncommitted changes in the working directory.
+   */
+  async hasUncommittedChanges(repoPath: string): Promise<boolean> {
+    const output = await gitExecReadOnly(['status', '--porcelain'], repoPath);
+    return output.length > 0;
   }
 
   /**
    * Create a slugified branch name from a task title.
    */
-  slugifyBranch(title: string): string {
-    return 'castle/' + title
+  slugifyBranch(title: string, kind?: string): string {
+    const prefix = kind === 'bug' ? 'bugfix' : kind === 'chore' ? 'chore' : 'feature';
+    const slug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .substring(0, 60);
+      .substring(0, 50);
+    return `castle/${prefix}/${slug}`;
   }
 
   /**
    * Create a new git worktree for a task.
-   * Creates a branch and a worktree directory under .castle-worktrees/<taskId>/
    */
-  createWorktree(repoPath: string, taskTitle: string, taskId: string): WorktreeResult {
+  async createWorktree(repoPath: string, taskTitle: string, taskId: string, kind?: string, baseBranch?: string): Promise<WorktreeResult> {
     if (!this.isGitRepo(repoPath)) {
       throw new Error('Not a git repository');
     }
 
     const repoRoot = this.getRepoRoot(repoPath);
-    const branchName = this.slugifyBranch(taskTitle);
+    const branchName = this.slugifyBranch(taskTitle, kind);
     const worktreeBase = path.join(repoRoot, GitWorktreeService.WORKTREE_DIR);
     const worktreePath = path.join(worktreeBase, taskId);
+
+    // Enforce concurrent worktree limit
+    const active = await this.listCastleWorktrees(repoPath);
+    if (active.length >= this.maxConcurrent) {
+      throw new Error(`Maximum concurrent worktrees (${this.maxConcurrent}) reached. Clean up completed tasks first.`);
+    }
 
     // Ensure the worktree base directory exists
     if (!fs.existsSync(worktreeBase)) {
       fs.mkdirSync(worktreeBase, { recursive: true });
     }
 
-    // Add .castle-worktrees to .gitignore if not already there
     this.ensureGitignore(repoRoot);
 
     // If worktree already exists, return it
@@ -107,33 +230,29 @@ export class GitWorktreeService {
       return { worktreePath, branchName };
     }
 
+    // Determine the start point for the new branch
+    const startPoint = baseBranch || 'HEAD';
+
     // Check if branch already exists
     let branchExists = false;
     try {
-      execSync(`git rev-parse --verify ${branchName}`, {
-        cwd: repoRoot,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      await gitExec(['rev-parse', '--verify', branchName], repoRoot);
       branchExists = true;
     } catch {
       branchExists = false;
     }
 
     if (branchExists) {
-      // Create worktree using existing branch
-      execSync(`git worktree add "${worktreePath}" ${branchName}`, {
-        cwd: repoRoot,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      await gitExec(['worktree', 'add', worktreePath, branchName], repoRoot);
     } else {
-      // Create worktree with new branch from current HEAD
-      execSync(`git worktree add -b ${branchName} "${worktreePath}"`, {
-        cwd: repoRoot,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      await gitExec(['worktree', 'add', '-b', branchName, worktreePath, startPoint], repoRoot);
+    }
+
+    // Enable long paths on Windows
+    if (process.platform === 'win32') {
+      try {
+        await gitExec(['config', 'core.longpaths', 'true'], worktreePath);
+      } catch { /* non-fatal */ }
     }
 
     console.log(`[GitWorktree] Created worktree: ${worktreePath} on branch ${branchName}`);
@@ -141,15 +260,115 @@ export class GitWorktreeService {
   }
 
   /**
+   * Install dependencies in a worktree (detects package manager).
+   */
+  async installDependencies(worktreeDir: string): Promise<void> {
+    if (fs.existsSync(path.join(worktreeDir, 'package-lock.json'))) {
+      console.log('[GitWorktree] Installing dependencies with npm...');
+      await execFileAsync('npm', ['ci', '--prefer-offline'], { cwd: worktreeDir, timeout: 300_000 });
+    } else if (fs.existsSync(path.join(worktreeDir, 'yarn.lock'))) {
+      console.log('[GitWorktree] Installing dependencies with yarn...');
+      await execFileAsync('yarn', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000 });
+    } else if (fs.existsSync(path.join(worktreeDir, 'pnpm-lock.yaml'))) {
+      console.log('[GitWorktree] Installing dependencies with pnpm...');
+      await execFileAsync('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000 });
+    } else {
+      console.log('[GitWorktree] No lock file found, skipping dependency install');
+    }
+  }
+
+  /**
+   * Check if a worktree needs dependency installation (has lock file but no node_modules).
+   */
+  needsDependencyInstall(worktreeDir: string): boolean {
+    const hasLockFile = fs.existsSync(path.join(worktreeDir, 'package-lock.json'))
+      || fs.existsSync(path.join(worktreeDir, 'yarn.lock'))
+      || fs.existsSync(path.join(worktreeDir, 'pnpm-lock.yaml'));
+    const hasNodeModules = fs.existsSync(path.join(worktreeDir, 'node_modules'));
+    return hasLockFile && !hasNodeModules;
+  }
+
+  /**
+   * Stage and commit all changes in a worktree.
+   */
+  async commitChanges(worktreePath: string, message: string): Promise<boolean> {
+    // Check if there are changes to commit
+    const status = await gitExec(['status', '--porcelain'], worktreePath);
+    if (!status) {
+      console.log('[GitWorktree] No changes to commit');
+      return false;
+    }
+
+    await gitExec(['add', '-A'], worktreePath);
+    await gitExec(['commit', '-m', message], worktreePath);
+    console.log(`[GitWorktree] Committed changes: ${message}`);
+    return true;
+  }
+
+  /**
+   * Push branch to remote.
+   */
+  async pushBranch(worktreePath: string): Promise<void> {
+    const branch = await gitExec(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+    await gitExec(['push', '--set-upstream', 'origin', branch], worktreePath);
+    console.log(`[GitWorktree] Pushed branch: ${branch}`);
+  }
+
+  /**
+   * Get a diff summary for a worktree (for preview).
+   */
+  async getDiffSummary(worktreePath: string): Promise<string> {
+    try {
+      const branch = await gitExecReadOnly(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+      let baseBranch = 'main';
+      try {
+        await gitExecReadOnly(['rev-parse', '--verify', 'main'], worktreePath);
+      } catch {
+        baseBranch = 'master';
+      }
+      try {
+        const mergeBase = await gitExecReadOnly(['merge-base', baseBranch, branch], worktreePath);
+        return await gitExecReadOnly(['diff', '--stat', mergeBase, 'HEAD'], worktreePath);
+      } catch {
+        return await gitExecReadOnly(['diff', '--stat', 'HEAD~1'], worktreePath);
+      }
+    } catch {
+      return '(unable to generate diff summary)';
+    }
+  }
+
+  /**
+   * Get the full diff for a worktree.
+   */
+  async getDiff(worktreePath: string): Promise<string> {
+    try {
+      const branch = await gitExecReadOnly(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+      let baseBranch = 'main';
+      try {
+        await gitExecReadOnly(['rev-parse', '--verify', 'main'], worktreePath);
+      } catch {
+        baseBranch = 'master';
+      }
+      try {
+        const mergeBase = await gitExecReadOnly(['merge-base', baseBranch, branch], worktreePath);
+        return await gitExecReadOnly(['diff', mergeBase, 'HEAD'], worktreePath);
+      } catch {
+        return await gitExecReadOnly(['diff', 'HEAD~1'], worktreePath);
+      }
+    } catch {
+      return '';
+    }
+  }
+
+  /**
    * Remove a git worktree and optionally delete the branch.
    */
-  removeWorktree(worktreePath: string, deleteBranch = false): void {
+  async removeWorktree(worktreePath: string, deleteBranch = false): Promise<void> {
     if (!fs.existsSync(worktreePath)) {
       console.log(`[GitWorktree] Worktree does not exist: ${worktreePath}`);
       return;
     }
 
-    // Find the repo root by going up from the worktree path
     let repoRoot: string;
     try {
       repoRoot = this.getRepoRoot(worktreePath);
@@ -163,42 +382,25 @@ export class GitWorktreeService {
     if (deleteBranch) {
       try {
         branchName = this.getCurrentBranch(worktreePath);
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
 
-    // Remove worktree
     try {
-      execSync(`git worktree remove "${worktreePath}" --force`, {
-        cwd: repoRoot,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      await gitExec(['worktree', 'remove', worktreePath, '--force'], repoRoot);
       console.log(`[GitWorktree] Removed worktree: ${worktreePath}`);
     } catch (error) {
       console.warn(`[GitWorktree] Error removing worktree:`, error);
-      // Try force cleanup
       if (fs.existsSync(worktreePath)) {
         fs.rmSync(worktreePath, { recursive: true, force: true });
       }
       try {
-        execSync('git worktree prune', {
-          cwd: repoRoot,
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        await gitExec(['worktree', 'prune'], repoRoot);
       } catch { /* ignore */ }
     }
 
-    // Delete the branch if requested
     if (deleteBranch && branchName && branchName !== 'HEAD') {
       try {
-        execSync(`git branch -D ${branchName}`, {
-          cwd: repoRoot,
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
+        await gitExec(['branch', '-D', branchName], repoRoot);
         console.log(`[GitWorktree] Deleted branch: ${branchName}`);
       } catch {
         console.warn(`[GitWorktree] Could not delete branch: ${branchName}`);
@@ -215,11 +417,7 @@ export class GitWorktreeService {
     }
 
     const repoRoot = this.getRepoRoot(repoPath);
-    const output = execSync('git worktree list --porcelain', {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    const output = gitExecSync(['worktree', 'list', '--porcelain'], repoRoot);
 
     const worktrees: WorktreeInfo[] = [];
     const entries = output.split('\n\n').filter(Boolean);
@@ -243,7 +441,7 @@ export class GitWorktreeService {
           path: wPath,
           branch,
           head,
-          isMainWorktree: wPath === repoRoot || path.normalize(wPath) === path.normalize(repoRoot),
+          isMainWorktree: path.normalize(wPath) === path.normalize(repoRoot),
         });
       }
     }
@@ -252,76 +450,107 @@ export class GitWorktreeService {
   }
 
   /**
+   * List only Castle-managed worktrees (those under .castle-worktrees).
+   */
+  async listCastleWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
+    const all = this.listWorktrees(repoPath);
+    const repoRoot = this.getRepoRoot(repoPath);
+    const worktreeBase = path.join(repoRoot, GitWorktreeService.WORKTREE_DIR);
+    return all.filter(w => path.normalize(w.path).startsWith(path.normalize(worktreeBase)));
+  }
+
+  /**
    * Get the status of a specific worktree.
    */
-  getWorktreeStatus(worktreePath: string): { exists: boolean; branch?: string; hasChanges?: boolean } {
+  async getWorktreeStatus(worktreePath: string): Promise<{ exists: boolean; branch?: string; hasChanges?: boolean }> {
     if (!fs.existsSync(worktreePath)) {
       return { exists: false };
     }
 
     try {
-      const branch = this.getCurrentBranch(worktreePath);
-      const status = execSync('git status --porcelain', {
-        cwd: worktreePath,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      return {
-        exists: true,
-        branch,
-        hasChanges: status.trim().length > 0,
-      };
+      const branch = await gitExecReadOnly(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+      const status = await gitExecReadOnly(['status', '--porcelain'], worktreePath);
+      return { exists: true, branch, hasChanges: status.length > 0 };
     } catch {
       return { exists: false };
     }
   }
 
   /**
-   * Create a pull request from a worktree branch using the `gh` CLI.
+   * Detect the remote URL and find a matching PR provider.
    */
-  createPullRequest(worktreePath: string, title: string, body: string): PullRequestResult {
-    // Verify gh CLI is available
+  async getProvider(cwd: string): Promise<PullRequestProvider | null> {
     try {
-      execSync('gh --version', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-    } catch {
-      return {
-        success: false,
-        error: 'GitHub CLI (gh) is not installed. Install it from https://cli.github.com/',
-      };
+      const remoteUrl = await gitExec(['remote', 'get-url', 'origin'], cwd);
+      for (const provider of this.providers) {
+        if (provider.matchesRemote(remoteUrl)) return provider;
+      }
+    } catch { /* no remote */ }
+    return null;
+  }
+
+  /**
+   * Check if the PR provider CLI is authenticated.
+   */
+  async isProviderAuthenticated(cwd: string): Promise<{ authenticated: boolean; provider?: string }> {
+    const provider = await this.getProvider(cwd);
+    if (!provider) return { authenticated: false };
+    const authenticated = await provider.isAuthenticated(cwd);
+    return { authenticated, provider: provider.name };
+  }
+
+  /**
+   * Push branch and create a pull request via the detected provider.
+   */
+  async pushAndCreatePR(worktreePath: string, options: PRCreateOptions): Promise<PullRequestResult> {
+    const provider = await this.getProvider(worktreePath);
+    if (!provider) {
+      return { success: false, error: 'No supported Git hosting provider detected for this repository.' };
     }
 
+    const authenticated = await provider.isAuthenticated(worktreePath);
+    if (!authenticated) {
+      return { success: false, error: `Not authenticated with ${provider.name}. Run the appropriate login command.` };
+    }
+
+    // Push first
     try {
-      // Push the branch first
-      const branch = this.getCurrentBranch(worktreePath);
-      execSync(`git push -u origin ${branch}`, {
-        cwd: worktreePath,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      // Create the PR
-      const result = execSync(
-        `gh pr create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}"`,
-        {
-          cwd: worktreePath,
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-        }
-      );
-
-      const url = result.trim();
-      console.log(`[GitWorktree] Created PR: ${url}`);
-      return { success: true, url };
+      await this.pushBranch(worktreePath);
     } catch (error: any) {
-      return {
-        success: false,
-        error: error.message || String(error),
-      };
+      return { success: false, error: `Failed to push: ${error.message || error}` };
     }
+
+    return provider.createPR(worktreePath, options);
+  }
+
+  /**
+   * Clean up orphaned Castle worktrees (those on disk that don't map to active tasks).
+   * Called on app startup.
+   */
+  async cleanupOrphans(repoPath: string, activeTaskIds: Set<string>): Promise<void> {
+    if (!this.isGitRepo(repoPath)) return;
+
+    const repoRoot = this.getRepoRoot(repoPath);
+    const worktreeBase = path.join(repoRoot, GitWorktreeService.WORKTREE_DIR);
+
+    if (!fs.existsSync(worktreeBase)) return;
+
+    const dirs = fs.readdirSync(worktreeBase, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+
+    for (const taskId of dirs) {
+      if (!activeTaskIds.has(taskId)) {
+        const orphanPath = path.join(worktreeBase, taskId);
+        console.log(`[GitWorktree] Cleaning up orphan worktree: ${orphanPath}`);
+        await this.removeWorktree(orphanPath, true);
+      }
+    }
+
+    // Prune any stale worktree references
+    try {
+      await gitExec(['worktree', 'prune'], repoRoot);
+    } catch { /* ignore */ }
   }
 
   /**

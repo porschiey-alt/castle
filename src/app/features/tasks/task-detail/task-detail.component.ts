@@ -17,7 +17,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTabsModule } from '@angular/material/tabs';
 import { marked } from 'marked';
 
-import { TASK_STATES, TASK_KINDS, BUG_CLOSE_REASONS, type Task, type TaskLabel, type TaskState, type TaskKind, type BugCloseReason, type ResearchComment, type ResearchCommentAnchor } from '../../../../shared/types/task.types';
+import { TASK_STATES, TASK_KINDS, BUG_CLOSE_REASONS, type Task, type TaskLabel, type TaskState, type TaskKind, type BugCloseReason, type ResearchComment, type ResearchCommentAnchor, type TaskPRState } from '../../../../shared/types/task.types';
 import type { Agent } from '../../../../shared/types/agent.types';
 import { ResearchContentComponent } from '../research-content/research-content.component';
 import { AgentIconComponent } from '../../../shared/components/agent-icon/agent-icon.component';
@@ -96,6 +96,7 @@ export class TaskDetailComponent implements OnInit {
   researchRequested = output<TaskResearchEvent>();
   implementRequested = output<TaskImplementEvent>();
   createPRRequested = output<TaskCreatePREvent>();
+  diffLoadRequested = output<string>();
   reviewSubmitted = output<TaskReviewSubmitEvent>();
   goToResearcher = output<string>();
   goToImplementer = output<string>();
@@ -125,6 +126,14 @@ export class TaskDetailComponent implements OnInit {
   prCreating = false;
   prUrl: string | null = null;
   prError: string | null = null;
+  // Worktree lifecycle phase
+  lifecyclePhase: string | null = null;
+  lifecycleWarning: string | null = null;
+  // Diff preview
+  diffSummary: string | null = null;
+  diffContent: string | null = null;
+  showDiffPreview = false;
+  loadingDiff = false;
 
   /** Clear review state when reviewRunning transitions from true to false */
   private reviewRunningEffect = effect(() => {
@@ -283,12 +292,66 @@ export class TaskDetailComponent implements OnInit {
   }
 
   /** Called by parent when PR creation completes */
-  onPRResult(result: { success: boolean; url?: string; error?: string }): void {
+  onPRResult(result: { success: boolean; url?: string; prNumber?: number; error?: string }): void {
     this.prCreating = false;
     if (result.success && result.url) {
       this.prUrl = result.url;
     } else {
       this.prError = result.error || 'Failed to create pull request';
+    }
+  }
+
+  /** Called by parent when worktree lifecycle phase changes */
+  onLifecycleUpdate(event: { taskId: string; phase: string; message?: string }): void {
+    const t = this.task();
+    if (!t || t.id !== event.taskId) return;
+
+    if (event.phase === 'warning') {
+      this.lifecycleWarning = event.message || null;
+    } else {
+      this.lifecyclePhase = event.phase;
+      // Clear warning when phase advances
+      if (event.phase === 'done') {
+        this.lifecyclePhase = null;
+      }
+    }
+  }
+
+  /** Load diff preview for the worktree */
+  async loadDiffPreview(): Promise<void> {
+    const t = this.task();
+    if (!t?.worktreePath) return;
+    this.loadingDiff = true;
+    this.showDiffPreview = true;
+    this.diffLoadRequested.emit(t.worktreePath);
+  }
+
+  /** Called by parent with diff results */
+  onDiffLoaded(result: { summary: string; diff: string }): void {
+    this.diffSummary = result.summary;
+    this.diffContent = result.diff;
+    this.loadingDiff = false;
+  }
+
+  /** Format lifecycle phase for display */
+  get lifecycleLabel(): string {
+    switch (this.lifecyclePhase) {
+      case 'creating_worktree': return 'Creating worktree...';
+      case 'installing_deps': return 'Installing dependencies...';
+      case 'implementing': return 'Implementation in progress...';
+      case 'committing': return 'Committing changes...';
+      case 'creating_pr': return 'Creating pull request...';
+      default: return '';
+    }
+  }
+
+  /** Get PR state display info */
+  getPRStateInfo(state: TaskPRState): { label: string; icon: string; color: string } {
+    switch (state) {
+      case 'draft': return { label: 'Draft', icon: 'edit_note', color: '#6b7280' };
+      case 'open': return { label: 'Open', icon: 'merge', color: '#22c55e' };
+      case 'merged': return { label: 'Merged', icon: 'merge', color: '#8b5cf6' };
+      case 'closed': return { label: 'Closed', icon: 'close', color: '#ef4444' };
     }
   }
 

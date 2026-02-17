@@ -19,7 +19,7 @@ import {
 import { ChatMessage, MessageRole } from '../../shared/types/message.types';
 import { Agent } from '../../shared/types/agent.types';
 import { Conversation, CreateConversationInput, UpdateConversationInput } from '../../shared/types/conversation.types';
-import { Task, TaskState, TaskKind, TaskLabel, CreateTaskInput, UpdateTaskInput, BugCloseReason, ResearchReview, ResearchComment } from '../../shared/types/task.types';
+import { Task, TaskState, TaskKind, TaskLabel, TaskPRState, CreateTaskInput, UpdateTaskInput, BugCloseReason, ResearchReview, ResearchComment } from '../../shared/types/task.types';
 
 export class DatabaseService {
   private db: SqlJsDatabase | null = null;
@@ -197,6 +197,16 @@ export class DatabaseService {
     } catch { /* column already exists */ }
     try {
       this.db.run(`ALTER TABLE tasks ADD COLUMN branch_name TEXT`);
+    } catch { /* column already exists */ }
+    // Migration: add PR metadata columns
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN pr_url TEXT`);
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN pr_number INTEGER`);
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN pr_state TEXT`);
     } catch { /* column already exists */ }
 
     // Research reviews table
@@ -887,6 +897,9 @@ export class DatabaseService {
     if (updates.implementAgentId !== undefined) { sets.push('implement_agent_id = ?'); params.push(updates.implementAgentId); }
     if (updates.worktreePath !== undefined) { sets.push('worktree_path = ?'); params.push(updates.worktreePath); }
     if (updates.branchName !== undefined) { sets.push('branch_name = ?'); params.push(updates.branchName); }
+    if (updates.prUrl !== undefined) { sets.push('pr_url = ?'); params.push(updates.prUrl); }
+    if (updates.prNumber !== undefined) { sets.push('pr_number = ?'); params.push(updates.prNumber); }
+    if (updates.prState !== undefined) { sets.push('pr_state = ?'); params.push(updates.prState); }
 
     if (sets.length > 0) {
       sets.push("updated_at = datetime('now')");
@@ -919,7 +932,7 @@ export class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, worktree_path, branch_name, created_at, updated_at
+      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, worktree_path, branch_name, pr_url, pr_number, pr_state, created_at, updated_at
        FROM tasks WHERE id = ?`
     );
     stmt.bind([taskId]);
@@ -934,6 +947,7 @@ export class DatabaseService {
       github_issue_number: number | null; github_repo: string | null;
       close_reason: string | null;
       worktree_path: string | null; branch_name: string | null;
+      pr_url: string | null; pr_number: number | null; pr_state: string | null;
       created_at: string; updated_at: string;
     };
     stmt.free();
@@ -956,6 +970,9 @@ export class DatabaseService {
       closeReason: (row.close_reason as BugCloseReason) ?? undefined,
       worktreePath: row.worktree_path ?? undefined,
       branchName: row.branch_name ?? undefined,
+      prUrl: row.pr_url ?? undefined,
+      prNumber: row.pr_number ?? undefined,
+      prState: (row.pr_state as TaskPRState) ?? undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
@@ -964,7 +981,7 @@ export class DatabaseService {
   async getTasks(stateFilter?: string, kindFilter?: string, projectPath?: string): Promise<Task[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, worktree_path, branch_name, created_at, updated_at
+    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, worktree_path, branch_name, pr_url, pr_number, pr_state, created_at, updated_at
                FROM tasks`;
     const params: unknown[] = [];
     const conditions: string[] = [];
@@ -999,6 +1016,7 @@ export class DatabaseService {
         github_issue_number: number | null; github_repo: string | null;
         close_reason: string | null;
         worktree_path: string | null; branch_name: string | null;
+        pr_url: string | null; pr_number: number | null; pr_state: string | null;
         created_at: string; updated_at: string;
       };
 
@@ -1018,6 +1036,9 @@ export class DatabaseService {
         closeReason: (row.close_reason as BugCloseReason) ?? undefined,
         worktreePath: row.worktree_path ?? undefined,
         branchName: row.branch_name ?? undefined,
+        prUrl: row.pr_url ?? undefined,
+        prNumber: row.pr_number ?? undefined,
+        prState: (row.pr_state as TaskPRState) ?? undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
       });

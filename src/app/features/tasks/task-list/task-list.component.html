@@ -23,6 +23,7 @@
         (researchRequested)="onResearchRequested($event)"
         (implementRequested)="onImplementRequested($event)"
         (createPRRequested)="onCreatePR($event)"
+        (diffLoadRequested)="onDiffLoadRequested($event)"
         (reviewSubmitted)="onReviewSubmitted($event)"
         (goToResearcher)="goToAgent.emit($event)"
         (goToImplementer)="goToAgent.emit($event)"
@@ -110,6 +111,18 @@
                     <span class="mini-label research-badge">
                       <mat-icon class="badge-icon">{{ task.kind === 'bug' ? 'bug_report' : 'science' }}</mat-icon>
                       {{ task.kind === 'bug' ? 'Diagnosed' : 'Researched' }}
+                    </span>
+                  }
+                  @if (task.branchName) {
+                    <span class="mini-label branch-badge">
+                      <mat-icon class="badge-icon">account_tree</mat-icon>
+                      {{ task.branchName }}
+                    </span>
+                  }
+                  @if (task.prUrl) {
+                    <span class="mini-label pr-badge">
+                      <mat-icon class="badge-icon">merge</mat-icon>
+                      PR #{{ task.prNumber || '' }}
                     </span>
                   }
                   @for (label of task.labels; track label.id) {

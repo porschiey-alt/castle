@@ -48,11 +48,23 @@ export class SettingsDialogComponent implements OnInit {
   tailscaleError: string | null = null;
   saving = false;
 
+  // Worktree settings
+  worktreeEnabled = true;
+  worktreeDefaultBaseBranch = 'main';
+  worktreeDraftPR = false;
+  worktreeMaxConcurrent = 5;
+  worktreeAutoInstallDeps = true;
+
   async ngOnInit(): Promise<void> {
     const settings = await this.electronService.getSettings();
     if (settings) {
       this.tailscaleEnabled = settings.tailscaleEnabled ?? false;
       this.tailscalePort = settings.tailscalePort ?? DEFAULT_TAILSCALE_PORT;
+      this.worktreeEnabled = settings.worktreeEnabled !== false;
+      this.worktreeDefaultBaseBranch = settings.worktreeDefaultBaseBranch || 'main';
+      this.worktreeDraftPR = settings.worktreeDraftPR ?? false;
+      this.worktreeMaxConcurrent = settings.worktreeMaxConcurrent ?? 5;
+      this.worktreeAutoInstallDeps = settings.worktreeAutoInstallDeps !== false;
     }
     const status = await this.electronService.getTailscaleStatus();
     this.tailscaleRunning = status.running;
@@ -95,6 +107,18 @@ export class SettingsDialogComponent implements OnInit {
       this.tailscaleError = result.error;
     }
 
+    this.saving = false;
+  }
+
+  async saveWorktreeSettings(): Promise<void> {
+    this.saving = true;
+    await this.electronService.updateSettings({
+      worktreeEnabled: this.worktreeEnabled,
+      worktreeDefaultBaseBranch: this.worktreeDefaultBaseBranch,
+      worktreeDraftPR: this.worktreeDraftPR,
+      worktreeMaxConcurrent: this.worktreeMaxConcurrent,
+      worktreeAutoInstallDeps: this.worktreeAutoInstallDeps,
+    });
     this.saving = false;
   }
 

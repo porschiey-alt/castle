@@ -610,21 +610,67 @@ export function registerIpcHandlers(services: IpcServices): void {
     const workingDirectory = directoryService.getCurrentDirectory();
     if (!workingDirectory) throw new Error('No workspace directory selected');
 
+    const settings = await databaseService.getSettings();
+    const worktreeEnabled = settings.worktreeEnabled !== false; // default true
+
+    // Configure worktree limits from settings
+    if (settings.worktreeMaxConcurrent) {
+      gitWorktreeService.setMaxConcurrent(settings.worktreeMaxConcurrent);
+    }
+
     // Try to create a git worktree for isolated parallel work
     let effectiveWorkDir = workingDirectory;
     let worktreePath: string | undefined;
     let branchName: string | undefined;
-    try {
-      if (gitWorktreeService.isGitRepo(workingDirectory)) {
-        const result = gitWorktreeService.createWorktree(workingDirectory, task.title, taskId);
-        effectiveWorkDir = result.worktreePath;
-        worktreePath = result.worktreePath;
-        branchName = result.branchName;
-        console.log(`[Implementation] Using worktree: ${effectiveWorkDir} (branch: ${branchName})`);
+
+    if (worktreeEnabled) {
+      try {
+        if (gitWorktreeService.isGitRepo(workingDirectory)) {
+          // Warn about uncommitted changes
+          const hasUncommitted = await gitWorktreeService.hasUncommittedChanges(workingDirectory);
+          if (hasUncommitted) {
+            console.warn('[Implementation] Warning: uncommitted changes in main working directory');
+            broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
+              taskId, phase: 'warning',
+              message: 'Uncommitted changes detected in your working directory. The worktree will branch from the last commit.',
+            });
+          }
+
+          // Phase: Creating worktree
+          broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'creating_worktree' });
+          const baseBranch = settings.worktreeDefaultBaseBranch || undefined;
+          const result = await gitWorktreeService.createWorktree(workingDirectory, task.title, taskId, task.kind, baseBranch);
+          effectiveWorkDir = result.worktreePath;
+          worktreePath = result.worktreePath;
+          branchName = result.branchName;
+          console.log(`[Implementation] Using worktree: ${effectiveWorkDir} (branch: ${branchName})`);
+
+          // Phase: Installing dependencies
+          const autoInstall = settings.worktreeAutoInstallDeps !== false;
+          if (autoInstall && gitWorktreeService.needsDependencyInstall(effectiveWorkDir)) {
+            broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'installing_deps' });
+            try {
+              await gitWorktreeService.installDependencies(effectiveWorkDir);
+            } catch (depError) {
+              console.warn('[Implementation] Dependency install failed:', depError);
+              broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
+                taskId, phase: 'warning',
+                message: 'Dependency installation failed. The agent may encounter import errors.',
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Implementation] Could not create worktree, using main directory:', error);
+        broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
+          taskId, phase: 'warning',
+          message: `Worktree creation failed: ${error instanceof Error ? error.message : error}. Using main directory.`,
+        });
       }
-    } catch (error) {
-      console.warn('[Implementation] Could not create worktree, using main directory:', error);
     }
+
+    // Phase: Implementation
+    broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'implementing' });
 
     // Ensure agent has a session (using worktree directory if available)
     let sessionProcess = processManagerService.getSessionByAgentId(agentId);
@@ -660,19 +706,61 @@ export function registerIpcHandlers(services: IpcServices): void {
     const unsubscribeImpl = processManagerService.onComplete(sessionProcess.session.id, async () => {
       unsubscribeImpl();
 
-      // Auto-transition task to done (with closeReason for bugs)
       const currentTask = await databaseService.getTask(taskId);
-      if (currentTask && currentTask.state !== 'done') {
+      if (!currentTask) return;
+
+      // Auto-commit changes if we have a worktree
+      if (currentTask.worktreePath) {
+        try {
+          broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'committing' });
+          const committed = await gitWorktreeService.commitChanges(
+            currentTask.worktreePath,
+            `feat: ${currentTask.title}\n\nImplemented by Castle agent.`
+          );
+
+          // Auto-push and create PR if there were changes
+          if (committed) {
+            broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'creating_pr' });
+            const prResult = await gitWorktreeService.pushAndCreatePR(currentTask.worktreePath, {
+              title: currentTask.title,
+              body: `## ${currentTask.title}\n\n${currentTask.description || ''}\n\n---\n*Implemented by Castle agent*`,
+              draft: settings.worktreeDraftPR || false,
+            });
+
+            if (prResult.success) {
+              await databaseService.updateTask(taskId, {
+                prUrl: prResult.url,
+                prNumber: prResult.prNumber,
+                prState: settings.worktreeDraftPR ? 'draft' : 'open',
+              });
+              console.log(`[Implementation] PR created: ${prResult.url}`);
+            } else {
+              console.warn(`[Implementation] PR creation failed: ${prResult.error}`);
+              broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
+                taskId, phase: 'warning',
+                message: `Auto-PR failed: ${prResult.error}. You can create one manually.`,
+              });
+            }
+          }
+        } catch (commitError) {
+          console.warn('[Implementation] Auto-commit/PR failed:', commitError);
+        }
+      }
+
+      // Auto-transition task to done
+      if (currentTask.state !== 'done') {
         const updates: { state: 'done'; closeReason?: 'fixed' } = { state: 'done' };
         if (currentTask.kind === 'bug') {
           updates.closeReason = 'fixed';
         }
         await databaseService.updateTask(taskId, updates);
-        broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, {
-          action: 'updated',
-          task: await databaseService.getTask(taskId),
-        });
       }
+
+      broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'done' });
+      broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, {
+        action: 'updated',
+        task: await databaseService.getTask(taskId),
+      });
 
       // Notify renderer that implementation is complete
       broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
@@ -823,12 +911,12 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // ============ Worktree Handlers ============
 
-  handle(IPC_CHANNELS.WORKTREE_CREATE, async (_event, { repoPath, taskTitle, taskId }: { repoPath: string; taskTitle: string; taskId: string }) => {
-    return gitWorktreeService.createWorktree(repoPath, taskTitle, taskId);
+  handle(IPC_CHANNELS.WORKTREE_CREATE, async (_event, { repoPath, taskTitle, taskId, kind }: { repoPath: string; taskTitle: string; taskId: string; kind?: string }) => {
+    return gitWorktreeService.createWorktree(repoPath, taskTitle, taskId, kind);
   });
 
   handle(IPC_CHANNELS.WORKTREE_REMOVE, async (_event, { worktreePath, deleteBranch }: { worktreePath: string; deleteBranch?: boolean }) => {
-    gitWorktreeService.removeWorktree(worktreePath, deleteBranch);
+    await gitWorktreeService.removeWorktree(worktreePath, deleteBranch);
   });
 
   handle(IPC_CHANNELS.WORKTREE_LIST, async (_event, { repoPath }: { repoPath: string }) => {
@@ -839,8 +927,30 @@ export function registerIpcHandlers(services: IpcServices): void {
     return gitWorktreeService.getWorktreeStatus(worktreePath);
   });
 
-  handle(IPC_CHANNELS.WORKTREE_CREATE_PR, async (_event, { worktreePath, title, body }: { worktreePath: string; title: string; body: string }) => {
-    return gitWorktreeService.createPullRequest(worktreePath, title, body);
+  handle(IPC_CHANNELS.WORKTREE_CREATE_PR, async (_event, { worktreePath, title, body, draft }: { worktreePath: string; title: string; body: string; draft?: boolean }) => {
+    return gitWorktreeService.pushAndCreatePR(worktreePath, { title, body, draft });
+  });
+
+  handle(IPC_CHANNELS.WORKTREE_GET_DIFF, async (_event, { worktreePath }: { worktreePath: string }) => {
+    const summary = await gitWorktreeService.getDiffSummary(worktreePath);
+    const diff = await gitWorktreeService.getDiff(worktreePath);
+    return { summary, diff };
+  });
+
+  handle(IPC_CHANNELS.WORKTREE_COMMIT, async (_event, { worktreePath, message }: { worktreePath: string; message: string }) => {
+    const committed = await gitWorktreeService.commitChanges(worktreePath, message);
+    return { committed };
+  });
+
+  handle(IPC_CHANNELS.WORKTREE_CHECK_GIT, async (_event, { repoPath }: { repoPath: string }) => {
+    const isGitRepo = gitWorktreeService.isGitRepo(repoPath);
+    let hasUncommittedChanges = false;
+    let currentBranch: string | null = null;
+    if (isGitRepo) {
+      hasUncommittedChanges = await gitWorktreeService.hasUncommittedChanges(repoPath);
+      currentBranch = gitWorktreeService.getCurrentBranch(repoPath);
+    }
+    return { isGitRepo, hasUncommittedChanges, currentBranch };
   });
 
   console.log('IPC handlers registered');

@@ -163,6 +163,17 @@
         </div>
       </div>
 
+      <!-- Non-git project banner -->
+      @if (nonGitBannerVisible && !nonGitBannerDismissed) {
+        <div class="non-git-banner">
+          <mat-icon>warning</mat-icon>
+          <span>Git is not detected in this project. Worktree-based parallel agent tasks are unavailable. <a href="https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup" target="_blank" rel="noopener">Learn more</a></span>
+          <button mat-icon-button (click)="nonGitBannerDismissed = true" matTooltip="Dismiss">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+
       <!-- Status bar -->
       <app-status-bar />
     </main>

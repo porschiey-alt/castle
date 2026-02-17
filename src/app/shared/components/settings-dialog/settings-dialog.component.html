@@ -65,6 +65,72 @@
     }
   </div>
 
+  <!-- Worktree / Git Settings Section -->
+  <div class="settings-section">
+    <h3>
+      <mat-icon>account_tree</mat-icon>
+      Git Worktrees
+    </h3>
+    <p class="section-description">
+      Enable isolated git worktrees for parallel agent implementation tasks. Each task gets its own branch and working directory.
+    </p>
+
+    <div class="setting-row">
+      <div class="setting-label">
+        <span>Enable worktree isolation</span>
+      </div>
+      <mat-slide-toggle
+        [(ngModel)]="worktreeEnabled"
+        (change)="saveWorktreeSettings()"
+        [disabled]="saving">
+      </mat-slide-toggle>
+    </div>
+
+    @if (worktreeEnabled) {
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>Auto-install dependencies</span>
+        </div>
+        <mat-slide-toggle
+          [(ngModel)]="worktreeAutoInstallDeps"
+          (change)="saveWorktreeSettings()"
+          [disabled]="saving">
+        </mat-slide-toggle>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>Create PRs as draft</span>
+        </div>
+        <mat-slide-toggle
+          [(ngModel)]="worktreeDraftPR"
+          (change)="saveWorktreeSettings()"
+          [disabled]="saving">
+        </mat-slide-toggle>
+      </div>
+
+      <div class="setting-row">
+        <mat-form-field appearance="outline" class="port-field">
+          <mat-label>Max concurrent worktrees</mat-label>
+          <input matInput type="number" [(ngModel)]="worktreeMaxConcurrent" min="1" max="10">
+        </mat-form-field>
+        <button mat-stroked-button (click)="saveWorktreeSettings()" [disabled]="saving">
+          Apply
+        </button>
+      </div>
+
+      <div class="setting-row">
+        <mat-form-field appearance="outline" class="port-field">
+          <mat-label>Default base branch</mat-label>
+          <input matInput type="text" [(ngModel)]="worktreeDefaultBaseBranch" placeholder="main">
+        </mat-form-field>
+        <button mat-stroked-button (click)="saveWorktreeSettings()" [disabled]="saving">
+          Apply
+        </button>
+      </div>
+    }
+  </div>
+
   <div class="settings-footer">
     <button mat-button (click)="close()">Close</button>
   </div>

@@ -40,3 +40,6 @@ data/
 # Temporary files
 tmp/
 temp/
+
+# Castle agent worktrees
+.castle-worktrees/

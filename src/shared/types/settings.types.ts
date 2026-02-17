@@ -23,6 +23,12 @@ export interface AppSettings {
   windowBounds?: WindowBounds;
   tailscaleEnabled: boolean;
   tailscalePort: number;
+  // Worktree settings
+  worktreeEnabled: boolean;
+  worktreeDefaultBaseBranch: string;
+  worktreeDraftPR: boolean;
+  worktreeMaxConcurrent: number;
+  worktreeAutoInstallDeps: boolean;
 }
 
 export interface WindowBounds {
@@ -64,7 +70,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 14,
   recentDirectories: [],
   tailscaleEnabled: false,
-  tailscalePort: 39417
+  tailscalePort: 39417,
+  worktreeEnabled: true,
+  worktreeDefaultBaseBranch: 'main',
+  worktreeDraftPR: false,
+  worktreeMaxConcurrent: 5,
+  worktreeAutoInstallDeps: true,
 };
 
 export const DEFAULT_PERMISSIONS: PermissionSet = {

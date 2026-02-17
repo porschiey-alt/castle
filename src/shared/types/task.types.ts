@@ -36,6 +36,8 @@ export interface TaskLabel {
   color: string;
 }
 
+export type TaskPRState = 'draft' | 'open' | 'merged' | 'closed';
+
 export interface Task {
   id: string;
   title: string;
@@ -52,6 +54,9 @@ export interface Task {
   closeReason?: BugCloseReason;
   worktreePath?: string;
   branchName?: string;
+  prUrl?: string;
+  prNumber?: number;
+  prState?: TaskPRState;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,7 +65,7 @@ export type CreateTaskInput = Pick<Task, 'title' | 'description' | 'state' | 'ki
   labelIds?: string[];
 };
 
-export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId' | 'implementAgentId' | 'closeReason' | 'worktreePath' | 'branchName'>> & {
+export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId' | 'implementAgentId' | 'closeReason' | 'worktreePath' | 'branchName' | 'prUrl' | 'prNumber' | 'prState'>> & {
   labelIds?: string[];
 };
 

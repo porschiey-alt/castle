@@ -154,6 +154,37 @@
   }
 }
 
+.branch-badge {
+  color: #3b82f6;
+  background-color: #3b82f622;
+  border-color: #3b82f644;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  .badge-icon {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
+    flex-shrink: 0;
+  }
+}
+
+.pr-badge {
+  color: #22c55e;
+  background-color: #22c55e22;
+  border-color: #22c55e44;
+
+  .badge-icon {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
+  }
+}
+
 .task-card-meta {
   flex-shrink: 0;
   text-align: right;

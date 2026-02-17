@@ -156,6 +156,34 @@ app.whenReady().then(async () => {
         console.error('Failed to start Tailscale server:', error);
       }
     }
+
+    // Clean up orphaned worktrees on startup
+    try {
+      const currentDir = directoryService.getCurrentDirectory();
+      if (currentDir && gitWorktreeService.isGitRepo(currentDir)) {
+        const allTasks = await databaseService.getTasks();
+        const activeTaskIds = new Set(
+          allTasks
+            .filter(t => t.worktreePath && t.state !== 'done')
+            .map(t => t.id)
+        );
+        await gitWorktreeService.cleanupOrphans(currentDir, activeTaskIds);
+      }
+    } catch (error) {
+      console.warn('Worktree orphan cleanup failed:', error);
+    }
+
+    // Periodic git worktree prune (every 30 minutes)
+    setInterval(async () => {
+      try {
+        const dir = directoryService.getCurrentDirectory();
+        if (dir && gitWorktreeService.isGitRepo(dir)) {
+          const { execFile: execFileCb } = require('child_process');
+          const repoRoot = gitWorktreeService.getRepoRoot(dir);
+          execFileCb('git', ['worktree', 'prune'], { cwd: repoRoot }, () => {});
+        }
+      } catch { /* non-critical */ }
+    }, 30 * 60 * 1000);
     
     app.on('activate', async () => {
       // On macOS, re-create window when dock icon is clicked

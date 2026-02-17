@@ -262,15 +262,24 @@ export class WebSocketAPI implements ElectronAPI {
   };
 
   worktree = {
-    create: (repoPath: string, taskTitle: string, taskId: string): Promise<{ worktreePath: string; branchName: string }> =>
-      this.invoke(IPC_CHANNELS.WORKTREE_CREATE, { repoPath, taskTitle, taskId }),
+    create: (repoPath: string, taskTitle: string, taskId: string, kind?: string): Promise<{ worktreePath: string; branchName: string }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_CREATE, { repoPath, taskTitle, taskId, kind }),
     remove: (worktreePath: string, deleteBranch?: boolean): Promise<void> =>
       this.invoke(IPC_CHANNELS.WORKTREE_REMOVE, { worktreePath, deleteBranch }),
     list: (repoPath: string): Promise<{ path: string; branch: string; head: string; isMainWorktree: boolean }[]> =>
       this.invoke(IPC_CHANNELS.WORKTREE_LIST, { repoPath }),
     status: (worktreePath: string): Promise<{ exists: boolean; branch?: string; hasChanges?: boolean }> =>
       this.invoke(IPC_CHANNELS.WORKTREE_STATUS, { worktreePath }),
-    createPR: (worktreePath: string, title: string, body: string): Promise<{ success: boolean; url?: string; error?: string }> =>
-      this.invoke(IPC_CHANNELS.WORKTREE_CREATE_PR, { worktreePath, title, body }),
+    createPR: (worktreePath: string, title: string, body: string, draft?: boolean): Promise<{ success: boolean; url?: string; prNumber?: number; error?: string }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_CREATE_PR, { worktreePath, title, body, draft }),
+    getDiff: (worktreePath: string): Promise<{ summary: string; diff: string }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_GET_DIFF, { worktreePath }),
+    commit: (worktreePath: string, message: string): Promise<{ committed: boolean }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_COMMIT, { worktreePath, message }),
+    checkGit: (repoPath: string): Promise<{ isGitRepo: boolean; hasUncommittedChanges: boolean; currentBranch: string | null }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_CHECK_GIT, { repoPath }),
+    onLifecycle: (callback: (event: { taskId: string; phase: string; message?: string }) => void): void => {
+      this.on(IPC_CHANNELS.WORKTREE_LIFECYCLE, callback);
+    },
   };
 }

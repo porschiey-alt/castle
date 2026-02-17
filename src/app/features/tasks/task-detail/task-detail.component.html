@@ -293,12 +293,37 @@
           @if (implementRunning()) {
             <div class="research-running">
               <mat-icon class="research-spinner">sync</mat-icon>
-              <h3>Implementation in progress...</h3>
+              <h3>{{ lifecycleLabel || 'Implementation in progress...' }}</h3>
               <p>The agent is implementing this task. You can watch its progress live.</p>
+              @if (lifecycleWarning) {
+                <div class="lifecycle-warning">
+                  <mat-icon>warning</mat-icon>
+                  <span>{{ lifecycleWarning }}</span>
+                </div>
+              }
               @if (task()!.branchName) {
                 <div class="branch-info">
                   <mat-icon>account_tree</mat-icon>
                   <span class="branch-name">{{ task()!.branchName }}</span>
+                </div>
+              }
+              @if (lifecyclePhase) {
+                <div class="lifecycle-steps">
+                  <span class="step" [class.active]="lifecyclePhase === 'creating_worktree'" [class.done]="lifecyclePhase !== 'creating_worktree'">
+                    <mat-icon>{{ lifecyclePhase === 'creating_worktree' ? 'sync' : 'check_circle' }}</mat-icon> Worktree
+                  </span>
+                  <span class="step" [class.active]="lifecyclePhase === 'installing_deps'" [class.done]="lifecyclePhase === 'implementing' || lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr'">
+                    <mat-icon>{{ lifecyclePhase === 'installing_deps' ? 'sync' : (lifecyclePhase === 'implementing' || lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr' ? 'check_circle' : 'radio_button_unchecked') }}</mat-icon> Deps
+                  </span>
+                  <span class="step" [class.active]="lifecyclePhase === 'implementing'" [class.done]="lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr'">
+                    <mat-icon>{{ lifecyclePhase === 'implementing' ? 'sync' : (lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr' ? 'check_circle' : 'radio_button_unchecked') }}</mat-icon> Implement
+                  </span>
+                  <span class="step" [class.active]="lifecyclePhase === 'committing'" [class.done]="lifecyclePhase === 'creating_pr'">
+                    <mat-icon>{{ lifecyclePhase === 'committing' ? 'sync' : (lifecyclePhase === 'creating_pr' ? 'check_circle' : 'radio_button_unchecked') }}</mat-icon> Commit
+                  </span>
+                  <span class="step" [class.active]="lifecyclePhase === 'creating_pr'">
+                    <mat-icon>{{ lifecyclePhase === 'creating_pr' ? 'sync' : 'radio_button_unchecked' }}</mat-icon> PR
+                  </span>
                 </div>
               }
               <button mat-stroked-button color="primary" (click)="goToImplementer.emit(task()!.implementAgentId || selectedImplementAgentId)">
@@ -319,6 +344,16 @@
                 </div>
               }
 
+              <!-- PR status badge -->
+              @if (task()!.prUrl) {
+                <div class="pr-status-badge" [style.border-color]="getPRStateInfo(task()!.prState || 'open').color">
+                  <mat-icon [style.color]="getPRStateInfo(task()!.prState || 'open').color">{{ getPRStateInfo(task()!.prState || 'open').icon }}</mat-icon>
+                  <a [href]="task()!.prUrl" target="_blank" rel="noopener">
+                    PR #{{ task()!.prNumber || '' }} — {{ getPRStateInfo(task()!.prState || 'open').label }}
+                  </a>
+                </div>
+              }
+
               <div class="implementation-actions">
                 <button mat-stroked-button color="primary"
                         (click)="goToImplementer.emit(task()!.implementAgentId!)">
@@ -326,7 +361,14 @@
                   View Agent Conversation
                 </button>
 
-                @if (task()!.worktreePath) {
+                @if (task()!.worktreePath && !task()!.prUrl) {
+                  <button mat-stroked-button
+                          [disabled]="loadingDiff"
+                          (click)="loadDiffPreview()">
+                    <mat-icon>difference</mat-icon>
+                    {{ loadingDiff ? 'Loading...' : 'Preview Diff' }}
+                  </button>
+
                   <button mat-flat-button color="primary"
                           [disabled]="prCreating"
                           (click)="createPR()">
@@ -342,10 +384,24 @@
                 </button>
               </div>
 
+              <!-- Diff preview panel -->
+              @if (showDiffPreview && diffSummary) {
+                <div class="diff-preview">
+                  <div class="diff-header">
+                    <mat-icon>difference</mat-icon>
+                    <strong>Diff Preview</strong>
+                    <button mat-icon-button (click)="showDiffPreview = false">
+                      <mat-icon>close</mat-icon>
+                    </button>
+                  </div>
+                  <pre class="diff-summary">{{ diffSummary }}</pre>
+                </div>
+              }
+
               @if (prUrl) {
                 <div class="pr-success">
                   <mat-icon>check_circle</mat-icon>
-                  <span>PR created: {{ prUrl }}</span>
+                  <span>PR created: <a [href]="prUrl" target="_blank" rel="noopener">{{ prUrl }}</a></span>
                 </div>
               }
               @if (prError) {

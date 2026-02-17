@@ -76,6 +76,8 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   recentDirectories: string[] = [];
   sidebarOpen = false;
   conversationPanelOpen = window.innerWidth > 768;
+  nonGitBannerVisible = false;
+  nonGitBannerDismissed = false;
 
   async ngOnInit(): Promise<void> {
     // Listen for permission requests from Copilot
@@ -95,6 +97,16 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     // Load current directory
     this.currentDirectory = await this.electronService.getCurrentDirectory();
     
+    // Check if the project is a git repo for non-git banner
+    if (this.currentDirectory) {
+      try {
+        const gitInfo = await this.electronService.checkGit(this.currentDirectory);
+        this.nonGitBannerVisible = !gitInfo.isGitRepo;
+      } catch {
+        this.nonGitBannerVisible = false;
+      }
+    }
+
     // Discover agents if directory is set (this auto-selects and starts session for first agent)
     if (this.currentDirectory) {
       await this.agentService.discoverAgents(this.currentDirectory);
@@ -145,6 +157,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     if (directory) {
       this.currentDirectory = directory;
       this.activeView = 'chat';
+      this.nonGitBannerDismissed = false;
       await this.agentService.discoverAgents(directory);
       // Load conversations for the auto-selected agent and select the most recent
       const agentId = this.agentService.selectedAgentId();
@@ -156,6 +169,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       if (this.statusBar) {
         this.statusBar.updateDirectory(directory);
       }
+      // Check if git repo
+      try {
+        const gitInfo = await this.electronService.checkGit(directory);
+        this.nonGitBannerVisible = !gitInfo.isGitRepo;
+      } catch { this.nonGitBannerVisible = false; }
     }
   }
 
@@ -163,6 +181,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     await this.electronService.setCurrentDirectory(dirPath);
     this.currentDirectory = dirPath;
     this.activeView = 'chat';
+    this.nonGitBannerDismissed = false;
     await this.agentService.discoverAgents(dirPath);
     // Load conversations for the auto-selected agent and select the most recent
     const agentId = this.agentService.selectedAgentId();
@@ -173,6 +192,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     if (this.statusBar) {
       this.statusBar.updateDirectory(dirPath);
     }
+    // Check if git repo
+    try {
+      const gitInfo = await this.electronService.checkGit(dirPath);
+      this.nonGitBannerVisible = !gitInfo.isGitRepo;
+    } catch { this.nonGitBannerVisible = false; }
   }
 
   getDirectoryName(dirPath: string): string {

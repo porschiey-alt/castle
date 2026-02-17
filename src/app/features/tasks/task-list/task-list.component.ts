@@ -79,6 +79,11 @@ export class TaskListComponent implements OnInit, OnDestroy {
         await this.electronService.deleteDiagnosisFile(data.filePath);
       }
     });
+
+    // Listen for worktree lifecycle events
+    this.electronService.onWorktreeLifecycle((event) => {
+      this.taskDetailComponent?.onLifecycleUpdate(event);
+    });
   }
 
   ngOnDestroy(): void {
@@ -188,8 +193,19 @@ export class TaskListComponent implements OnInit, OnDestroy {
     const body = task.description
       ? `## ${task.title}\n\n${task.description}`
       : task.title;
-    const result = await this.electronService.createPullRequest(task.worktreePath, task.title, body);
+    const settings = await this.electronService.getSettings();
+    const draft = settings?.worktreeDraftPR || false;
+    const result = await this.electronService.createPullRequest(task.worktreePath, task.title, body, draft);
     this.taskDetailComponent?.onPRResult(result);
+    // Reload task to get updated PR metadata
+    if (result.success) {
+      await this.taskService.loadTasks();
+    }
+  }
+
+  async onDiffLoadRequested(worktreePath: string): Promise<void> {
+    const result = await this.electronService.getWorktreeDiff(worktreePath);
+    this.taskDetailComponent?.onDiffLoaded(result);
   }
 
   private openConfirmDialog(data: ConfirmDialogData): Promise<boolean> {
