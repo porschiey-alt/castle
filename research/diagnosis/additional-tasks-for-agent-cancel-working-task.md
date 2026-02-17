@@ -4,277 +4,291 @@
 
 ### Symptoms
 
-When an agent is already working on a task in a worktree (Task A, running in
-branch/cwd A), and a new implementation task (Task B) is assigned to the same agent,
-the first task's ACP session is killed. The agent loses all in-progress work for
-Task A. The user expects both tasks to run concurrently in separate worktrees.
+After the initial fix in commit `497c482`, agents can now technically have multiple
+ACP sessions (one per worktree). However, the following problems remain:
+
+1. **Conversation A's output appears in Conversation B's chat.** When Task B starts,
+   its streaming output is shown in the UI as belonging to Conversation A, and
+   Conversation B (which was created for Task B) never receives its intended work.
+
+2. **Task A appears to be cancelled.** Although Task A's session is no longer killed,
+   its streaming state in the renderer is overwritten when Task B starts, making it
+   look cancelled from the user's perspective.
+
+3. **Task B's work never actually starts in its conversation.** The prompt is sent to
+   the correct session, but completion events save messages to the wrong conversation.
 
 ### Root Cause Analysis
 
-The entire system is built on a **1:1 agent-to-session mapping**. Every layer —
-from the session store, to the IPC handlers, to the conversation tracking, to the
-renderer — assumes each agent has at most one active session. This assumption
-collapses when worktrees enable parallel work.
+The initial fix (commit `497c482`) correctly addressed session creation — multiple
+sessions per agent can now coexist. However, **three shared-state systems still use
+agentId as their sole key**, creating collisions when two sessions exist for the same
+agent:
 
-#### Layer 1 (Primary): `ProcessManagerService.getSessionByAgentId()` returns a single session
+#### Problem 1: `activeConversationIds` is keyed by `agentId` — last write wins
 
-**File:** `src/main/services/process-manager.service.ts`, line 632
-
-```typescript
-getSessionByAgentId(agentId: string): SessionProcess | undefined {
-  for (const sessionProcess of this.sessions.values()) {
-    if (sessionProcess.session.agentId === agentId) {
-      return sessionProcess;          // ← returns FIRST match only
-    }
-  }
-  return undefined;
-}
-```
-
-The sessions map is keyed by `sessionId`, but this lookup scans by `agentId` and
-returns the first match. When an agent has two sessions (one per worktree), this
-method silently ignores the second.
-
-#### Layer 2 (Primary): Implementation handler explicitly kills the existing session
-
-**File:** `src/main/ipc/index.ts`, lines 706–712
-
-```typescript
-let sessionProcess = processManagerService.getSessionByAgentId(agentId);
-if (sessionProcess && worktreePath) {
-  // Existing session was started with a different cwd — kill and recreate
-  console.log('[Implementation] Restarting agent session for worktree cwd');
-  await processManagerService.stopSession(sessionProcess.session.id);
-  sessionProcess = undefined;
-}
-```
-
-When the implementation handler sees an existing session and a new `worktreePath`, it
-**kills the existing session** so it can create a new one with the worktree's cwd.
-This is the direct cause of the cancellation. The code assumes "there can only be one
-session per agent, so we must replace it."
-
-#### Layer 3: `startSession()` returns early if any session exists for the agent
-
-**File:** `src/main/services/process-manager.service.ts`, lines 82–86
-
-```typescript
-async startSession(agent: Agent, workingDirectory: string, ...): Promise<AgentSession> {
-  const existingSession = this.getSessionByAgentId(agent.id);
-  if (existingSession) {
-    return existingSession.session;    // ← refuses to create a second session
-  }
-  // ...
-}
-```
-
-Even if the implementation handler didn't kill the first session, `startSession()`
-would refuse to create a second one — it returns the existing session immediately.
-This means the new task would accidentally share the first task's session and cwd.
-
-#### Layer 4: `activeConversationIds` is keyed by agentId (1:1)
-
-**File:** `src/main/ipc/index.ts`, line 37
+**File:** `src/main/ipc/index.ts`, line 40
 
 ```typescript
 const activeConversationIds = new Map<string, string>();  // agentId → conversationId
 ```
 
-When the second task sets `activeConversationIds.set(agentId, conversationId)`, it
-**overwrites** the first task's conversation mapping. The first task's completion
-handler (in `subscribeToSession`) will then save its messages to the wrong
-conversation.
+**Collision sequence:**
 
-#### Layer 5: `sendMessage()` looks up session by agentId
+| Time | Event | `activeConversationIds[agentA]` |
+|------|-------|-------------------------------|
+| T1 | Task A starts, sets conversation A | `conv-A` |
+| T2 | Task B starts, sets conversation B | `conv-B` ← **overwrites** |
+| T3 | Task A completes, reads `activeConversationIds.get(agentId)` | gets `conv-B` ← **wrong!** |
 
-**File:** `src/main/services/process-manager.service.ts`, line 407
+**Line 787** (implementation handler):
+```typescript
+activeConversationIds.set(agentId, conversationId);  // Task B overwrites Task A
+```
 
-The `sendMessage(sessionId, content)` takes a `sessionId` parameter, so this method
-itself is fine. But the callers (chat handler at line 238, research handler at
-line 483) all resolve the session via `getSessionByAgentId(agentId)` — which would
-return an arbitrary session if multiple exist.
+**Line 170** (subscribeToSession completion handler):
+```typescript
+const conversationId = activeConversationIds.get(agentId);  // Task A reads Task B's ID
+```
 
-#### Layer 6: Renderer-side assumes one session per agent
+This causes Task A's completion messages to be saved to Conversation B's ID, and
+Task B's conversation to appear to contain Task A's output.
 
-The renderer's `AgentService`, `ChatService`, and `AgentWithSession` type all model
-a single `session?: AgentSession` per agent. The UI has no concept of multiple
-concurrent sessions for one agent.
+#### Problem 2: `subscribeToSession` completion handler uses shared conversation lookup
+
+**File:** `src/main/ipc/index.ts`, lines 167–189
+
+```typescript
+processManagerService.onComplete(sessionId, async (message) => {
+  const conversationId = activeConversationIds.get(agentId);  // ← agent-scoped, not session-scoped
+  // ... saves message to whichever conversation was last set for this agent
+});
+```
+
+Even though each session has its own `onComplete` listener (keyed by `sessionId`),
+the **closure captures `agentId`** and looks up the conversation at completion time.
+By then, the map has been overwritten by the second task.
+
+#### Problem 3: `SYNC_STREAMING_STARTED` broadcast clobbers renderer state
+
+**File:** `src/main/ipc/index.ts`, line 859
+
+```typescript
+broadcaster.send(IPC_CHANNELS.SYNC_STREAMING_STARTED, { agentId, conversationId });
+```
+
+**Renderer:** `src/app/core/services/chat.service.ts`, line 169–171
+
+```typescript
+this.electronService.streamingStarted$.subscribe(({ agentId, conversationId }) => {
+  this.setStreamingConversationId(agentId, conversationId ?? null);
+  this.setLoading(agentId, true);
+});
+```
+
+The renderer's `ChatService` stores streaming state **per agent** (`ChatState` is
+keyed by `agentId` in `chatStatesSignal`). When Task B fires
+`SYNC_STREAMING_STARTED`, it overwrites the `streamingConversationId` for that agent,
+which controls which conversation shows the streaming bubble. This makes Task A's
+streaming content disappear from its conversation and appear in Task B's.
+
+#### Problem 4: `CHAT_STREAM_CHUNK` broadcasts use agentId with no session discrimination
+
+**File:** `src/main/ipc/index.ts`, line 163–164
+
+```typescript
+processManagerService.onOutput(sessionId, (message) => {
+  broadcaster.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, message);
+});
+```
+
+The `StreamingMessage` contains `agentId` but no `conversationId` or `sessionId`.
+The renderer receives chunks from **both** sessions and applies them all to the
+single `streamingMessage` slot for that agent — they interleave and overwrite
+each other.
+
+#### Problem 5: `respondToPermission` and `getAcpSessionId` use first-match lookup
+
+**File:** `src/main/services/process-manager.service.ts`, lines 534–537
+
+```typescript
+respondToPermission(agentId: string, ...): void {
+  const sessionProcess = this.getSessionByAgentId(agentId);  // no workDir filter
+```
+
+Without a `workingDirectory` parameter, `getSessionByAgentId` returns the first
+session found for that agent. Permission responses may be routed to the wrong
+session.
 
 ### Suggested Fix
 
-The fix requires allowing multiple sessions per agent, keyed by a task-scoped
-identifier. The minimal change preserves the existing single-session behavior for
-chat conversations (which should continue to use one session per agent) while
-allowing the implementation handler to create independent additional sessions for
-worktree tasks.
+The core issue is that **conversation routing must be scoped by session, not agent**.
+The `activeConversationIds` map and all event broadcasting need to carry a session
+identifier so the correct conversation receives each session's output.
 
-#### 1. Allow `startSession()` to create multiple sessions per agent
+#### 1. Re-key `activeConversationIds` by sessionId
 
-**File:** `src/main/services/process-manager.service.ts`
-
-Remove the early-return guard and add an optional `taskId` to `SessionProcess` for
-disambiguation:
+**File:** `src/main/ipc/index.ts`
 
 ```diff
- interface SessionProcess {
-+  taskId?: string;               // Set for implementation sessions
-   session: AgentSession;
+-// Track active conversationId per agent for associating assistant replies
+-const activeConversationIds = new Map<string, string>();
++// Track active conversationId per session for associating assistant replies
++const activeConversationIds = new Map<string, string>();  // sessionId → conversationId
+```
+
+#### 2. Update `subscribeToSession` to use sessionId for conversation lookup
+
+The completion handler already receives `sessionId` as a closure parameter — use it:
+
+```diff
+  function subscribeToSession(sessionId: string, agentId: string): void {
+    // ...
+    processManagerService.onComplete(sessionId, async (message) => {
+-     const conversationId = activeConversationIds.get(agentId);
++     const conversationId = activeConversationIds.get(sessionId);
+      // ... rest unchanged
+    });
+
+    // ...
+    processManagerService.onTitleUpdate(sessionId, async ({ title }) => {
+-     const conversationId = activeConversationIds.get(agentId);
++     const conversationId = activeConversationIds.get(sessionId);
+      // ...
+    });
+
+-   const acpId = processManagerService.getAcpSessionId(agentId);
++   const acpId = processManagerService.getAcpSessionId(sessionId);
+    if (acpId) {
+-     const conversationId = activeConversationIds.get(agentId);
++     const conversationId = activeConversationIds.get(sessionId);
+      // ...
+    }
+  }
+```
+
+#### 3. Update all callers to set conversation by sessionId
+
+**Chat handler** (`CHAT_SEND_MESSAGE`, line 246):
+
+```diff
+    if (conversationId) {
+-     activeConversationIds.set(agentId, conversationId);
++     activeConversationIds.set(sessionProcess.session.id, conversationId);
+    } else {
+-     activeConversationIds.delete(agentId);
++     activeConversationIds.delete(sessionProcess.session.id);
+    }
+```
+
+Note: the session lookup happens before the message is sent, so move the
+`activeConversationIds.set()` call to **after** session resolution (after line 287).
+
+**Implementation handler** (`TASKS_RUN_IMPLEMENTATION`, line 786):
+
+```diff
+    if (conversationId) {
+-     activeConversationIds.set(agentId, conversationId);
++     activeConversationIds.set(sessionProcess.session.id, conversationId);
+    }
+```
+
+**Research handler** (`TASKS_RUN_RESEARCH`) — apply the same pattern.
+
+**Research review handler** (`TASKS_SUBMIT_RESEARCH_REVIEW`) — apply the same pattern.
+
+#### 4. Include `conversationId` in `CHAT_STREAM_CHUNK` messages
+
+The `StreamingMessage` already flows from the session through `onOutput`. Tag it
+with the conversation before broadcasting:
+
+```diff
+  processManagerService.onOutput(sessionId, (message) => {
++   // Tag streaming chunks with their target conversation
++   const conversationId = activeConversationIds.get(sessionId);
++   if (conversationId) {
++     (message as any).conversationId = conversationId;
++   }
+    broadcaster.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, message);
+  });
+```
+
+Then update the `StreamingMessage` type to include an optional `conversationId`:
+
+**File:** `src/shared/types/message.types.ts`
+
+```diff
+ export interface StreamingMessage {
+   id: string;
+   agentId: string;
++  conversationId?: string;
+   content: string;
    // ...
  }
 ```
 
+#### 5. Update the renderer to use conversationId for stream routing
+
+**File:** `src/app/core/services/chat.service.ts`
+
+The renderer should use `conversationId` from the streaming chunk to determine which
+conversation's state to update, rather than blindly using `agentId`:
+
 ```diff
-- async startSession(agent: Agent, workingDirectory: string, acpSessionIdToResume?: string): Promise<AgentSession> {
--   const existingSession = this.getSessionByAgentId(agent.id);
--   if (existingSession) {
--     return existingSession.session;
--   }
-+ async startSession(agent: Agent, workingDirectory: string, options?: { acpSessionIdToResume?: string; taskId?: string }): Promise<AgentSession> {
-+   // For task-scoped sessions, allow multiple per agent.
-+   // For general chat, reuse existing session (no taskId).
-+   if (!options?.taskId) {
-+     const existingSession = this.getSessionByAgentId(agent.id);
-+     if (existingSession && !existingSession.taskId) {
-+       return existingSession.session;
-+     }
+  this.electronService.streamChunk$.subscribe((chunk: StreamingMessage) => {
+-   this.updateStreamingMessage(chunk.agentId, chunk);
++   // Only apply streaming chunks to the currently viewed conversation
++   const state = this.currentChatState();
++   if (chunk.conversationId && state?.streamingConversationId
++       && chunk.conversationId !== state.streamingConversationId) {
++     return; // chunk belongs to a different conversation for this agent
 +   }
++   this.updateStreamingMessage(chunk.agentId, chunk);
 ```
 
-Store `taskId` on the new `SessionProcess`:
-
-```diff
-     const sessionProcess: SessionProcess = {
-+      taskId: options?.taskId,
-       session,
-       process: childProcess,
-       // ...
-     };
-```
-
-#### 2. Add a task-scoped session lookup
+#### 6. Fix `respondToPermission` to route by sessionId
 
 **File:** `src/main/services/process-manager.service.ts`
 
-```typescript
-getSessionByTask(agentId: string, taskId: string): SessionProcess | undefined {
-  for (const sp of this.sessions.values()) {
-    if (sp.session.agentId === agentId && sp.taskId === taskId) {
-      return sp;
+Change `respondToPermission` to accept a `sessionId` (or look up by the permission
+`requestId` which is tied to a specific session's event emitter). The simplest fix:
+broadcast the permission response to **all** sessions for the agent, since only the
+one that emitted the request will have a listener for that `requestId`:
+
+```diff
+  respondToPermission(agentId: string, requestId: string, optionId: string): void {
+-   const sessionProcess = this.getSessionByAgentId(agentId);
+-   if (sessionProcess) {
+-     sessionProcess.eventEmitter.emit('permissionResponse', { requestId, optionId });
++   // Broadcast to all sessions for this agent — only the requesting one
++   // will have a listener waiting for this specific requestId.
++   for (const sp of this.sessions.values()) {
++     if (sp.session.agentId === agentId) {
++       sp.eventEmitter.emit('permissionResponse', { requestId, optionId });
++     }
     }
   }
-  return undefined;
-}
 ```
-
-Keep the existing `getSessionByAgentId` but restrict it to non-task sessions (for
-chat):
-
-```diff
- getSessionByAgentId(agentId: string): SessionProcess | undefined {
-   for (const sessionProcess of this.sessions.values()) {
--    if (sessionProcess.session.agentId === agentId) {
-+    if (sessionProcess.session.agentId === agentId && !sessionProcess.taskId) {
-       return sessionProcess;
-     }
-   }
-   return undefined;
- }
-```
-
-#### 3. Rewrite the implementation handler to create independent sessions
-
-**File:** `src/main/ipc/index.ts`, lines 706–718
-
-Replace the stop-and-recreate logic with a task-scoped session creation:
-
-```diff
--   let sessionProcess = processManagerService.getSessionByAgentId(agentId);
--   if (sessionProcess && worktreePath) {
--     // Existing session was started with a different cwd — kill and recreate
--     console.log('[Implementation] Restarting agent session for worktree cwd');
--     await processManagerService.stopSession(sessionProcess.session.id);
--     sessionProcess = undefined;
--   }
--   if (!sessionProcess) {
--     const session = await processManagerService.startSession(agent, effectiveWorkDir);
--     subscribeToSession(session.id, agentId);
--     sessionProcess = processManagerService.getSessionByAgentId(agentId);
--     if (!sessionProcess) throw new Error('Failed to start implementation agent session');
--   }
-+   // Create a task-scoped session so this doesn't interfere with other work
-+   let sessionProcess = processManagerService.getSessionByTask(agentId, taskId);
-+   if (!sessionProcess) {
-+     const session = await processManagerService.startSession(agent, effectiveWorkDir, { taskId });
-+     subscribeToSession(session.id, agentId);
-+     sessionProcess = processManagerService.getSessionByTask(agentId, taskId);
-+     if (!sessionProcess) throw new Error('Failed to start implementation agent session');
-+   }
-```
-
-#### 4. Use session-scoped conversation tracking instead of agent-scoped
-
-**File:** `src/main/ipc/index.ts`
-
-Replace the `activeConversationIds` Map with a **session-scoped** map:
-
-```diff
--const activeConversationIds = new Map<string, string>();  // agentId → conversationId
-+const activeConversationIds = new Map<string, string>();  // sessionId → conversationId
-```
-
-Then update all callers to use `sessionId` as the key instead of `agentId`:
-- `subscribeToSession`: use `sessionId` to look up `conversationId`
-- Chat handler: set by `sessionProcess.session.id`
-- Research handler: set by `sessionProcess.session.id`
-- Implementation handler: set by `sessionProcess.session.id`
-
-This ensures each session's completion handler saves messages to the correct
-conversation regardless of how many sessions the agent has.
-
-#### 5. Update `cancelMessage()` to accept sessionId
-
-**File:** `src/main/services/process-manager.service.ts`
-
-The current `cancelMessage(agentId)` cancels by agent, which would be ambiguous with
-multiple sessions. Change it to cancel by `sessionId`:
-
-```diff
--async cancelMessage(agentId: string): Promise<void> {
--  const sessionProcess = this.getSessionByAgentId(agentId);
-+async cancelMessage(sessionId: string): Promise<void> {
-+  const sessionProcess = this.sessions.get(sessionId);
-   if (!sessionProcess) return;
-   // ... rest unchanged
-```
-
-Update the IPC caller to resolve the appropriate session first.
-
-### What does NOT need to change
-
-- **Chat handler** (`CHAT_SEND_MESSAGE`): The chat view still uses one session per
-  agent via the existing `getSessionByAgentId()` (which now excludes task sessions).
-  No change needed.
-- **Research handler** (`TASKS_RUN_RESEARCH`): Research uses the agent's main session
-  in the main cwd. This is fine as-is — research doesn't create worktrees.
-- **Renderer**: The renderer UI doesn't need to track multiple sessions. Implementation
-  tasks already have their own lifecycle tracking (`WORKTREE_LIFECYCLE` events). The
-  single-session chat view continues to show the agent's main chat session.
 
 ### Verification Steps
 
-1. **Concurrent tasks:** Assign two implementation tasks to the same agent. Verify both
-   tasks run to completion simultaneously in separate worktrees without either being
-   cancelled.
-2. **Chat while implementing:** While an agent is working on an implementation task,
-   send a chat message to the same agent. Verify the chat works independently and the
-   implementation continues.
-3. **Task completion:** Verify that when each implementation task completes, its commit
-   and PR are created from the correct worktree/branch (not cross-contaminated).
-4. **Conversation integrity:** Verify that each task's messages are saved to the correct
-   conversation (not mixed with another task's messages).
-5. **Cancel single task:** Cancel one implementation task. Verify the other task
-   continues running unaffected.
-6. **Research while implementing:** Start a research task on an agent that is also
-   implementing. Verify both run without interference.
-7. **Session cleanup:** After all tasks complete, verify there are no orphaned sessions
-   lingering in the process manager.
+1. **Concurrent tasks:** Assign Task A and Task B to the same agent with worktrees
+   enabled. Verify both run to completion, each in their own conversation, without
+   interfering.
+
+2. **Correct conversation routing:** While both tasks stream, open each conversation.
+   Verify each shows only its own task's output (no interleaving).
+
+3. **Completion saves to correct conversation:** After both tasks complete, check
+   the database. Verify each assistant message is saved with the correct
+   `conversationId`.
+
+4. **Permission routing:** If both sessions request permissions simultaneously,
+   verify each permission response reaches the correct session.
+
+5. **Chat while implementing:** Send a manual chat message while an implementation
+   task is running. Verify the chat uses its own session and conversation, and the
+   implementation continues unaffected.
+
+6. **Single-task regression:** Run a single implementation task. Verify it works
+   exactly as before (no regression from the session-scoped conversation changes).
