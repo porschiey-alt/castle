@@ -72,7 +72,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tailscaleEnabled: false,
   tailscalePort: 39417,
   worktreeEnabled: true,
-  worktreeDefaultBaseBranch: 'main',
+  worktreeDefaultBaseBranch: '',
   worktreeDraftPR: false,
   worktreeMaxConcurrent: 5,
   worktreeAutoInstallDeps: true,

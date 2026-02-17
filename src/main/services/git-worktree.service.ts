@@ -230,8 +230,16 @@ export class GitWorktreeService {
       return { worktreePath, branchName };
     }
 
-    // Determine the start point for the new branch
-    const startPoint = baseBranch || 'HEAD';
+    // Determine the start point for the new branch, validating the ref exists
+    let startPoint = 'HEAD';
+    if (baseBranch) {
+      try {
+        await gitExec(['rev-parse', '--verify', baseBranch], repoRoot);
+        startPoint = baseBranch;
+      } catch {
+        console.warn(`[GitWorktree] Base branch '${baseBranch}' not found, falling back to HEAD`);
+      }
+    }
 
     // Check if branch already exists
     let branchExists = false;
