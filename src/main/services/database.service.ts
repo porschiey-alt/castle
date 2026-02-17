@@ -13,6 +13,7 @@ import {
   DEFAULT_SETTINGS, 
   PermissionSet, 
   DEFAULT_PERMISSIONS,
+  PermissionGrant,
   WindowBounds 
 } from '../../shared/types';
 import { ChatMessage, MessageRole } from '../../shared/types/message.types';
@@ -230,6 +231,19 @@ export class DatabaseService {
 
     // Migration: create legacy conversations for existing messages without conversation_id
     this.migrateLegacyConversations();
+
+    // Permission grants table (scoped by project path + tool kind)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS permission_grants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_path TEXT NOT NULL,
+        tool_kind TEXT NOT NULL,
+        granted INTEGER NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(project_path, tool_kind)
+      )
+    `);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_permission_grants_project ON permission_grants(project_path)`);
   }
 
   private migrateLegacyConversations(): void {
@@ -324,6 +338,80 @@ export class DatabaseService {
 
     this.saveDatabase();
     return this.getSettings();
+  }
+
+  // ============ Permission Grant Methods ============
+
+  async getPermissionGrant(projectPath: string, toolKind: string): Promise<PermissionGrant | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const stmt = this.db.prepare(
+      `SELECT id, project_path, tool_kind, granted, created_at FROM permission_grants
+       WHERE project_path = ? AND tool_kind = ?`
+    );
+    stmt.bind([projectPath, toolKind]);
+    let grant: PermissionGrant | null = null;
+    if (stmt.step()) {
+      const row = stmt.getAsObject() as any;
+      grant = {
+        id: row.id,
+        projectPath: row.project_path,
+        toolKind: row.tool_kind,
+        granted: !!row.granted,
+        createdAt: row.created_at,
+      };
+    }
+    stmt.free();
+    return grant;
+  }
+
+  async getPermissionGrants(projectPath: string): Promise<PermissionGrant[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const stmt = this.db.prepare(
+      `SELECT id, project_path, tool_kind, granted, created_at FROM permission_grants
+       WHERE project_path = ? ORDER BY created_at DESC`
+    );
+    stmt.bind([projectPath]);
+    const grants: PermissionGrant[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as any;
+      grants.push({
+        id: row.id,
+        projectPath: row.project_path,
+        toolKind: row.tool_kind,
+        granted: !!row.granted,
+        createdAt: row.created_at,
+      });
+    }
+    stmt.free();
+    return grants;
+  }
+
+  async savePermissionGrant(projectPath: string, toolKind: string, granted: boolean): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db.run(
+      `INSERT INTO permission_grants (project_path, tool_kind, granted, created_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(project_path, tool_kind) DO UPDATE SET granted = excluded.granted, created_at = datetime('now')`,
+      [projectPath, toolKind, granted ? 1 : 0]
+    );
+    this.saveDatabase();
+  }
+
+  async deletePermissionGrant(grantId: number): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db.run(`DELETE FROM permission_grants WHERE id = ?`, [grantId]);
+    this.saveDatabase();
+  }
+
+  async deleteAllPermissionGrants(projectPath: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    this.db.run(`DELETE FROM permission_grants WHERE project_path = ?`, [projectPath]);
+    this.saveDatabase();
   }
 
   // ============ Message Methods ============

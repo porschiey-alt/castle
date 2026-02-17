@@ -11,7 +11,7 @@ import { Observable, Subject } from 'rxjs';
 import type { ElectronAPI } from '../../../preload/index';
 import type { Agent, AgentDiscoveryResult, AgentSession, CastleAgentConfig } from '../../../shared/types/agent.types';
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
-import type { AppSettings, PermissionSet, PermissionResponse } from '../../../shared/types/settings.types';
+import type { AppSettings, PermissionSet, PermissionResponse, PermissionGrant } from '../../../shared/types/settings.types';
 import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
 import type { Conversation, CreateConversationInput, UpdateConversationInput } from '../../../shared/types/conversation.types';
 import { ApiService } from './api.service';
@@ -176,8 +176,22 @@ export class ElectronService {
     return this.api.permissions.set(agentId, permission, granted);
   }
 
-  respondToPermissionRequest(requestId: string, agentId: string, optionId: string): void {
-    this.api.permissions.respond(requestId, agentId, optionId);
+  respondToPermissionRequest(requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string): void {
+    this.api.permissions.respond(requestId, agentId, optionId, optionKind, toolKind);
+  }
+
+  // ============ Permission Grant Methods ============
+
+  async getPermissionGrants(projectPath: string): Promise<PermissionGrant[]> {
+    return this.api.permissionGrants.get(projectPath);
+  }
+
+  async deletePermissionGrant(grantId: number): Promise<void> {
+    return this.api.permissionGrants.delete(grantId);
+  }
+
+  async deleteAllPermissionGrants(projectPath: string): Promise<void> {
+    return this.api.permissionGrants.deleteAll(projectPath);
   }
 
   // ============ Settings Methods ============

@@ -125,7 +125,15 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe((optionId: string) => {
       this.openPermissionDialogs.delete(request.requestId);
       if (optionId) {
-        this.electronService.respondToPermissionRequest(request.requestId, request.agentId, optionId);
+        // Find the option to get its kind for persistence
+        const selectedOption = request.options?.find((o: any) => o.optionId === optionId);
+        this.electronService.respondToPermissionRequest(
+          request.requestId,
+          request.agentId,
+          optionId,
+          selectedOption?.kind,
+          request.toolCall?.kind
+        );
       }
     });
   }
@@ -269,10 +277,14 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.conversationPanelOpen = !this.conversationPanelOpen;
   }
 
-  goToAgent(agentId: string): void {
+  goToAgent(agentId: string, newConversation = false): void {
     this.agentService.selectAgent(agentId);
     this.conversationService.loadConversations(agentId).then(() => {
-      this.conversationService.selectMostRecent();
+      if (newConversation) {
+        this.conversationService.selectConversation(null);
+      } else {
+        this.conversationService.selectMostRecent();
+      }
     });
     this.activeView = 'chat';
     this.closeSidebar();

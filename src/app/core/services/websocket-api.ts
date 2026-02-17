@@ -8,7 +8,7 @@
 import type { ElectronAPI } from '../../../preload/index';
 import type { AgentDiscoveryResult, AgentSession, CastleAgentConfig } from '../../../shared/types/agent.types';
 import type { ChatMessage, StreamingMessage } from '../../../shared/types/message.types';
-import type { AppSettings, PermissionSet } from '../../../shared/types/settings.types';
+import type { AppSettings, PermissionSet, PermissionGrant } from '../../../shared/types/settings.types';
 import type { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
 import type { Conversation, CreateConversationInput, UpdateConversationInput } from '../../../shared/types/conversation.types';
 import { IPC_CHANNELS } from '../../../shared/types/ipc.types';
@@ -159,9 +159,18 @@ export class WebSocketAPI implements ElectronAPI {
       this.invoke(IPC_CHANNELS.PERMISSION_SET, { agentId, permission, granted }),
     onRequest: (callback: (request: unknown) => void): (() => void) =>
       this.on(IPC_CHANNELS.PERMISSION_REQUEST, callback),
-    respond: (requestId: string, agentId: string, optionId: string): void => {
-      this.invoke(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, agentId, optionId });
+    respond: (requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string): void => {
+      this.invoke(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, agentId, optionId, optionKind, toolKind });
     },
+  };
+
+  permissionGrants = {
+    get: (projectPath: string): Promise<PermissionGrant[]> =>
+      this.invoke(IPC_CHANNELS.PERMISSION_GRANTS_GET, { projectPath }),
+    delete: (grantId: number): Promise<void> =>
+      this.invoke(IPC_CHANNELS.PERMISSION_GRANTS_DELETE, { grantId }),
+    deleteAll: (projectPath: string): Promise<void> =>
+      this.invoke(IPC_CHANNELS.PERMISSION_GRANTS_DELETE_ALL, { projectPath }),
   };
 
   settings = {

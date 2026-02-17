@@ -5,7 +5,7 @@
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/types/ipc.types';
-import { AppSettings, PermissionSet, PermissionResponse } from '../shared/types/settings.types';
+import { AppSettings, PermissionSet, PermissionResponse, PermissionGrant } from '../shared/types/settings.types';
 import { Agent, AgentDiscoveryResult, AgentSession, CastleAgentConfig } from '../shared/types/agent.types';
 import { ChatMessage, StreamingMessage } from '../shared/types/message.types';
 import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../shared/types/task.types';
@@ -45,7 +45,14 @@ export interface ElectronAPI {
     get: (agentId: string) => Promise<PermissionSet>;
     set: (agentId: string, permission: keyof PermissionSet, granted: boolean) => Promise<void>;
     onRequest: (callback: (request: unknown) => void) => () => void;
-    respond: (requestId: string, agentId: string, optionId: string) => void;
+    respond: (requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string) => void;
+  };
+
+  // Permission grant management
+  permissionGrants: {
+    get: (projectPath: string) => Promise<PermissionGrant[]>;
+    delete: (grantId: number) => Promise<void>;
+    deleteAll: (projectPath: string) => Promise<void>;
   };
 
   // Settings operations
@@ -164,8 +171,17 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on(IPC_CHANNELS.PERMISSION_REQUEST, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.PERMISSION_REQUEST, handler);
     },
-    respond: (requestId: string, agentId: string, optionId: string) =>
-      ipcRenderer.send(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, agentId, optionId })
+    respond: (requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string) =>
+      ipcRenderer.send(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, agentId, optionId, optionKind, toolKind })
+  },
+
+  permissionGrants: {
+    get: (projectPath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PERMISSION_GRANTS_GET, { projectPath }),
+    delete: (grantId: number) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PERMISSION_GRANTS_DELETE, { grantId }),
+    deleteAll: (projectPath: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.PERMISSION_GRANTS_DELETE_ALL, { projectPath }),
   },
 
   settings: {

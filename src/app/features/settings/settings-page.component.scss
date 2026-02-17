@@ -387,6 +387,93 @@
   }
 }
 
+// Permission grants
+.empty-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 13px;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.grants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  transition: background-color 0.15s;
+
+  &:hover {
+    background: var(--bg-secondary);
+  }
+}
+
+.grant-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.grant-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.grant-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grant-kind {
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.grant-status {
+  font-size: 12px;
+
+  &.allowed {
+    color: #22c55e;
+  }
+
+  &.rejected {
+    color: #ef4444;
+  }
+}
+
+.revoke-all-btn {
+  margin-top: 12px;
+  color: #ef4444;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    margin-right: 4px;
+  }
+}
+
 // About section
 .about-card {
   display: flex;

@@ -12,11 +12,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatSelectModule } from '@angular/material/select';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { ThemeService, CastleTheme } from '../../core/services/theme.service';
 import { ElectronService } from '../../core/services/electron.service';
 import { APP_NAME, APP_VERSION, DEFAULT_TAILSCALE_PORT } from '../../../shared/constants';
-import type { ThemeCustomization } from '../../../shared/types/settings.types';
+import type { ThemeCustomization, PermissionGrant } from '../../../shared/types/settings.types';
 import { getContrastingTextColor, contrastRatio } from '../../shared/utils/color.utils';
 
 @Component({
@@ -32,6 +33,7 @@ import { getContrastingTextColor, contrastRatio } from '../../shared/utils/color
     MatInputModule,
     MatDividerModule,
     MatSelectModule,
+    MatTooltipModule,
   ],
   templateUrl: './settings-page.component.html',
   styleUrl: './settings-page.component.scss'
@@ -68,6 +70,10 @@ export class SettingsPageComponent implements OnInit {
   tailscaleError: string | null = null;
   saving = false;
 
+  // Permission grants state
+  permissionGrants: PermissionGrant[] = [];
+  currentProjectPath: string | null = null;
+
   async ngOnInit(): Promise<void> {
     const settings = await this.electronService.getSettings();
     if (settings) {
@@ -99,6 +105,12 @@ export class SettingsPageComponent implements OnInit {
 
     const status = await this.electronService.getTailscaleStatus();
     this.tailscaleRunning = status.running;
+
+    // Load permission grants for current project
+    this.currentProjectPath = await this.electronService.getCurrentDirectory();
+    if (this.currentProjectPath) {
+      this.permissionGrants = await this.electronService.getPermissionGrants(this.currentProjectPath);
+    }
   }
 
   setTheme(themeId: string): void {
@@ -191,5 +203,29 @@ export class SettingsPageComponent implements OnInit {
     this.gradientEndColor = '#1a1a2e';
     this.gradientDirection = 'to bottom';
     this.themeService.applyCustomization({});
+  }
+
+  async deleteGrant(grant: PermissionGrant): Promise<void> {
+    await this.electronService.deletePermissionGrant(grant.id);
+    this.permissionGrants = this.permissionGrants.filter(g => g.id !== grant.id);
+  }
+
+  async deleteAllGrants(): Promise<void> {
+    if (!this.currentProjectPath) return;
+    await this.electronService.deleteAllPermissionGrants(this.currentProjectPath);
+    this.permissionGrants = [];
+  }
+
+  getGrantIcon(toolKind: string): string {
+    switch (toolKind) {
+      case 'read': return 'visibility';
+      case 'edit': return 'edit';
+      case 'delete': return 'delete';
+      case 'move': return 'drive_file_move';
+      case 'search': return 'search';
+      case 'execute': return 'terminal';
+      case 'fetch': return 'cloud_download';
+      default: return 'build';
+    }
   }
 }

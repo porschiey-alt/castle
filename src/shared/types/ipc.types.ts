@@ -4,7 +4,7 @@
 
 import { Agent, AgentDiscoveryResult, AgentSession, CastleAgentConfig } from './agent.types';
 import { ChatMessage, StreamingMessage } from './message.types';
-import { AppSettings, PermissionRequest, PermissionResponse, PermissionSet } from './settings.types';
+import { AppSettings, PermissionRequest, PermissionResponse, PermissionSet, PermissionGrant } from './settings.types';
 import { Task, TaskLabel, CreateTaskInput, UpdateTaskInput, ResearchComment } from './task.types';
 import { Conversation, CreateConversationInput, UpdateConversationInput } from './conversation.types';
 
@@ -37,6 +37,9 @@ export const IPC_CHANNELS = {
   PERMISSION_RESPONSE: 'permission:response',
   PERMISSION_GET: 'permission:get',
   PERMISSION_SET: 'permission:set',
+  PERMISSION_GRANTS_GET: 'permission:grants:get',
+  PERMISSION_GRANTS_DELETE: 'permission:grants:delete',
+  PERMISSION_GRANTS_DELETE_ALL: 'permission:grants:deleteAll',
   
   // Settings operations
   SETTINGS_GET: 'settings:get',
@@ -174,6 +177,18 @@ export interface IPCPayloads {
   };
   [IPC_CHANNELS.PERMISSION_SET]: {
     request: { agentId: string; permission: keyof PermissionSet; granted: boolean };
+    response: void;
+  };
+  [IPC_CHANNELS.PERMISSION_GRANTS_GET]: {
+    request: { projectPath: string };
+    response: PermissionGrant[];
+  };
+  [IPC_CHANNELS.PERMISSION_GRANTS_DELETE]: {
+    request: { grantId: number };
+    response: void;
+  };
+  [IPC_CHANNELS.PERMISSION_GRANTS_DELETE_ALL]: {
+    request: { projectPath: string };
     response: void;
   };
   

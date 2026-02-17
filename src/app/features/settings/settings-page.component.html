@@ -247,6 +247,55 @@
 
     <mat-divider />
 
+    <!-- Permissions Section -->
+    <section class="settings-section">
+      <h3>
+        <mat-icon>security</mat-icon>
+        Permissions
+      </h3>
+      <p class="section-description">
+        Manage persisted permission grants for the current project.
+        These are saved when you select "Always allow" or "Always reject" on a permission prompt.
+      </p>
+
+      @if (!currentProjectPath) {
+        <div class="empty-state">
+          <mat-icon>folder_off</mat-icon>
+          <span>No project open. Open a project to manage its permissions.</span>
+        </div>
+      } @else if (permissionGrants.length === 0) {
+        <div class="empty-state">
+          <mat-icon>check_circle</mat-icon>
+          <span>No persisted permission grants for this project.</span>
+        </div>
+      } @else {
+        <div class="grants-list">
+          @for (grant of permissionGrants; track grant.id) {
+            <div class="grant-row">
+              <div class="grant-info">
+                <mat-icon class="grant-icon">{{ getGrantIcon(grant.toolKind) }}</mat-icon>
+                <div class="grant-details">
+                  <span class="grant-kind">{{ grant.toolKind }}</span>
+                  <span class="grant-status" [class.allowed]="grant.granted" [class.rejected]="!grant.granted">
+                    {{ grant.granted ? 'Always allowed' : 'Always rejected' }}
+                  </span>
+                </div>
+              </div>
+              <button mat-icon-button (click)="deleteGrant(grant)" matTooltip="Revoke">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
+        </div>
+        <button mat-stroked-button class="revoke-all-btn" (click)="deleteAllGrants()">
+          <mat-icon>delete_sweep</mat-icon>
+          Revoke All
+        </button>
+      }
+    </section>
+
+    <mat-divider />
+
     <!-- About Section -->
     <section class="settings-section about-section">
       <h3>

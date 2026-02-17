@@ -75,3 +75,11 @@ export const DEFAULT_PERMISSIONS: PermissionSet = {
   networkAccess: false,
   gitOperations: false
 };
+
+export interface PermissionGrant {
+  id: number;
+  projectPath: string;
+  toolKind: string;
+  granted: boolean;
+  createdAt: string;
+}
