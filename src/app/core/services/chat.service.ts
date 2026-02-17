@@ -23,6 +23,8 @@ interface ChatState {
   previousContentLength: number;
   /** Number of tool calls as of last chunk – used to detect tool-call updates */
   previousToolCallsCount: number;
+  /** Set when a non-thinking update arrives; consumed to clear thinking on next thought */
+  thinkingReadyToReplace: boolean;
 }
 
 function defaultChatState(): ChatState {
@@ -35,7 +37,8 @@ function defaultChatState(): ChatState {
     accumulatedThinking: '',
     previousThinkingLength: 0,
     previousContentLength: 0,
-    previousToolCallsCount: 0
+    previousToolCallsCount: 0,
+    thinkingReadyToReplace: false
   };
 }
 
@@ -301,18 +304,20 @@ export class ChatService {
     const prevLen = currentState.previousThinkingLength;
     const hasNewThinking = fullThinking.length > prevLen;
 
-    // Keep accumulated thinking visible even when non-thinking chunks arrive.
-    // Only reset when a new thinking block starts after a non-thinking gap.
+    // Detect non-thinking activity (content or tool-call changes)
+    const contentChanged = contentLength !== currentState.previousContentLength;
+    const toolCallsChanged = toolCallsCount !== currentState.previousToolCallsCount;
+
+    // Mark thinking as ready-to-replace when a non-thinking update arrives
+    let readyToReplace = currentState.thinkingReadyToReplace || contentChanged || toolCallsChanged;
+
     let accumulatedThinking = currentState.accumulatedThinking;
 
     if (hasNewThinking) {
-      const contentChanged = contentLength !== currentState.previousContentLength;
-      const toolCallsChanged = toolCallsCount !== currentState.previousToolCallsCount;
-      const hadNonThinkingGap = contentChanged || toolCallsChanged;
-
-      if (hadNonThinkingGap) {
+      if (readyToReplace) {
         // New thinking block after tool calls / content — start fresh
         accumulatedThinking = fullThinking.substring(prevLen);
+        readyToReplace = false;
       } else {
         accumulatedThinking += fullThinking.substring(prevLen);
       }
@@ -324,7 +329,8 @@ export class ChatService {
       accumulatedThinking,
       previousThinkingLength: fullThinking.length,
       previousContentLength: contentLength,
-      previousToolCallsCount: toolCallsCount
+      previousToolCallsCount: toolCallsCount,
+      thinkingReadyToReplace: readyToReplace
     });
     
     this.chatStatesSignal.set(states);
@@ -345,7 +351,8 @@ export class ChatService {
         accumulatedThinking: '',
         previousThinkingLength: 0,
         previousContentLength: 0,
-        previousToolCallsCount: 0
+        previousToolCallsCount: 0,
+        thinkingReadyToReplace: false
       });
       this.chatStatesSignal.set(states);
     }
