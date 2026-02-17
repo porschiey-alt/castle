@@ -15,6 +15,9 @@ import { TailscaleServerService } from './services/tailscale-server.service';
 import { WsBridgeService } from './services/ws-bridge.service';
 import { EventBroadcaster } from './services/event-broadcaster';
 import { IPC_CHANNELS } from '../shared/types/ipc.types';
+import { createLogger } from './services/logger.service';
+
+const log = createLogger('App');
 
 // On Windows, refresh PATH from the registry so tools installed after
 // the parent shell was opened (e.g. gh, git) are discoverable.
@@ -49,6 +52,7 @@ let broadcaster: EventBroadcaster | null = null;
 
 /** Start (or restart) the Tailscale HTTP + WebSocket server */
 async function startTailscaleServer(port: number): Promise<void> {
+  log.info(`Starting Tailscale server on port ${port}`);
   // Stop existing instances
   if (wsBridge) { wsBridge.stop(); wsBridge = null; }
   if (tailscaleServer) { tailscaleServer.stop(); tailscaleServer = null; }
@@ -64,21 +68,24 @@ async function startTailscaleServer(port: number): Promise<void> {
       broadcaster.setRemoteSink(wsBridge);
     }
   }
+  log.info(`Tailscale server started successfully on port ${port}`);
 }
 
 /** Stop the Tailscale HTTP + WebSocket server */
 function stopTailscaleServer(): void {
+  log.info('Stopping Tailscale server');
   if (wsBridge) { wsBridge.stop(); wsBridge = null; }
   if (tailscaleServer) { tailscaleServer.stop(); tailscaleServer = null; }
   if (broadcaster) { broadcaster.setRemoteSink(null); }
 }
 
 async function initializeServices(): Promise<void> {
-  console.log('Initializing Castle services...');
+  log.info('Initializing Castle services...');
   
   // Initialize database
   databaseService = new DatabaseService();
   await databaseService.initialize();
+  log.info('Database service initialized');
   
   // Initialize other services
   directoryService = new DirectoryService(databaseService);
@@ -86,7 +93,7 @@ async function initializeServices(): Promise<void> {
   processManagerService = new ProcessManagerService();
   gitWorktreeService = new GitWorktreeService();
   
-  console.log('Services initialized successfully');
+  log.info('All services initialized successfully');
 }
 
 async function createWindow(): Promise<void> {
@@ -173,7 +180,7 @@ app.whenReady().then(async () => {
       try {
         await startTailscaleServer(settings.tailscalePort || 39417);
       } catch (error) {
-        console.error('Failed to start Tailscale server:', error);
+        log.error('Failed to start Tailscale server', error);
       }
     }
 
@@ -181,6 +188,7 @@ app.whenReady().then(async () => {
     try {
       const currentDir = directoryService.getCurrentDirectory();
       if (currentDir && gitWorktreeService.isGitRepo(currentDir)) {
+        log.info('Cleaning up orphaned worktrees on startup');
         const allTasks = await databaseService.getTasks();
         const activeTaskIds = new Set(
           allTasks
@@ -190,7 +198,7 @@ app.whenReady().then(async () => {
         await gitWorktreeService.cleanupOrphans(currentDir, activeTaskIds);
       }
     } catch (error) {
-      console.warn('Worktree orphan cleanup failed:', error);
+      log.warn('Worktree orphan cleanup failed', error);
     }
 
     // Periodic git worktree prune (every 30 minutes)
@@ -212,7 +220,7 @@ app.whenReady().then(async () => {
       }
     });
   } catch (error) {
-    console.error('Failed to initialize Castle:', error);
+    log.error('Failed to initialize Castle', error);
     dialog.showErrorBox('Initialization Error', 
       `Failed to start Castle: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -221,6 +229,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  log.info('All windows closed, stopping agent sessions');
   // Stop all agent sessions
   if (processManagerService) {
     processManagerService.stopAllSessions();
@@ -233,6 +242,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async () => {
+  log.info('Application quitting, cleaning up resources');
   // Cleanup
   if (processManagerService) {
     processManagerService.stopAllSessions();
@@ -242,9 +252,9 @@ app.on('before-quit', async () => {
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
+  log.error('Uncaught exception', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled rejection at:', promise, 'reason:', reason);
+  log.error('Unhandled rejection', { promise, reason });
 });

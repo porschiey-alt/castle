@@ -13,6 +13,7 @@ import { ChatService } from '../../core/services/chat.service';
 import { AgentService } from '../../core/services/agent.service';
 import { ConversationService } from '../../core/services/conversation.service';
 import { TaskService } from '../../core/services/task.service';
+import { LoggerService } from '../../core/services/logger.service';
 import type { AgentWithSession } from '../../../shared/types/agent.types';
 import type { Task } from '../../../shared/types/task.types';
 
@@ -33,6 +34,7 @@ export class ChatComponent implements OnInit, OnChanges {
   private agentService = inject(AgentService);
   private conversationService = inject(ConversationService);
   private taskService = inject(TaskService);
+  private logger = inject(LoggerService);
 
   // Input
   agent = input.required<AgentWithSession>();
@@ -97,7 +99,7 @@ export class ChatComponent implements OnInit, OnChanges {
     try {
       await this.chatService.sendMessage(agentId, content);
     } catch (error) {
-      console.error('Failed to send message:', error);
+      this.logger.error('Chat', 'Failed to send message', error);
     }
   }
 
@@ -106,7 +108,7 @@ export class ChatComponent implements OnInit, OnChanges {
     try {
       await this.chatService.cancelMessage(agentId);
     } catch (error) {
-      console.error('Failed to cancel message:', error);
+      this.logger.error('Chat', 'Failed to cancel message', error);
     }
   }
 }

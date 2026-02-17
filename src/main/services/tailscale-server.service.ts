@@ -9,6 +9,9 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
+import { createLogger } from './logger.service';
+
+const log = createLogger('TailscaleServer');
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -36,10 +39,10 @@ export class TailscaleServerService extends EventEmitter {
     this.staticDir = path.join(__dirname, '../../renderer/browser');
     // When the Angular dev server is running, proxy to it instead of serving static files
     this.devServerUrl = process.env['ELECTRON_DEV_SERVER'] === 'true' ? 'http://localhost:4200' : null;
-    console.log(`[TailscaleServer] Static dir: ${this.staticDir}`);
-    console.log(`[TailscaleServer] Index exists: ${fs.existsSync(path.join(this.staticDir, 'index.html'))}`);
+    log.info(`Static dir: ${this.staticDir}`);
+    log.info(`Index exists: ${fs.existsSync(path.join(this.staticDir, 'index.html'))}`);
     if (this.devServerUrl) {
-      console.log(`[TailscaleServer] Dev mode: proxying to ${this.devServerUrl}`);
+      log.info(`Dev mode: proxying to ${this.devServerUrl}`);
     }
   }
 
@@ -50,12 +53,12 @@ export class TailscaleServerService extends EventEmitter {
       });
 
       this.server.on('error', (err) => {
-        console.error('[TailscaleServer] Error:', err);
+        log.error('Server error', err);
         reject(err);
       });
 
       this.server.listen(this.port, '0.0.0.0', () => {
-        console.log(`[TailscaleServer] Listening on http://0.0.0.0:${this.port}`);
+        log.info(`Listening on http://0.0.0.0:${this.port}`);
         resolve();
       });
     });

@@ -5,6 +5,7 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { ElectronService } from './electron.service';
 import { AgentService } from './agent.service';
+import { LoggerService } from './logger.service';
 import type { Conversation, CreateConversationInput, UpdateConversationInput } from '../../../shared/types/conversation.types';
 
 @Injectable({
@@ -13,6 +14,7 @@ import type { Conversation, CreateConversationInput, UpdateConversationInput } f
 export class ConversationService {
   private electronService = inject(ElectronService);
   private agentService = inject(AgentService);
+  private logger = inject(LoggerService);
 
   // State signals
   private conversationsSignal = signal<Map<string, Conversation[]>>(new Map());
@@ -56,6 +58,7 @@ export class ConversationService {
    * Create a new conversation
    */
   async createConversation(agentId: string, title?: string, taskId?: string): Promise<Conversation | null> {
+    this.logger.info('Conversation', `Creating conversation for agent ${agentId}`, { title, taskId });
     const conversation = await this.electronService.createConversation({
       agentId,
       title,
@@ -90,6 +93,7 @@ export class ConversationService {
    * Delete a conversation
    */
   async deleteConversation(conversationId: string): Promise<void> {
+    this.logger.info('Conversation', `Deleting conversation ${conversationId}`);
     const wasActive = this.activeConversationIdSignal() === conversationId;
     await this.electronService.deleteConversation(conversationId);
     

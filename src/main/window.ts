@@ -4,6 +4,7 @@
 
 import { BrowserWindow, shell } from 'electron';
 import * as path from 'path';
+import { createLogger } from './services/logger.service';
 import { 
   DEFAULT_WINDOW_WIDTH, 
   DEFAULT_WINDOW_HEIGHT, 
@@ -11,6 +12,8 @@ import {
   MIN_WINDOW_HEIGHT,
   APP_NAME 
 } from '../shared/constants';
+
+const log = createLogger('Window');
 
 export interface WindowOptions {
   width?: number;
@@ -31,6 +34,7 @@ export class WindowManager {
   createMainWindow(): BrowserWindow {
     // Check if we should use dev server (only when ELECTRON_DEV_SERVER is set)
     const useDevServer = process.env['ELECTRON_DEV_SERVER'] === 'true';
+    log.info(`Creating main window (devServer=${useDevServer})`);
     
     this.mainWindow = new BrowserWindow({
       width: this.options.width || DEFAULT_WINDOW_WIDTH,
@@ -64,13 +68,14 @@ export class WindowManager {
     // Load the app
     if (useDevServer) {
       // Development with hot reload: load from Angular dev server
+      log.info('Loading app from dev server: http://localhost:4200');
       this.mainWindow.loadURL('http://localhost:4200');
       // Open DevTools in development
       this.mainWindow.webContents.openDevTools();
     } else {
       // Production or dev without hot reload: load from built files
       const indexPath = path.join(__dirname, '../renderer/browser/index.html');
-      console.log('Loading app from:', indexPath);
+      log.info(`Loading app from file: ${indexPath}`);
       this.mainWindow.loadFile(indexPath);
     }
 
@@ -82,6 +87,7 @@ export class WindowManager {
 
     // Handle window closed
     this.mainWindow.on('closed', () => {
+      log.info('Main window closed');
       this.mainWindow = null;
     });
 

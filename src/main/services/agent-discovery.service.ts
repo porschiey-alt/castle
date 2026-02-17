@@ -8,6 +8,9 @@ import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent, AgentDiscoveryResult, CastleAgentConfig } from '../../shared/types/agent.types';
 import { AGENTS_MD_FILENAMES, BUILTIN_AGENT_COLORS } from '../../shared/constants';
+import { createLogger } from './logger.service';
+
+const log = createLogger('AgentDiscovery');
 
 /** Generate a deterministic UUID v4-format ID from a stable key (name + source) */
 function stableAgentId(name: string, source: string): string {
@@ -107,14 +110,14 @@ export class AgentDiscoveryService {
   private async parseBuiltinAgents(): Promise<Agent[]> {
     try {
       if (!fs.existsSync(this.builtinAgentsPath)) {
-        console.log('No builtin agents.md found, using defaults');
+        log.info('No builtin agents.md found, using defaults');
         return this.getDefaultAgents();
       }
 
       const content = fs.readFileSync(this.builtinAgentsPath, 'utf-8');
       return this.parseAgentsMd(content, 'builtin');
     } catch (error) {
-      console.error('Error parsing builtin agents:', error);
+      log.error('Error parsing builtin agents', error);
       return this.getDefaultAgents();
     }
   }
@@ -131,7 +134,7 @@ export class AgentDiscoveryService {
           const content = fs.readFileSync(filePath, 'utf-8');
           return this.parseAgentsMd(content, 'workspace');
         } catch (error) {
-          console.error(`Error parsing ${filePath}:`, error);
+          log.error(`Error parsing ${filePath}`, error);
         }
       }
     }
@@ -170,7 +173,7 @@ export class AgentDiscoveryService {
           }
         }
       } catch (error) {
-        console.error('Error parsing Castle config:', error);
+        log.error('Error parsing Castle config', error);
       }
     }
 

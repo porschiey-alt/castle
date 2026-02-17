@@ -4,6 +4,7 @@
 
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { ElectronService } from './electron.service';
+import { LoggerService } from './logger.service';
 import type { Task, TaskLabel, TaskState, TaskKind, CreateTaskInput, UpdateTaskInput, ResearchComment } from '../../../shared/types/task.types';
 
 @Injectable({
@@ -11,6 +12,7 @@ import type { Task, TaskLabel, TaskState, TaskKind, CreateTaskInput, UpdateTaskI
 })
 export class TaskService {
   private electronService = inject(ElectronService);
+  private logger = inject(LoggerService);
 
   // State
   private tasksSignal = signal<Task[]>([]);
@@ -150,6 +152,7 @@ export class TaskService {
   }
 
   async createTask(input: CreateTaskInput): Promise<Task | null> {
+    this.logger.info('Task', `Creating task: "${input.title}", kind=${input.kind || 'feature'}`);
     const task = await this.electronService.createTask(input);
     if (task) {
       // Dedup — the SYNC_TASKS_CHANGED broadcast may have already added it
@@ -172,6 +175,7 @@ export class TaskService {
   }
 
   async deleteTask(taskId: string): Promise<void> {
+    this.logger.info('Task', `Deleting task ${taskId}`);
     await this.electronService.deleteTask(taskId);
     this.tasksSignal.update(tasks => tasks.filter(t => t.id !== taskId));
     if (this.selectedTaskIdSignal() === taskId) {
@@ -193,6 +197,7 @@ export class TaskService {
   }
 
   async runResearch(taskId: string, agentId: string, outputPath?: string, conversationId?: string): Promise<void> {
+    this.logger.info('Task', `Running research: taskId=${taskId}, agentId=${agentId}`);
     await this.electronService.runTaskResearch(taskId, agentId, outputPath, conversationId);
     // Mark the task as having a research agent
     this.tasksSignal.update(tasks =>
@@ -201,6 +206,7 @@ export class TaskService {
   }
 
   async runImplementation(taskId: string, agentId: string, conversationId?: string): Promise<void> {
+    this.logger.info('Task', `Running implementation: taskId=${taskId}, agentId=${agentId}`);
     await this.electronService.runTaskImplementation(taskId, agentId, conversationId);
     // Mark the task as having an implementation agent
     this.tasksSignal.update(tasks =>

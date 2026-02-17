@@ -11,8 +11,10 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createLogger } from './logger.service';
 
 const execFileAsync = promisify(execFile);
+const log = createLogger('GitWorktree');
 
 export interface WorktreeInfo {
   path: string;
@@ -62,6 +64,7 @@ export interface PRCreateOptions {
 /** GitHub provider using `gh` CLI */
 class GitHubProvider implements PullRequestProvider {
   readonly name = 'github';
+  private readonly log = createLogger('GitHubProvider');
 
   matchesRemote(remoteUrl: string): boolean {
     return /github\.com/i.test(remoteUrl);
@@ -70,15 +73,13 @@ class GitHubProvider implements PullRequestProvider {
   async isAuthenticated(cwd: string): Promise<boolean> {
     try {
       const { stdout, stderr } = await execFileAsync('gh', ['auth', 'status'], { cwd });
-      console.log('[GitHubProvider] gh auth status OK:', stdout.trim());
+      this.log.info('gh auth status OK', stdout.trim());
       return true;
     } catch (error: any) {
-      console.warn('[GitHubProvider] gh auth status FAILED:', {
+      this.log.warn('gh auth status FAILED', {
         message: error.message,
         stderr: error.stderr,
-        stdout: error.stdout,
         code: error.code,
-        path: process.env.PATH?.split(';').filter((p: string) => /github|gh/i.test(p)),
       });
       return false;
     }
@@ -234,7 +235,7 @@ export class GitWorktreeService {
 
     // If worktree already exists, return it
     if (fs.existsSync(worktreePath)) {
-      console.log(`[GitWorktree] Worktree already exists: ${worktreePath}`);
+      log.info(`Worktree already exists: ${worktreePath}`);
       return { worktreePath, branchName };
     }
 
@@ -245,7 +246,7 @@ export class GitWorktreeService {
         await gitExec(['rev-parse', '--verify', baseBranch], repoRoot);
         startPoint = baseBranch;
       } catch {
-        console.warn(`[GitWorktree] Base branch '${baseBranch}' not found, falling back to HEAD`);
+        log.warn(`Base branch '${baseBranch}' not found, falling back to HEAD`);
       }
     }
 
@@ -271,7 +272,7 @@ export class GitWorktreeService {
       } catch { /* non-fatal */ }
     }
 
-    console.log(`[GitWorktree] Created worktree: ${worktreePath} on branch ${branchName}`);
+    log.info(`Created worktree: ${worktreePath} on branch ${branchName}`);
     return { worktreePath, branchName };
   }
 
@@ -280,16 +281,16 @@ export class GitWorktreeService {
    */
   async installDependencies(worktreeDir: string): Promise<void> {
     if (fs.existsSync(path.join(worktreeDir, 'package-lock.json'))) {
-      console.log('[GitWorktree] Installing dependencies with npm...');
+      log.info('Installing dependencies with npm...');
       await execFileAsync('npm', ['ci', '--prefer-offline'], { cwd: worktreeDir, timeout: 300_000, shell: true });
     } else if (fs.existsSync(path.join(worktreeDir, 'yarn.lock'))) {
-      console.log('[GitWorktree] Installing dependencies with yarn...');
+      log.info('Installing dependencies with yarn...');
       await execFileAsync('yarn', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000, shell: true });
     } else if (fs.existsSync(path.join(worktreeDir, 'pnpm-lock.yaml'))) {
-      console.log('[GitWorktree] Installing dependencies with pnpm...');
+      log.info('Installing dependencies with pnpm...');
       await execFileAsync('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000, shell: true });
     } else {
-      console.log('[GitWorktree] No lock file found, skipping dependency install');
+      log.info('No lock file found, skipping dependency install');
     }
   }
 
@@ -311,13 +312,13 @@ export class GitWorktreeService {
     // Check if there are changes to commit
     const status = await gitExec(['status', '--porcelain'], worktreePath);
     if (!status) {
-      console.log('[GitWorktree] No changes to commit');
+      log.info('No changes to commit');
       return false;
     }
 
     await gitExec(['add', '-A'], worktreePath);
     await gitExec(['commit', '-m', message], worktreePath);
-    console.log(`[GitWorktree] Committed changes: ${message}`);
+    log.info(`Committed changes: ${message}`);
     return true;
   }
 
@@ -348,7 +349,7 @@ export class GitWorktreeService {
   async pushBranch(worktreePath: string): Promise<void> {
     const branch = await gitExec(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
     await gitExec(['push', '--set-upstream', 'origin', branch], worktreePath);
-    console.log(`[GitWorktree] Pushed branch: ${branch}`);
+    log.info(`Pushed branch: ${branch}`);
   }
 
   /**
@@ -402,7 +403,7 @@ export class GitWorktreeService {
    */
   async removeWorktree(worktreePath: string, deleteBranch = false): Promise<void> {
     if (!fs.existsSync(worktreePath)) {
-      console.log(`[GitWorktree] Worktree does not exist: ${worktreePath}`);
+      log.info(`Worktree does not exist: ${worktreePath}`);
       return;
     }
 
@@ -410,7 +411,7 @@ export class GitWorktreeService {
     try {
       repoRoot = this.getRepoRoot(worktreePath);
     } catch {
-      console.warn(`[GitWorktree] Cannot find repo root for: ${worktreePath}`);
+      log.warn(`Cannot find repo root for: ${worktreePath}`);
       return;
     }
 
@@ -424,9 +425,9 @@ export class GitWorktreeService {
 
     try {
       await gitExec(['worktree', 'remove', worktreePath, '--force'], repoRoot);
-      console.log(`[GitWorktree] Removed worktree: ${worktreePath}`);
+      log.info(`Removed worktree: ${worktreePath}`);
     } catch (error) {
-      console.warn(`[GitWorktree] Error removing worktree:`, error);
+      log.warn('Error removing worktree', error);
       if (fs.existsSync(worktreePath)) {
         fs.rmSync(worktreePath, { recursive: true, force: true });
       }
@@ -438,9 +439,9 @@ export class GitWorktreeService {
     if (deleteBranch && branchName && branchName !== 'HEAD') {
       try {
         await gitExec(['branch', '-D', branchName], repoRoot);
-        console.log(`[GitWorktree] Deleted branch: ${branchName}`);
+        log.info(`Deleted branch: ${branchName}`);
       } catch {
-        console.warn(`[GitWorktree] Could not delete branch: ${branchName}`);
+        log.warn(`Could not delete branch: ${branchName}`);
       }
     }
   }
@@ -519,7 +520,7 @@ export class GitWorktreeService {
    */
   async cleanupWorktrees(worktrees: WorktreeInfo[]): Promise<void> {
     for (const wt of worktrees) {
-      console.log(`[GitWorktree] LRU cleanup: removing ${wt.path} (branch: ${wt.branch})`);
+      log.info(`LRU cleanup: removing ${wt.path} (branch: ${wt.branch})`);
       await this.removeWorktree(wt.path, true);
     }
   }
@@ -573,9 +574,9 @@ export class GitWorktreeService {
       return { success: false, error: 'No supported Git hosting provider detected for this repository.' };
     }
 
-    console.log(`[GitWorktree] pushAndCreatePR: provider=${provider.name}, cwd=${worktreePath}`);
+    log.info(`pushAndCreatePR: provider=${provider.name}, cwd=${worktreePath}`);
     const authenticated = await provider.isAuthenticated(worktreePath);
-    console.log(`[GitWorktree] pushAndCreatePR: authenticated=${authenticated}`);
+    log.info(`pushAndCreatePR: authenticated=${authenticated}`);
     if (!authenticated) {
       return { success: false, error: `Not authenticated with ${provider.name}. Run the appropriate login command.` };
     }
@@ -609,7 +610,7 @@ export class GitWorktreeService {
     for (const taskId of dirs) {
       if (!activeTaskIds.has(taskId)) {
         const orphanPath = path.join(worktreeBase, taskId);
-        console.log(`[GitWorktree] Cleaning up orphan worktree: ${orphanPath}`);
+        log.info(`Cleaning up orphan worktree: ${orphanPath}`);
         await this.removeWorktree(orphanPath, true);
       }
     }
