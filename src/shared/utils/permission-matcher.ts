@@ -57,8 +57,13 @@ function findMatchingGrantForChain(
   let weakestGrant: PermissionGrant | null = null;
   let weakestScore = Infinity;
 
+  // `cd` is pure navigation — implicitly allowed in chains
+  const IMPLICIT_CMDS = ['cd'];
+
   for (const sub of subCmds) {
-    // Create a fake rawInput for each sub-command
+    const binary = sub.trim().split(/\s+/)[0].toLowerCase();
+    if (IMPLICIT_CMDS.includes(binary)) continue;
+
     const subInput = { command: sub };
     let bestScore = 0;
     let bestGrant: PermissionGrant | null = null;
@@ -233,7 +238,7 @@ export function deriveScopeOptions(
       const subCmds = splitChainedCommands(cmd);
       // For chained commands, offer per-binary prefixes for each unique binary
       if (subCmds.length > 1) {
-        const binaries = [...new Set(subCmds.map(s => s.split(/\s+/)[0]))];
+        const binaries = [...new Set(subCmds.map(s => s.split(/\s+/)[0].toLowerCase()))].filter(b => b !== 'cd');
         for (const bin of binaries) {
           options.push({ scopeType: 'command_prefix', scopeValue: bin, label: `All \`${bin}\` commands` });
         }
