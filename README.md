@@ -2,17 +2,18 @@
 
 A Discord-like desktop application for GitHub Copilot CLI agents. Castle provides a beautiful, intuitive interface for managing multiple AI coding agents, each running its own GitHub Copilot CLI session.
 
-![Castle Screenshot](docs/screenshot.png)
-
 ## Features
 
 - **🤖 Multiple Agents**: Run multiple specialized AI agents simultaneously
 - **💬 Discord-like UI**: Familiar chat interface with agent circles in the sidebar
 - **📁 Project-aware**: Open Castle on any directory, just like VS Code
 - **🎨 Theme Engine**: Beautiful dark theme with more themes coming
-- **💾 Persistent Sessions**: Chat history and permissions are saved
+- **💾 Persistent Sessions**: Chat history and permissions are saved via embedded SQLite
 - **🔐 Permission Control**: Fine-grained control over what agents can do
 - **🔗 Inter-agent Communication**: Agents can communicate with each other
+- **🌐 Remote Access**: Optional Tailscale-powered HTTP + WebSocket server for accessing agents from other devices
+- **📝 Rich Markdown**: Agent responses rendered with syntax-highlighted code blocks
+- **🔌 Agent Client Protocol**: ACP SDK integration for standardized agent communication
 
 ## Installation
 
@@ -59,7 +60,7 @@ This creates distributable packages in the `release/` directory.
 2. Click "Open a Project" or use the menu
 3. Select a directory containing your code
 4. Castle will discover agents from:
-   - Built-in agents (General Assistant, Researcher, Debugger)
+   - Built-in agents (General Assistant, Researcher, Debugger, Git Agent, Primary Coder)
    - Your project's `AGENTS.md` file (if present)
 
 ### Chatting with Agents
@@ -99,8 +100,10 @@ agents:
 | Agent | Icon | Description |
 |-------|------|-------------|
 | General Assistant | 🤖 | All-purpose coding help |
-| Researcher | 🔬 | Researches tasks and produces detailed analysis |
+| Researcher | 🔬 | Researches tasks and produces detailed analysis documents |
 | Debugger | 🐛 | Diagnoses bugs and suggests fixes |
+| Git Agent | 💫 | Helps with Git operations, PRs, commits, and merge conflicts |
+| Primary Coder | 💻 | Primary coding agent for implementation tasks |
 
 ## Configuration
 
@@ -137,10 +140,13 @@ Permissions are requested as needed and can be remembered.
 ## Architecture
 
 Castle is built with:
-- **Electron** - Cross-platform desktop framework
-- **Angular 17** - Frontend framework
+- **Electron 29** - Cross-platform desktop framework
+- **Angular 17** - Frontend framework (standalone components)
 - **Angular Material** - UI components
-- **SQLite** - Local database for persistence
+- **SQL.js** - Embedded SQLite database for persistence
+- **Agent Client Protocol SDK** - Standardized agent communication
+- **Tailscale Server** - Optional HTTP + WebSocket server for remote access
+- **marked + highlight.js** - Rich markdown rendering with syntax highlighting
 - **GitHub Copilot CLI** - AI backend
 
 See [plans/castle-architecture.md](plans/castle-architecture.md) for detailed architecture documentation.
@@ -152,12 +158,16 @@ See [plans/castle-architecture.md](plans/castle-architecture.md) for detailed ar
 ```
 castle/
 ├── src/
-│   ├── main/           # Electron main process
+│   ├── main/           # Electron main process (IPC, services)
 │   ├── preload/        # Electron preload scripts
-│   ├── app/            # Angular application
-│   └── shared/         # Shared types and utilities
-├── resources/          # App resources (icons, agents.md)
-└── plans/              # Architecture documentation
+│   ├── app/            # Angular application (components, services)
+│   ├── shared/         # Shared types and constants
+│   ├── assets/         # Static assets
+│   ├── styles/         # Global stylesheets
+│   └── types/          # TypeScript declarations
+├── resources/          # App resources (icons, built-in agents.md)
+├── plans/              # Architecture documentation
+└── release/            # Build output directory
 ```
 
 ### Scripts
@@ -178,7 +188,7 @@ castle/
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License
 
 ## Acknowledgments
 
