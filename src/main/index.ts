@@ -15,7 +15,8 @@ import { TailscaleServerService } from './services/tailscale-server.service';
 import { WsBridgeService } from './services/ws-bridge.service';
 import { EventBroadcaster } from './services/event-broadcaster';
 import { IPC_CHANNELS } from '../shared/types/ipc.types';
-import { createLogger } from './services/logger.service';
+import { createLogger, setLogLevel } from './services/logger.service';
+import type { LogLevel } from './services/logger.service';
 
 const log = createLogger('App');
 
@@ -99,6 +100,11 @@ async function initializeServices(): Promise<void> {
 async function createWindow(): Promise<void> {
   // Get saved window bounds from database
   const settings = await databaseService.getSettings();
+
+  // Apply log level from settings
+  if (settings.logLevel) {
+    setLogLevel(settings.logLevel as LogLevel);
+  }
   
   windowManager = new WindowManager({
     width: settings.windowBounds?.width || 1200,

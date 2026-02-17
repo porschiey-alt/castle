@@ -29,6 +29,8 @@ export interface AppSettings {
   worktreeDraftPR: boolean;
   worktreeMaxConcurrent: number;
   worktreeAutoInstallDeps: boolean;
+  // Logging
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
 
 export interface WindowBounds {
@@ -76,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   worktreeDraftPR: false,
   worktreeMaxConcurrent: 5,
   worktreeAutoInstallDeps: true,
+  logLevel: 'info',
 };
 
 export const DEFAULT_PERMISSIONS: PermissionSet = {

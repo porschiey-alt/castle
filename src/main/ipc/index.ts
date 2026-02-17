@@ -16,7 +16,8 @@ import { findMatchingGrant } from '../../shared/utils/permission-matcher';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../../shared/types/agent.types';
 import { Task, ResearchComment } from '../../shared/types/task.types';
-import { createLogger } from '../services/logger.service';
+import { createLogger, setLogLevel } from '../services/logger.service';
+import type { LogLevel } from '../services/logger.service';
 
 const log = createLogger('IPC');
 
@@ -56,7 +57,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   /** Register a handler for both Electron IPC and the shared registry */
   function handle(channel: string, handler: (event: any, payload: any) => any): void {
     const wrappedHandler = async (event: any, payload: any) => {
-      log.info(`Handler invoked: ${channel}`);
+      log.debug(`Handler invoked: ${channel}`);
       try {
         const result = await handler(event, payload);
         return result;
@@ -388,6 +389,9 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   handle(IPC_CHANNELS.SETTINGS_UPDATE, async (_event, updates) => {
+    if (updates.logLevel) {
+      setLogLevel(updates.logLevel as LogLevel);
+    }
     return databaseService.updateSettings(updates);
   });
 

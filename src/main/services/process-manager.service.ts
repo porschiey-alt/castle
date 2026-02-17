@@ -247,7 +247,7 @@ export class ProcessManagerService {
             arguments: {},
             status: acpStatus === 'completed' ? 'success' : acpStatus === 'failed' ? 'error' : acpStatus === 'in_progress' ? 'running' : 'pending'
           };
-          log.info(`Agent "${agent.name}" tool call: ${toolCall.name} (${toolCall.id}) status=${toolCall.status}`);
+          log.debug(`Agent "${agent.name}" tool call: ${toolCall.name} (${toolCall.id}) status=${toolCall.status}`);
           sessionProcess.toolCalls.set(update.toolCallId, toolCall);
           // Add to existing tool-calls segment or create a new one
           const last = sessionProcess.segments[sessionProcess.segments.length - 1];
@@ -268,7 +268,7 @@ export class ProcessManagerService {
             if (existing.status === 'error') {
               log.error(`Agent "${agent.name}" tool call failed: ${existing.name} (${update.toolCallId})`);
             } else {
-              log.info(`Agent "${agent.name}" tool call update: ${existing.name} (${update.toolCallId}) status=${existing.status}`);
+              log.debug(`Agent "${agent.name}" tool call update: ${existing.name} (${update.toolCallId}) status=${existing.status}`);
             }
             // Update the tool call in segments too
             for (const seg of sessionProcess.segments) {

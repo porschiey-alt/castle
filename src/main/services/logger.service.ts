@@ -3,9 +3,29 @@
  *
  * Provides consistent log formatting with timestamps, severity levels,
  * and category tags across all main-process services.
+ *
+ * Log levels (in order): debug < info < warn < error
+ * Default minimum level is 'info'. Set to 'debug' for verbose output.
  */
 
-export type LogLevel = 'info' | 'warn' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+
+let minLevel: LogLevel = 'info';
+
+/** Set the minimum log level. Messages below this level are suppressed. */
+export function setLogLevel(level: LogLevel): void {
+  minLevel = level;
+}
+
+export function getLogLevel(): LogLevel {
+  return minLevel;
+}
+
+function shouldLog(level: LogLevel): boolean {
+  return LEVEL_ORDER[level] >= LEVEL_ORDER[minLevel];
+}
 
 function timestamp(): string {
   return new Date().toISOString();
@@ -23,11 +43,18 @@ class Logger {
     this.category = category;
   }
 
+  debug(message: string, data?: unknown): void {
+    if (!shouldLog('debug')) return;
+    console.log(formatMessage('debug', this.category, message, data));
+  }
+
   info(message: string, data?: unknown): void {
+    if (!shouldLog('info')) return;
     console.log(formatMessage('info', this.category, message, data));
   }
 
   warn(message: string, data?: unknown): void {
+    if (!shouldLog('warn')) return;
     console.warn(formatMessage('warn', this.category, message, data));
   }
 
