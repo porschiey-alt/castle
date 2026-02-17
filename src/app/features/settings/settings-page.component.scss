@@ -308,8 +308,23 @@
   justify-content: space-between;
   padding: 8px 0;
 
-  .setting-label span {
-    font-size: 14px;
+  .setting-label {
+    display: flex;
+    flex-direction: column;
+
+    span {
+      font-size: 14px;
+    }
+  }
+
+  .setting-hint {
+    font-size: 12px;
+    opacity: 0.6;
+    margin-top: 2px;
+  }
+
+  .small-field {
+    width: 80px;
   }
 }
 

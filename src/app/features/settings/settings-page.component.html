@@ -249,6 +249,65 @@
 
     <mat-divider />
 
+    <!-- Git Worktree Section -->
+    <section class="settings-section">
+      <h3>
+        <mat-icon>account_tree</mat-icon>
+        Git Worktrees
+      </h3>
+      <p class="section-description">
+        Agent implementation tasks use git worktrees for branch isolation. Each task gets its own working directory.
+      </p>
+
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>Enable worktrees</span>
+          <span class="setting-hint">When disabled, agents work directly in your main directory</span>
+        </div>
+        <mat-slide-toggle
+          [(ngModel)]="worktreeEnabled"
+          (change)="saveWorktreeSettings()">
+        </mat-slide-toggle>
+      </div>
+
+      @if (worktreeEnabled) {
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Max concurrent worktrees</span>
+            <span class="setting-hint">Limit how many worktrees can exist at once (each uses disk space)</span>
+          </div>
+          <mat-form-field appearance="outline" class="small-field">
+            <input matInput type="number" [(ngModel)]="worktreeMaxConcurrent" min="1" max="20"
+                   (change)="saveWorktreeSettings()">
+          </mat-form-field>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Auto-install dependencies</span>
+            <span class="setting-hint">Run npm/yarn/pnpm install in new worktrees</span>
+          </div>
+          <mat-slide-toggle
+            [(ngModel)]="worktreeAutoInstallDeps"
+            (change)="saveWorktreeSettings()">
+          </mat-slide-toggle>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Create PRs as drafts</span>
+            <span class="setting-hint">Mark auto-created pull requests as drafts</span>
+          </div>
+          <mat-slide-toggle
+            [(ngModel)]="worktreeDraftPR"
+            (change)="saveWorktreeSettings()">
+          </mat-slide-toggle>
+        </div>
+      }
+    </section>
+
+    <mat-divider />
+
     <!-- Permissions Section -->
     <section class="settings-section">
       <h3>

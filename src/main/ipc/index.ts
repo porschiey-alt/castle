@@ -2,7 +2,7 @@
  * IPC Handler Registration
  */
 
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain, dialog } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseService } from '../services/database.service';
@@ -640,10 +640,37 @@ export function registerIpcHandlers(services: IpcServices): void {
           // Phase: Creating worktree
           sendLifecycle('creating_worktree');
           const baseBranch = settings.worktreeDefaultBaseBranch || undefined;
-          const result = await gitWorktreeService.createWorktree(workingDirectory, task.title, taskId, task.kind, baseBranch);
-          effectiveWorkDir = result.worktreePath;
-          worktreePath = result.worktreePath;
-          branchName = result.branchName;
+
+          // Try to create; if limit reached, offer LRU cleanup
+          let worktreeResult: { worktreePath: string; branchName: string } | undefined;
+          try {
+            worktreeResult = await gitWorktreeService.createWorktree(workingDirectory, task.title, taskId, task.kind, baseBranch);
+          } catch (limitErr: any) {
+            if (limitErr?.message?.includes('Maximum concurrent worktrees')) {
+              const active = await gitWorktreeService.listCastleWorktrees(workingDirectory);
+              const lru = await gitWorktreeService.getLruWorktrees(workingDirectory, 1);
+              if (lru.length > 0) {
+                const branchList = lru.map(w => `  • ${w.branch} (last used: ${w.lastModified.toLocaleDateString()})`).join('\n');
+                const { response } = await dialog.showMessageBox(mainWindow, {
+                  type: 'question',
+                  buttons: ['Clean up & continue', 'Cancel'],
+                  defaultId: 0,
+                  title: 'Worktree Limit Reached',
+                  message: `All ${active.length} worktree slots are in use.`,
+                  detail: `Remove the oldest worktree to make room?\n\n${branchList}`,
+                });
+                if (response === 0) {
+                  await gitWorktreeService.cleanupWorktrees(lru);
+                  worktreeResult = await gitWorktreeService.createWorktree(workingDirectory, task.title, taskId, task.kind, baseBranch);
+                }
+              }
+            }
+            if (!worktreeResult) throw limitErr;
+          }
+
+          effectiveWorkDir = worktreeResult.worktreePath;
+          worktreePath = worktreeResult.worktreePath;
+          branchName = worktreeResult.branchName;
           console.log(`[Implementation] Using worktree: ${effectiveWorkDir} (branch: ${branchName})`);
 
           // Phase: Installing dependencies

@@ -497,6 +497,34 @@ export class GitWorktreeService {
   }
 
   /**
+   * Get worktrees sorted by last modified time (oldest first) for LRU cleanup.
+   * Returns worktrees that can be cleaned up to free slots.
+   */
+  async getLruWorktrees(repoPath: string, count: number): Promise<Array<WorktreeInfo & { lastModified: Date }>> {
+    const worktrees = await this.listCastleWorktrees(repoPath);
+    const withMtime = worktrees.map(w => {
+      let mtime = new Date(0);
+      try {
+        mtime = fs.statSync(w.path).mtime;
+      } catch { /* directory may be gone */ }
+      return { ...w, lastModified: mtime };
+    });
+    // Sort oldest first (LRU)
+    withMtime.sort((a, b) => a.lastModified.getTime() - b.lastModified.getTime());
+    return withMtime.slice(0, count);
+  }
+
+  /**
+   * Clean up the given worktrees (remove worktree + delete branch).
+   */
+  async cleanupWorktrees(worktrees: WorktreeInfo[]): Promise<void> {
+    for (const wt of worktrees) {
+      console.log(`[GitWorktree] LRU cleanup: removing ${wt.path} (branch: ${wt.branch})`);
+      await this.removeWorktree(wt.path, true);
+    }
+  }
+
+  /**
    * Get the status of a specific worktree.
    */
   async getWorktreeStatus(worktreePath: string): Promise<{ exists: boolean; branch?: string; hasChanges?: boolean }> {

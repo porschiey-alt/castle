@@ -77,6 +77,12 @@ export class SettingsPageComponent implements OnInit {
   tailscaleError: string | null = null;
   saving = false;
 
+  // Worktree settings state
+  worktreeEnabled = true;
+  worktreeMaxConcurrent = 5;
+  worktreeAutoInstallDeps = true;
+  worktreeDraftPR = false;
+
   // Permission grants state
   permissionGrants: PermissionGrant[] = [];
   currentProjectPath: string | null = null;
@@ -86,6 +92,10 @@ export class SettingsPageComponent implements OnInit {
     if (settings) {
       this.tailscaleEnabled = settings.tailscaleEnabled ?? false;
       this.tailscalePort = settings.tailscalePort ?? DEFAULT_TAILSCALE_PORT;
+      this.worktreeEnabled = settings.worktreeEnabled !== false;
+      this.worktreeMaxConcurrent = settings.worktreeMaxConcurrent ?? 5;
+      this.worktreeAutoInstallDeps = settings.worktreeAutoInstallDeps !== false;
+      this.worktreeDraftPR = settings.worktreeDraftPR ?? false;
 
       // Load existing customization
       const c = settings.themeCustomization;
@@ -199,6 +209,15 @@ export class SettingsPageComponent implements OnInit {
     }
 
     this.saving = false;
+  }
+
+  async saveWorktreeSettings(): Promise<void> {
+    await this.electronService.updateSettings({
+      worktreeEnabled: this.worktreeEnabled,
+      worktreeMaxConcurrent: Math.max(1, Math.min(20, this.worktreeMaxConcurrent)),
+      worktreeAutoInstallDeps: this.worktreeAutoInstallDeps,
+      worktreeDraftPR: this.worktreeDraftPR,
+    });
   }
 
   resetCustomization(): void {
