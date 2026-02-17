@@ -1,4 +1,4 @@
-<div class="message-list-container" #scrollContainer (scroll)="onScroll($event)">
+<div class="message-list-container" #scrollContainer (scroll)="onScroll()">
   <div class="messages-wrapper">
     @for (message of messages(); track trackByMessageId($index, message)) {
       <app-message-bubble

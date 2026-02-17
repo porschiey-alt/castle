@@ -2,7 +2,7 @@
  * Message List Component - Displays chat messages
  */
 
-import { Component, input, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
+import { Component, input, ElementRef, ViewChild, AfterViewInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatIconModule } from '@angular/material/icon';
@@ -23,7 +23,7 @@ import type { ChatMessage, StreamingMessage } from '../../../../shared/types/mes
   templateUrl: './message-list.component.html',
   styleUrl: './message-list.component.scss'
 })
-export class MessageListComponent implements AfterViewChecked {
+export class MessageListComponent implements AfterViewInit {
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
 
   // Inputs
@@ -33,25 +33,43 @@ export class MessageListComponent implements AfterViewChecked {
   agentName = input<string>('Agent');
   agentIcon = input<string | undefined>(undefined);
 
-  private shouldScrollToBottom = true;
+  private userHasScrolledUp = false;
+  private isAutoScrolling = false;
+  private viewReady = false;
 
-  ngAfterViewChecked(): void {
-    if (this.shouldScrollToBottom) {
-      this.scrollToBottom();
-    }
+  constructor() {
+    // React to content changes only — not every CD cycle
+    effect(() => {
+      this.messages();
+      this.streamingMessage();
+      if (this.viewReady && !this.userHasScrolledUp) {
+        Promise.resolve().then(() => this.scrollToBottom());
+      }
+    });
   }
 
-  onScroll(event: Event): void {
-    const element = event.target as HTMLElement;
-    const atBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 100;
-    this.shouldScrollToBottom = atBottom;
+  ngAfterViewInit(): void {
+    this.viewReady = true;
+    this.scrollToBottom();
+  }
+
+  onScroll(): void {
+    if (this.isAutoScrolling) {
+      return;
+    }
+    const el = this.scrollContainer.nativeElement;
+    const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
+    this.userHasScrolledUp = !atBottom;
   }
 
   private scrollToBottom(): void {
-    if (this.scrollContainer) {
-      const element = this.scrollContainer.nativeElement;
-      element.scrollTop = element.scrollHeight;
-    }
+    if (!this.scrollContainer) return;
+    const el = this.scrollContainer.nativeElement;
+    this.isAutoScrolling = true;
+    el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(() => {
+      this.isAutoScrolling = false;
+    });
   }
 
   trackByMessageId(_index: number, message: ChatMessage): string {
