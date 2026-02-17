@@ -33,6 +33,7 @@ export class ElectronService {
   private permissionRespondedSubject = new Subject<{ requestId: string }>();
   private streamingStartedSubject = new Subject<{ agentId: string; conversationId?: string }>();
   private conversationsChangedSubject = new Subject<{ action: string; conversation?: Conversation; conversationId?: string }>();
+  private worktreeLifecycleSubject = new Subject<{ taskId: string; agentId: string; taskTitle: string; phase: string; message?: string }>();
 
   // Observables
   readonly streamChunk$ = this.streamChunkSubject.asObservable();
@@ -44,6 +45,7 @@ export class ElectronService {
   readonly permissionResponded$ = this.permissionRespondedSubject.asObservable();
   readonly streamingStarted$ = this.streamingStartedSubject.asObservable();
   readonly conversationsChanged$ = this.conversationsChangedSubject.asObservable();
+  readonly worktreeLifecycle$ = this.worktreeLifecycleSubject.asObservable();
 
   constructor(private ngZone: NgZone) {
     this.api = this.apiService.api;
@@ -104,6 +106,12 @@ export class ElectronService {
     this.api.sync.onConversationsChanged((data) => {
       this.ngZone.run(() => {
         this.conversationsChangedSubject.next(data);
+      });
+    });
+
+    this.api.worktree.onLifecycle((event) => {
+      this.ngZone.run(() => {
+        this.worktreeLifecycleSubject.next(event);
       });
     });
   }
@@ -360,7 +368,7 @@ export class ElectronService {
     return this.api.worktree.checkGit(repoPath);
   }
 
-  onWorktreeLifecycle(callback: (event: { taskId: string; phase: string; message?: string }) => void): void {
+  onWorktreeLifecycle(callback: (event: { taskId: string; agentId: string; taskTitle: string; phase: string; message?: string }) => void): void {
     this.api.worktree.onLifecycle(callback);
   }
 }

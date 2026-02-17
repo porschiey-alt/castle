@@ -284,6 +284,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.taskService.loadTasks();
   }
 
+  goToTask(taskId: string): void {
+    this.taskService.selectTask(taskId);
+    this.showTasks();
+  }
+
   showChat(): void {
     this.activeView = 'chat';
     this.closeSidebar();

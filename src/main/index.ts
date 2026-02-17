@@ -16,6 +16,26 @@ import { WsBridgeService } from './services/ws-bridge.service';
 import { EventBroadcaster } from './services/event-broadcaster';
 import { IPC_CHANNELS } from '../shared/types/ipc.types';
 
+// On Windows, refresh PATH from the registry so tools installed after
+// the parent shell was opened (e.g. gh, git) are discoverable.
+if (process.platform === 'win32') {
+  try {
+    const { execSync } = require('child_process');
+    // Read system and user PATH directly from the registry
+    const sysPath = execSync(
+      'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" /v Path',
+      { encoding: 'utf-8' }
+    ).match(/REG_(?:EXPAND_)?SZ\s+(.*)/)?.[1]?.trim() || '';
+    const userPath = execSync(
+      'reg query "HKCU\\Environment" /v Path',
+      { encoding: 'utf-8' }
+    ).match(/REG_(?:EXPAND_)?SZ\s+(.*)/)?.[1]?.trim() || '';
+    if (sysPath || userPath) {
+      process.env.PATH = [sysPath, userPath, process.env.PATH].filter(Boolean).join(';');
+    }
+  } catch { /* ignore — non-critical */ }
+}
+
 // Services
 let windowManager: WindowManager;
 let databaseService: DatabaseService;

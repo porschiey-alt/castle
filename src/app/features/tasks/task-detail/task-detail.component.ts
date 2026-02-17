@@ -302,7 +302,7 @@ export class TaskDetailComponent implements OnInit {
   }
 
   /** Called by parent when worktree lifecycle phase changes */
-  onLifecycleUpdate(event: { taskId: string; phase: string; message?: string }): void {
+  onLifecycleUpdate(event: { taskId: string; agentId?: string; taskTitle?: string; phase: string; message?: string }): void {
     const t = this.task();
     if (!t || t.id !== event.taskId) return;
 

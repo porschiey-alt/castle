@@ -165,7 +165,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   async onResearchRequested(event: TaskResearchEvent): Promise<void> {
     this.taskService.markResearchRunning(event.task.id);
-    const convId = await this.createAndNavigateToConversation(event.agentId, event.task.title);
+    const convId = await this.createAndNavigateToConversation(event.agentId, event.task.title, event.task.id);
     await this.taskService.runResearch(event.task.id, event.agentId, event.outputPath, convId);
   }
 
@@ -175,7 +175,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
     if (event.task.state !== 'in_progress' && event.task.state !== 'done') {
       await this.taskService.updateTask(event.task.id, { state: 'in_progress' });
     }
-    const convId = await this.createAndNavigateToConversation(event.agentId, event.task.title);
+    const convId = await this.createAndNavigateToConversation(event.agentId, event.task.title, event.task.id);
     // Run implementation via IPC (main process handles completion)
     await this.taskService.runImplementation(event.task.id, event.agentId, convId);
   }
@@ -212,9 +212,9 @@ export class TaskListComponent implements OnInit, OnDestroy {
   }
 
   /** Create a conversation, navigate to the agent chat, and return the conversation ID */
-  private async createAndNavigateToConversation(agentId: string, title: string): Promise<string | undefined> {
+  private async createAndNavigateToConversation(agentId: string, title: string, taskId?: string): Promise<string | undefined> {
     await this.conversationService.loadConversations(agentId);
-    const conv = await this.conversationService.createConversation(agentId, title);
+    const conv = await this.conversationService.createConversation(agentId, title, taskId);
     this.goToAgent.emit(agentId);
     return conv?.id ?? undefined;
   }

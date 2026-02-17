@@ -152,7 +152,7 @@
           } @else if (activeView === 'tasks') {
             <app-task-list (goToAgent)="goToAgent($event)" (goToAgentNewConvo)="goToAgentWithNewConversation($event)" />
           } @else if (selectedAgent()) {
-            <app-chat [agent]="selectedAgent()!" />
+            <app-chat [agent]="selectedAgent()!" (navigateToTask)="goToTask($event)" />
           } @else {
             <div class="no-agent-selected">
               <mat-icon class="large-icon">smart_toy</mat-icon>

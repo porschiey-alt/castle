@@ -603,6 +603,10 @@ export function registerIpcHandlers(services: IpcServices): void {
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
+    // Helper to send lifecycle updates with task metadata
+    const sendLifecycle = (phase: string, message?: string) =>
+      broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, agentId, taskTitle: task.title, phase, message });
+
     let agent: Agent | null | undefined = discoveredAgents.get(agentId);
     if (!agent) agent = await databaseService.getAgent(agentId);
     if (!agent) throw new Error(`Agent ${agentId} not found`);
@@ -630,14 +634,11 @@ export function registerIpcHandlers(services: IpcServices): void {
           const hasUncommitted = await gitWorktreeService.hasUncommittedChanges(workingDirectory);
           if (hasUncommitted) {
             console.warn('[Implementation] Warning: uncommitted changes in main working directory');
-            broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
-              taskId, phase: 'warning',
-              message: 'Uncommitted changes detected in your working directory. The worktree will branch from the last commit.',
-            });
+            sendLifecycle('warning', 'Uncommitted changes detected in your working directory. The worktree will branch from the last commit.');
           }
 
           // Phase: Creating worktree
-          broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'creating_worktree' });
+          sendLifecycle('creating_worktree');
           const baseBranch = settings.worktreeDefaultBaseBranch || undefined;
           const result = await gitWorktreeService.createWorktree(workingDirectory, task.title, taskId, task.kind, baseBranch);
           effectiveWorkDir = result.worktreePath;
@@ -648,32 +649,34 @@ export function registerIpcHandlers(services: IpcServices): void {
           // Phase: Installing dependencies
           const autoInstall = settings.worktreeAutoInstallDeps !== false;
           if (autoInstall && gitWorktreeService.needsDependencyInstall(effectiveWorkDir)) {
-            broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'installing_deps' });
+            sendLifecycle('installing_deps');
             try {
               await gitWorktreeService.installDependencies(effectiveWorkDir);
             } catch (depError) {
               console.warn('[Implementation] Dependency install failed:', depError);
-              broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
-                taskId, phase: 'warning',
-                message: 'Dependency installation failed. The agent may encounter import errors.',
-              });
+              sendLifecycle('warning', 'Dependency installation failed. The agent may encounter import errors.');
             }
           }
         }
       } catch (error) {
         console.warn('[Implementation] Could not create worktree, using main directory:', error);
-        broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
-          taskId, phase: 'warning',
-          message: `Worktree creation failed: ${error instanceof Error ? error.message : error}. Using main directory.`,
-        });
+        sendLifecycle('warning', `Worktree creation failed: ${error instanceof Error ? error.message : error}. Using main directory.`);
       }
     }
 
     // Phase: Implementation
-    broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'implementing' });
+    sendLifecycle('implementing');
 
-    // Ensure agent has a session (using worktree directory if available)
+    // Ensure agent has a session whose cwd matches the worktree (or main dir).
+    // If an existing session points at a different directory we must restart it
+    // so the ACP agent actually works inside the worktree.
     let sessionProcess = processManagerService.getSessionByAgentId(agentId);
+    if (sessionProcess && worktreePath) {
+      // Existing session was started with a different cwd — kill and recreate
+      console.log('[Implementation] Restarting agent session for worktree cwd');
+      await processManagerService.stopSession(sessionProcess.session.id);
+      sessionProcess = undefined;
+    }
     if (!sessionProcess) {
       const session = await processManagerService.startSession(agent, effectiveWorkDir);
       subscribeToSession(session.id, agentId);
@@ -712,15 +715,16 @@ export function registerIpcHandlers(services: IpcServices): void {
       // Auto-commit changes if we have a worktree
       if (currentTask.worktreePath) {
         try {
-          broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'committing' });
+          sendLifecycle('committing');
           const committed = await gitWorktreeService.commitChanges(
             currentTask.worktreePath,
             `feat: ${currentTask.title}\n\nImplemented by Castle agent.`
           );
 
-          // Auto-push and create PR if there were changes
-          if (committed) {
-            broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'creating_pr' });
+          // Push and create PR if there are new commits (either ours or the agent's own)
+          const shouldCreatePR = committed || await gitWorktreeService.hasCommitsAhead(currentTask.worktreePath);
+          if (shouldCreatePR) {
+            sendLifecycle('creating_pr');
             const prResult = await gitWorktreeService.pushAndCreatePR(currentTask.worktreePath, {
               title: currentTask.title,
               body: `## ${currentTask.title}\n\n${currentTask.description || ''}\n\n---\n*Implemented by Castle agent*`,
@@ -736,10 +740,7 @@ export function registerIpcHandlers(services: IpcServices): void {
               console.log(`[Implementation] PR created: ${prResult.url}`);
             } else {
               console.warn(`[Implementation] PR creation failed: ${prResult.error}`);
-              broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, {
-                taskId, phase: 'warning',
-                message: `Auto-PR failed: ${prResult.error}. You can create one manually.`,
-              });
+              sendLifecycle('warning', `Auto-PR failed: ${prResult.error}. You can create one manually.`);
             }
           }
         } catch (commitError) {
@@ -756,7 +757,7 @@ export function registerIpcHandlers(services: IpcServices): void {
         await databaseService.updateTask(taskId, updates);
       }
 
-      broadcaster.send(IPC_CHANNELS.WORKTREE_LIFECYCLE, { taskId, phase: 'done' });
+      sendLifecycle('done');
       broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, {
         action: 'updated',
         task: await databaseService.getTask(taskId),

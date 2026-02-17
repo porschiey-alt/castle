@@ -69,9 +69,17 @@ class GitHubProvider implements PullRequestProvider {
 
   async isAuthenticated(cwd: string): Promise<boolean> {
     try {
-      await execFileAsync('gh', ['auth', 'status'], { cwd });
+      const { stdout, stderr } = await execFileAsync('gh', ['auth', 'status'], { cwd });
+      console.log('[GitHubProvider] gh auth status OK:', stdout.trim());
       return true;
-    } catch {
+    } catch (error: any) {
+      console.warn('[GitHubProvider] gh auth status FAILED:', {
+        message: error.message,
+        stderr: error.stderr,
+        stdout: error.stdout,
+        code: error.code,
+        path: process.env.PATH?.split(';').filter((p: string) => /github|gh/i.test(p)),
+      });
       return false;
     }
   }
@@ -273,13 +281,13 @@ export class GitWorktreeService {
   async installDependencies(worktreeDir: string): Promise<void> {
     if (fs.existsSync(path.join(worktreeDir, 'package-lock.json'))) {
       console.log('[GitWorktree] Installing dependencies with npm...');
-      await execFileAsync('npm', ['ci', '--prefer-offline'], { cwd: worktreeDir, timeout: 300_000 });
+      await execFileAsync('npm', ['ci', '--prefer-offline'], { cwd: worktreeDir, timeout: 300_000, shell: true });
     } else if (fs.existsSync(path.join(worktreeDir, 'yarn.lock'))) {
       console.log('[GitWorktree] Installing dependencies with yarn...');
-      await execFileAsync('yarn', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000 });
+      await execFileAsync('yarn', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000, shell: true });
     } else if (fs.existsSync(path.join(worktreeDir, 'pnpm-lock.yaml'))) {
       console.log('[GitWorktree] Installing dependencies with pnpm...');
-      await execFileAsync('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000 });
+      await execFileAsync('pnpm', ['install', '--frozen-lockfile'], { cwd: worktreeDir, timeout: 300_000, shell: true });
     } else {
       console.log('[GitWorktree] No lock file found, skipping dependency install');
     }
@@ -311,6 +319,27 @@ export class GitWorktreeService {
     await gitExec(['commit', '-m', message], worktreePath);
     console.log(`[GitWorktree] Committed changes: ${message}`);
     return true;
+  }
+
+  /**
+   * Check if the worktree branch has commits ahead of the base branch (main/master).
+   */
+  async hasCommitsAhead(worktreePath: string): Promise<boolean> {
+    try {
+      const branch = await gitExecReadOnly(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+      let baseBranch = 'main';
+      try {
+        await gitExecReadOnly(['rev-parse', '--verify', 'main'], worktreePath);
+      } catch {
+        baseBranch = 'master';
+      }
+      const count = await gitExecReadOnly(
+        ['rev-list', '--count', `${baseBranch}..${branch}`], worktreePath
+      );
+      return parseInt(count, 10) > 0;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -516,7 +545,9 @@ export class GitWorktreeService {
       return { success: false, error: 'No supported Git hosting provider detected for this repository.' };
     }
 
+    console.log(`[GitWorktree] pushAndCreatePR: provider=${provider.name}, cwd=${worktreePath}`);
     const authenticated = await provider.isAuthenticated(worktreePath);
+    console.log(`[GitWorktree] pushAndCreatePR: authenticated=${authenticated}`);
     if (!authenticated) {
       return { success: false, error: `Not authenticated with ${provider.name}. Run the appropriate login command.` };
     }

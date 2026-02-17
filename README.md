@@ -1,9 +1,10 @@
 # Castle 🏰
 
-A Discord-like desktop application for GitHub Copilot CLI agents. Castle provides a beautiful, intuitive interface for managing multiple AI coding agents, each running its own GitHub Copilot CLI session.
+A Discord-like desktop application for GitHub Copilot CLI agents. Castle provides a beautiful, intuitive interface for managing multiple AI coding agents, each running its own GitHub Copilot CLI session — accessible from your desktop, phone, or any device on your network.
 
 ## Features
 
+- **📱 Use from Your Phone**: Built-in Tailscale-powered web server lets you chat with your agents from any device — phone, tablet, or another computer — right in the browser
 - **🤖 Multiple Agents**: Run multiple specialized AI agents simultaneously
 - **💬 Discord-like UI**: Familiar chat interface with agent circles in the sidebar
 - **📁 Project-aware**: Open Castle on any directory, just like VS Code
@@ -11,9 +12,30 @@ A Discord-like desktop application for GitHub Copilot CLI agents. Castle provide
 - **💾 Persistent Sessions**: Chat history and permissions are saved via embedded SQLite
 - **🔐 Permission Control**: Fine-grained control over what agents can do
 - **🔗 Inter-agent Communication**: Agents can communicate with each other
-- **🌐 Remote Access**: Optional Tailscale-powered HTTP + WebSocket server for accessing agents from other devices
 - **📝 Rich Markdown**: Agent responses rendered with syntax-highlighted code blocks
 - **🔌 Agent Client Protocol**: ACP SDK integration for standardized agent communication
+
+## 📱 Access from Your Phone
+
+Castle includes a built-in web server that lets you interact with your agents from any device on your [Tailscale](https://tailscale.com/) network — no extra apps needed, just a browser.
+
+### How It Works
+
+1. **Enable Tailscale** in Castle's settings
+2. Castle starts an HTTP + WebSocket server on port `39417` (configurable)
+3. Open your device's browser and navigate to `http://<your-machine-ip>:39417`
+4. The full Castle UI loads in your browser with real-time chat streaming
+
+### What You Can Do Remotely
+
+- Chat with all your agents in real time
+- View streamed responses and code blocks
+- Manage tasks and review agent output
+- Everything syncs live between desktop and remote clients
+
+### Security
+
+Remote clients are automatically restricted from sensitive operations like window management, file dialogs, and Tailscale configuration — so your agents stay under your control.
 
 ## Installation
 
@@ -145,7 +167,7 @@ Castle is built with:
 - **Angular Material** - UI components
 - **SQL.js** - Embedded SQLite database for persistence
 - **Agent Client Protocol SDK** - Standardized agent communication
-- **Tailscale Server** - Optional HTTP + WebSocket server for remote access
+- **Tailscale Server** - Built-in HTTP + WebSocket server for phone and remote device access
 - **marked + highlight.js** - Rich markdown rendering with syntax highlighting
 - **GitHub Copilot CLI** - AI backend
 

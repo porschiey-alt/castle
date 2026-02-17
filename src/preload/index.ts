@@ -128,7 +128,7 @@ export interface ElectronAPI {
     getDiff: (worktreePath: string) => Promise<{ summary: string; diff: string }>;
     commit: (worktreePath: string, message: string) => Promise<{ committed: boolean }>;
     checkGit: (repoPath: string) => Promise<{ isGitRepo: boolean; hasUncommittedChanges: boolean; currentBranch: string | null }>;
-    onLifecycle: (callback: (event: { taskId: string; phase: string; message?: string }) => void) => void;
+    onLifecycle: (callback: (event: { taskId: string; agentId: string; taskTitle: string; phase: string; message?: string }) => void) => void;
   };
 }
 
@@ -325,7 +325,7 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.WORKTREE_COMMIT, { worktreePath, message }),
     checkGit: (repoPath: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.WORKTREE_CHECK_GIT, { repoPath }),
-    onLifecycle: (callback: (event: { taskId: string; phase: string; message?: string }) => void) =>
+    onLifecycle: (callback: (event: { taskId: string; agentId: string; taskTitle: string; phase: string; message?: string }) => void) =>
       ipcRenderer.on(IPC_CHANNELS.WORKTREE_LIFECYCLE, (_event, data) => callback(data)),
   },
 };

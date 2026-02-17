@@ -1,4 +1,22 @@
 <div class="chat-wrapper">
+  <!-- Task / lifecycle banner pinned to top -->
+  @if (linkedTask(); as task) {
+    <div class="task-banner">
+      <span class="task-icon">📋</span>
+      <a class="task-link" (click)="onTaskClick()">{{ task.title }}</a>
+      @if (lifecycleStatus(); as status) {
+        <span class="task-separator">·</span>
+        <span class="lifecycle-spinner"></span>
+        <span class="lifecycle-text">{{ status }}</span>
+      }
+    </div>
+  } @else if (lifecycleStatus()) {
+    <div class="task-banner">
+      <span class="lifecycle-spinner"></span>
+      <span class="lifecycle-text">{{ lifecycleStatus() }}</span>
+    </div>
+  }
+
   <!-- Todo banner pinned to top -->
   @if (todoItems().length > 0) {
     <app-todo-banner [items]="todoItems()" />

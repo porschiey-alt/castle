@@ -55,10 +55,11 @@ export class ConversationService {
   /**
    * Create a new conversation
    */
-  async createConversation(agentId: string, title?: string): Promise<Conversation | null> {
+  async createConversation(agentId: string, title?: string, taskId?: string): Promise<Conversation | null> {
     const conversation = await this.electronService.createConversation({
       agentId,
       title,
+      taskId,
     });
     if (conversation) {
       await this.loadConversations(agentId);
