@@ -107,8 +107,8 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   handle(IPC_CHANNELS.AGENTS_START_SESSION, async (_event, { agentId, workingDirectory, acpSessionId: resumeSessionId }) => {
     log.info(`Starting session for agent ${agentId} in ${workingDirectory}`);
-    // Reuse existing session if one is already running for this agent
-    const existing = processManagerService.getSessionByAgentId(agentId);
+    // Reuse existing session if one is already running for this agent in the same directory
+    const existing = processManagerService.getSessionByAgentId(agentId, workingDirectory);
     if (existing && existing.session.status !== 'stopped' && existing.session.status !== 'error') {
       return existing.session;
     }
@@ -756,20 +756,13 @@ export function registerIpcHandlers(services: IpcServices): void {
     // Phase: Implementation
     sendLifecycle('implementing');
 
-    // Ensure agent has a session whose cwd matches the worktree (or main dir).
-    // If an existing session points at a different directory we must restart it
-    // so the ACP agent actually works inside the worktree.
-    let sessionProcess = processManagerService.getSessionByAgentId(agentId);
-    if (sessionProcess && worktreePath) {
-      // Existing session was started with a different cwd — kill and recreate
-      log.info('Restarting agent session for worktree cwd');
-      await processManagerService.stopSession(sessionProcess.session.id);
-      sessionProcess = undefined;
-    }
+    // Find or create a session whose cwd matches the target directory.
+    // Each worktree gets its own session so parallel tasks don't interfere.
+    let sessionProcess = processManagerService.getSessionByAgentId(agentId, effectiveWorkDir);
     if (!sessionProcess) {
       const session = await processManagerService.startSession(agent, effectiveWorkDir);
       subscribeToSession(session.id, agentId);
-      sessionProcess = processManagerService.getSessionByAgentId(agentId);
+      sessionProcess = processManagerService.getSessionByAgentId(agentId, effectiveWorkDir);
       if (!sessionProcess) throw new Error('Failed to start implementation agent session');
     }
 
