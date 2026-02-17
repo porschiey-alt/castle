@@ -336,7 +336,7 @@
               <div class="grant-info">
                 <mat-icon class="grant-icon">{{ getGrantIcon(grant.toolKind) }}</mat-icon>
                 <div class="grant-details">
-                  <span class="grant-kind">{{ grant.toolKind }}</span>
+                  <span class="grant-kind">{{ grant.toolKind }}@if (grant.scopeType && grant.scopeType !== 'any') { — <span class="grant-scope">{{ formatGrantScope(grant) }}</span>}</span>
                   <span class="grant-status" [class.allowed]="grant.granted" [class.rejected]="!grant.granted">
                     {{ grant.granted ? 'Always allowed' : 'Always rejected' }}
                   </span>

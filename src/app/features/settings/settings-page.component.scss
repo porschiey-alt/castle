@@ -463,6 +463,13 @@
   font-size: 14px;
   font-weight: 500;
   text-transform: capitalize;
+
+  .grant-scope {
+    text-transform: none;
+    font-weight: 400;
+    opacity: 0.8;
+    font-size: 12px;
+  }
 }
 
 .grant-status {

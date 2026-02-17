@@ -87,10 +87,22 @@ export const DEFAULT_PERMISSIONS: PermissionSet = {
   gitOperations: false
 };
 
+export type PermissionScopeType =
+  | 'any'
+  | 'path'
+  | 'path_prefix'
+  | 'glob'
+  | 'command'
+  | 'command_prefix'
+  | 'domain'
+  | 'url_prefix';
+
 export interface PermissionGrant {
   id: number;
   projectPath: string;
   toolKind: string;
+  scopeType: PermissionScopeType;
+  scopeValue: string;
   granted: boolean;
   createdAt: string;
 }

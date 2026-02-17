@@ -7,6 +7,9 @@ import { CommonModule } from '@angular/common';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatRadioModule } from '@angular/material/radio';
+import { FormsModule } from '@angular/forms';
+import { deriveScopeOptions, ScopeOption } from '../../../../shared/utils/permission-matcher';
 
 export interface PermissionDialogData {
   requestId: string;
@@ -26,6 +29,12 @@ export interface PermissionDialogData {
   }>;
 }
 
+export interface PermissionDialogResult {
+  optionId: string;
+  scopeType?: string;
+  scopeValue?: string;
+}
+
 @Component({
   selector: 'app-permission-dialog',
   standalone: true,
@@ -33,19 +42,43 @@ export interface PermissionDialogData {
     CommonModule,
     MatDialogModule,
     MatButtonModule,
-    MatIconModule
+    MatIconModule,
+    MatRadioModule,
+    FormsModule,
   ],
   templateUrl: './permission-dialog.component.html',
   styleUrl: './permission-dialog.component.scss'
 })
 export class PermissionDialogComponent {
+  scopeOptions: ScopeOption[] = [];
+  selectedScopeIndex = 0;
+
   constructor(
     private dialogRef: MatDialogRef<PermissionDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: PermissionDialogData
-  ) {}
+  ) {
+    const toolKind = data.toolCall?.kind;
+    if (toolKind) {
+      this.scopeOptions = deriveScopeOptions(toolKind, data.toolCall?.locations, data.toolCall?.rawInput);
+    }
+  }
 
-  selectOption(optionId: string): void {
-    this.dialogRef.close(optionId);
+  selectOption(option: { optionId: string; kind: string }): void {
+    const isAlways = option.kind === 'allow_always' || option.kind === 'reject_always';
+    const scope = isAlways && this.scopeOptions.length > 0
+      ? this.scopeOptions[this.selectedScopeIndex]
+      : undefined;
+
+    const result: PermissionDialogResult = {
+      optionId: option.optionId,
+      scopeType: scope?.scopeType,
+      scopeValue: scope?.scopeValue,
+    };
+    this.dialogRef.close(result);
+  }
+
+  isAlwaysOption(kind: string): boolean {
+    return kind === 'allow_always' || kind === 'reject_always';
   }
 
   getToolKindIcon(kind: string): string {

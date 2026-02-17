@@ -33,6 +33,19 @@
       <code>{{ formatRawInput(data.toolCall.rawInput) }}</code>
     </div>
   }
+
+  @if (scopeOptions.length > 1) {
+    <div class="scope-selector">
+      <p class="section-label">Apply "Always" to:</p>
+      <mat-radio-group [(ngModel)]="selectedScopeIndex" class="scope-radio-group">
+        @for (scope of scopeOptions; track scope.scopeType + scope.scopeValue; let i = $index) {
+          <mat-radio-button [value]="i" class="scope-radio-button">
+            {{ scope.label }}
+          </mat-radio-button>
+        }
+      </mat-radio-group>
+    </div>
+  }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
@@ -40,7 +53,7 @@
     <button
       mat-raised-button
       [color]="getColor(option.kind)"
-      (click)="selectOption(option.optionId)">
+      (click)="selectOption(option)">
       <mat-icon>{{ getIcon(option.kind) }}</mat-icon>
       {{ option.name }}
     </button>

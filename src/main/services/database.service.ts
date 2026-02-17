@@ -14,6 +14,7 @@ import {
   PermissionSet, 
   DEFAULT_PERMISSIONS,
   PermissionGrant,
+  PermissionScopeType,
   WindowBounds 
 } from '../../shared/types';
 import { ChatMessage, MessageRole } from '../../shared/types/message.types';
@@ -266,18 +267,24 @@ export class DatabaseService {
     // Migration: create legacy conversations for existing messages without conversation_id
     this.migrateLegacyConversations();
 
-    // Permission grants table (scoped by project path + tool kind)
+    // Permission grants table (scoped by project path + tool kind + scope)
     this.db.run(`
       CREATE TABLE IF NOT EXISTS permission_grants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         project_path TEXT NOT NULL,
         tool_kind TEXT NOT NULL,
+        scope_type TEXT NOT NULL DEFAULT 'any',
+        scope_value TEXT NOT NULL DEFAULT '',
         granted INTEGER NOT NULL DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(project_path, tool_kind)
+        UNIQUE(project_path, tool_kind, scope_type, scope_value)
       )
     `);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_permission_grants_project ON permission_grants(project_path)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_permission_grants_lookup ON permission_grants(project_path, tool_kind)`);
+
+    // Migrate old permission_grants rows that lack scope columns
+    this.migratePermissionGrantsScope();
   }
 
   private migrateLegacyConversations(): void {
@@ -309,6 +316,47 @@ export class DatabaseService {
         `UPDATE messages SET conversation_id = ? WHERE agent_id = ? AND conversation_id IS NULL`,
         [legacyId, agentId]
       );
+    }
+  }
+
+  /**
+   * Migrate old permission_grants rows that were created before scope columns existed.
+   * The new table schema has scope_type/scope_value with defaults ('any'/''), so
+   * existing rows from the old UNIQUE(project_path, tool_kind) schema need to be
+   * re-inserted under the new UNIQUE(project_path, tool_kind, scope_type, scope_value).
+   */
+  private migratePermissionGrantsScope(): void {
+    if (!this.db) return;
+    try {
+      // Check if any rows lack scope_type (they'd have NULL from the old schema)
+      // With the new CREATE TABLE IF NOT EXISTS + defaults this is a no-op for fresh DBs.
+      // For DBs created before scope columns existed, sqlite will have added the columns
+      // with the DEFAULT values on recreation, so nothing extra is needed.
+      // This is a safety net that ensures the column exists by trying to read it.
+      const check = this.db.prepare(`SELECT scope_type FROM permission_grants LIMIT 1`);
+      check.free();
+    } catch {
+      // Column doesn't exist — old schema. Recreate table.
+      this.db.run(`ALTER TABLE permission_grants RENAME TO permission_grants_old`);
+      this.db.run(`
+        CREATE TABLE permission_grants (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_path TEXT NOT NULL,
+          tool_kind TEXT NOT NULL,
+          scope_type TEXT NOT NULL DEFAULT 'any',
+          scope_value TEXT NOT NULL DEFAULT '',
+          granted INTEGER NOT NULL DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(project_path, tool_kind, scope_type, scope_value)
+        )
+      `);
+      this.db.run(`
+        INSERT INTO permission_grants (project_path, tool_kind, scope_type, scope_value, granted, created_at)
+        SELECT project_path, tool_kind, 'any', '', granted, created_at
+        FROM permission_grants_old
+      `);
+      this.db.run(`DROP TABLE permission_grants_old`);
+      this.saveDatabase();
     }
   }
 
@@ -376,34 +424,38 @@ export class DatabaseService {
 
   // ============ Permission Grant Methods ============
 
-  async getPermissionGrant(projectPath: string, toolKind: string): Promise<PermissionGrant | null> {
+  async getPermissionGrantsByToolKind(projectPath: string, toolKind: string): Promise<PermissionGrant[]> {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT id, project_path, tool_kind, granted, created_at FROM permission_grants
+      `SELECT id, project_path, tool_kind, scope_type, scope_value, granted, created_at
+       FROM permission_grants
        WHERE project_path = ? AND tool_kind = ?`
     );
     stmt.bind([projectPath, toolKind]);
-    let grant: PermissionGrant | null = null;
-    if (stmt.step()) {
+    const grants: PermissionGrant[] = [];
+    while (stmt.step()) {
       const row = stmt.getAsObject() as any;
-      grant = {
+      grants.push({
         id: row.id,
         projectPath: row.project_path,
         toolKind: row.tool_kind,
+        scopeType: row.scope_type || 'any',
+        scopeValue: row.scope_value || '',
         granted: !!row.granted,
         createdAt: row.created_at,
-      };
+      });
     }
     stmt.free();
-    return grant;
+    return grants;
   }
 
   async getPermissionGrants(projectPath: string): Promise<PermissionGrant[]> {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT id, project_path, tool_kind, granted, created_at FROM permission_grants
+      `SELECT id, project_path, tool_kind, scope_type, scope_value, granted, created_at
+       FROM permission_grants
        WHERE project_path = ? ORDER BY created_at DESC`
     );
     stmt.bind([projectPath]);
@@ -414,6 +466,8 @@ export class DatabaseService {
         id: row.id,
         projectPath: row.project_path,
         toolKind: row.tool_kind,
+        scopeType: row.scope_type || 'any',
+        scopeValue: row.scope_value || '',
         granted: !!row.granted,
         createdAt: row.created_at,
       });
@@ -422,14 +476,21 @@ export class DatabaseService {
     return grants;
   }
 
-  async savePermissionGrant(projectPath: string, toolKind: string, granted: boolean): Promise<void> {
+  async savePermissionGrant(
+    projectPath: string,
+    toolKind: string,
+    granted: boolean,
+    scopeType: PermissionScopeType = 'any',
+    scopeValue: string = '',
+  ): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
     this.db.run(
-      `INSERT INTO permission_grants (project_path, tool_kind, granted, created_at)
-       VALUES (?, ?, ?, datetime('now'))
-       ON CONFLICT(project_path, tool_kind) DO UPDATE SET granted = excluded.granted, created_at = datetime('now')`,
-      [projectPath, toolKind, granted ? 1 : 0]
+      `INSERT INTO permission_grants (project_path, tool_kind, scope_type, scope_value, granted, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(project_path, tool_kind, scope_type, scope_value)
+       DO UPDATE SET granted = excluded.granted, created_at = datetime('now')`,
+      [projectPath, toolKind, scopeType, scopeValue, granted ? 1 : 0]
     );
     this.saveDatabase();
   }

@@ -110,3 +110,20 @@ mat-dialog-actions {
     }
   }
 }
+
+.scope-selector {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background-color: var(--bg-tertiary, #1e1e2e);
+  border-radius: 6px;
+
+  .scope-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .scope-radio-button {
+    font-size: 13px;
+  }
+}
