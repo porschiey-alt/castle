@@ -11,12 +11,26 @@ import type { ChatMessage, StreamingMessage, TodoItem } from '../../../shared/ty
 interface ChatState {
   messages: ChatMessage[];
   streamingMessage: StreamingMessage | null;
+  /** The conversation that owns the current streaming response */
+  streamingConversationId: string | null;
   isLoading: boolean;
   todoItems: TodoItem[];
   /** Only the most recent thinking chunk (not accumulated) */
   latestThinking: string;
   /** Length of accumulated thinking as of last chunk – used to compute delta */
   previousThinkingLength: number;
+}
+
+function defaultChatState(): ChatState {
+  return {
+    messages: [],
+    streamingMessage: null,
+    streamingConversationId: null,
+    isLoading: false,
+    todoItems: [],
+    latestThinking: '',
+    previousThinkingLength: 0
+  };
 }
 
 @Injectable({
@@ -35,14 +49,14 @@ export class ChatService {
     const selectedAgentId = this.agentService.selectedAgentId();
     if (!selectedAgentId) return null;
     
-    return this.chatStatesSignal().get(selectedAgentId) || {
-      messages: [],
-      streamingMessage: null,
-      isLoading: false,
-      todoItems: [],
-      latestThinking: '',
-      previousThinkingLength: 0
-    };
+    return this.chatStatesSignal().get(selectedAgentId) || defaultChatState();
+  });
+
+  /** True when the active conversation is the one being streamed */
+  private readonly isStreamingConversationActive = computed<boolean>(() => {
+    const state = this.currentChatState();
+    if (!state?.streamingConversationId) return false;
+    return this.conversationService.activeConversationId() === state.streamingConversationId;
   });
 
   readonly messages = computed<ChatMessage[]>(() => {
@@ -50,20 +64,28 @@ export class ChatService {
   });
 
   readonly streamingMessage = computed<StreamingMessage | null>(() => {
-    return this.currentChatState()?.streamingMessage || null;
+    const state = this.currentChatState();
+    if (!state?.streamingMessage) return null;
+    return this.isStreamingConversationActive() ? state.streamingMessage : null;
   });
 
   readonly isLoading = computed<boolean>(() => {
-    return this.currentChatState()?.isLoading || false;
+    const state = this.currentChatState();
+    if (!state?.isLoading) return false;
+    return this.isStreamingConversationActive();
   });
 
   readonly todoItems = computed<TodoItem[]>(() => {
-    return this.currentChatState()?.todoItems || [];
+    const state = this.currentChatState();
+    if (!state?.todoItems?.length) return [];
+    return this.isStreamingConversationActive() ? state.todoItems : [];
   });
 
   /** Only the most recent thinking chunk from the streaming agent */
   readonly latestThinking = computed<string>(() => {
-    return this.currentChatState()?.latestThinking || '';
+    const state = this.currentChatState();
+    if (!state?.latestThinking) return '';
+    return this.isStreamingConversationActive() ? state.latestThinking : '';
   });
 
   constructor() {
@@ -96,7 +118,16 @@ export class ChatService {
         message.metadata = { ...message.metadata, segments };
       }
 
-      this.addMessageIfNew(message.agentId, message);
+      // Only add the message to in-memory state if the user is still
+      // viewing the conversation that was being streamed. Otherwise the
+      // message is already persisted in the DB and will appear when the
+      // user navigates back to that conversation.
+      const activeConvId = this.conversationService.activeConversationId();
+      const streamConvId = currentState?.streamingConversationId ?? message.conversationId;
+      if (activeConvId && activeConvId === streamConvId) {
+        this.addMessageIfNew(message.agentId, message);
+      }
+
       this.clearStreamingMessage(message.agentId);
       this.setLoading(message.agentId, false);
       
@@ -128,14 +159,7 @@ export class ChatService {
     }
     
     const states = new Map(this.chatStatesSignal());
-    const currentState = states.get(agentId) || {
-      messages: [],
-      streamingMessage: null,
-      isLoading: false,
-      todoItems: [],
-      latestThinking: '',
-      previousThinkingLength: 0
-    };
+    const currentState = states.get(agentId) || defaultChatState();
     
     states.set(agentId, {
       ...currentState,
@@ -159,6 +183,9 @@ export class ChatService {
         const conversation = await this.conversationService.createConversation(agentId, title);
         conversationId = conversation?.id || null;
       }
+
+      // Track which conversation this stream belongs to
+      this.setStreamingConversationId(agentId, conversationId);
 
       const userMessage = await this.electronService.sendMessage(agentId, content, conversationId || undefined);
       if (userMessage) {
@@ -204,14 +231,7 @@ export class ChatService {
    */
   private addMessage(agentId: string, message: ChatMessage): void {
     const states = new Map(this.chatStatesSignal());
-    const currentState = states.get(agentId) || {
-      messages: [],
-      streamingMessage: null,
-      isLoading: false,
-      todoItems: [],
-      latestThinking: '',
-      previousThinkingLength: 0
-    };
+    const currentState = states.get(agentId) || defaultChatState();
     
     states.set(agentId, {
       ...currentState,
@@ -234,14 +254,7 @@ export class ChatService {
    */
   private updateStreamingMessage(agentId: string, message: StreamingMessage): void {
     const states = new Map(this.chatStatesSignal());
-    const currentState = states.get(agentId) || {
-      messages: [],
-      streamingMessage: null,
-      isLoading: true,
-      todoItems: [],
-      latestThinking: '',
-      previousThinkingLength: 0
-    };
+    const currentState = states.get(agentId) || defaultChatState();
 
     // Compute latest thinking chunk (delta since last update)
     const prevLen = currentState.previousThinkingLength;
@@ -271,6 +284,7 @@ export class ChatService {
       states.set(agentId, {
         ...currentState,
         streamingMessage: null,
+        streamingConversationId: null,
         latestThinking: '',
         previousThinkingLength: 0
       });
@@ -283,14 +297,7 @@ export class ChatService {
    */
   private updateTodoItems(agentId: string, todoItems: TodoItem[]): void {
     const states = new Map(this.chatStatesSignal());
-    const currentState = states.get(agentId) || {
-      messages: [],
-      streamingMessage: null,
-      isLoading: false,
-      todoItems: [],
-      latestThinking: '',
-      previousThinkingLength: 0
-    };
+    const currentState = states.get(agentId) || defaultChatState();
     
     states.set(agentId, {
       ...currentState,
@@ -305,18 +312,26 @@ export class ChatService {
    */
   private setLoading(agentId: string, isLoading: boolean): void {
     const states = new Map(this.chatStatesSignal());
-    const currentState = states.get(agentId) || {
-      messages: [],
-      streamingMessage: null,
-      isLoading: false,
-      todoItems: [],
-      latestThinking: '',
-      previousThinkingLength: 0
-    };
+    const currentState = states.get(agentId) || defaultChatState();
     
     states.set(agentId, {
       ...currentState,
       isLoading
+    });
+    
+    this.chatStatesSignal.set(states);
+  }
+
+  /**
+   * Record which conversation the current stream belongs to
+   */
+  private setStreamingConversationId(agentId: string, conversationId: string | null): void {
+    const states = new Map(this.chatStatesSignal());
+    const currentState = states.get(agentId) || defaultChatState();
+    
+    states.set(agentId, {
+      ...currentState,
+      streamingConversationId: conversationId
     });
     
     this.chatStatesSignal.set(states);
