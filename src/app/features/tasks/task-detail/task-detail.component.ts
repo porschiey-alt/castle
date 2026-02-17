@@ -20,6 +20,7 @@ import { marked } from 'marked';
 import { TASK_STATES, TASK_KINDS, BUG_CLOSE_REASONS, type Task, type TaskLabel, type TaskState, type TaskKind, type BugCloseReason, type ResearchComment, type ResearchCommentAnchor } from '../../../../shared/types/task.types';
 import type { Agent } from '../../../../shared/types/agent.types';
 import { ResearchContentComponent } from '../research-content/research-content.component';
+import { AgentIconComponent } from '../../../shared/components/agent-icon/agent-icon.component';
 
 marked.setOptions({ breaks: true, gfm: true });
 
@@ -64,6 +65,7 @@ export interface TaskReviewSubmitEvent {
     MatSelectModule,
     MatTabsModule,
     ResearchContentComponent,
+    AgentIconComponent,
   ],
   templateUrl: './task-detail.component.html',
   styleUrl: './task-detail.component.scss'

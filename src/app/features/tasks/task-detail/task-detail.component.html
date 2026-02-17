@@ -242,7 +242,7 @@
                       <mat-optgroup label="Debug Agents">
                         @for (a of debugAgents; track a.id) {
                           <mat-option [value]="a.id">
-                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                            <span class="agent-option"><app-agent-icon [icon]="a.icon" /> {{ a.name }}</span>
                           </mat-option>
                         }
                       </mat-optgroup>
@@ -251,7 +251,7 @@
                       <mat-optgroup label="Research Agents">
                         @for (a of researchAgents; track a.id) {
                           <mat-option [value]="a.id">
-                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                            <span class="agent-option"><app-agent-icon [icon]="a.icon" /> {{ a.name }}</span>
                           </mat-option>
                         }
                       </mat-optgroup>
@@ -260,7 +260,7 @@
                       <mat-optgroup label="Other Agents">
                         @for (a of codingAgents; track a.id) {
                           <mat-option [value]="a.id">
-                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                            <span class="agent-option"><app-agent-icon [icon]="a.icon" /> {{ a.name }}</span>
                           </mat-option>
                         }
                       </mat-optgroup>
@@ -342,7 +342,7 @@
                       <mat-optgroup label="Coding Agents">
                         @for (a of codingAgents; track a.id) {
                           <mat-option [value]="a.id">
-                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                            <span class="agent-option"><app-agent-icon [icon]="a.icon" /> {{ a.name }}</span>
                           </mat-option>
                         }
                       </mat-optgroup>
@@ -351,7 +351,7 @@
                       <mat-optgroup label="Research Agents">
                         @for (a of researchAgents; track a.id) {
                           <mat-option [value]="a.id">
-                            <span class="agent-option">{{ a.icon }} {{ a.name }}</span>
+                            <span class="agent-option"><app-agent-icon [icon]="a.icon" /> {{ a.name }}</span>
                           </mat-option>
                         }
                       </mat-optgroup>
