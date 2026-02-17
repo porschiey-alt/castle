@@ -2,7 +2,7 @@
  * IPC Handler Registration
  */
 
-import { BrowserWindow, ipcMain, dialog } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseService } from '../services/database.service';
@@ -38,6 +38,9 @@ export const ipcHandlerRegistry = new Map<string, (payload: any) => Promise<any>
 
 // Track active conversationId per agent for associating assistant replies
 const activeConversationIds = new Map<string, string>();
+
+// Pending confirm dialog requests (main → renderer → main)
+const pendingConfirms = new Map<string, (confirmed: boolean) => void>();
 
 export function registerIpcHandlers(services: IpcServices): void {
   const {
@@ -346,6 +349,24 @@ export function registerIpcHandlers(services: IpcServices): void {
       }
     }
     broadcaster.send(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, { requestId });
+  });
+
+  // Handle confirm dialog response from renderer
+  ipcMain.on(IPC_CHANNELS.CONFIRM_RESPONSE, (_event, { requestId, confirmed }) => {
+    const resolve = pendingConfirms.get(requestId);
+    if (resolve) {
+      pendingConfirms.delete(requestId);
+      resolve(confirmed);
+    }
+  });
+  // Also register in handler registry so WebSocket clients can respond
+  ipcHandlerRegistry.set(IPC_CHANNELS.CONFIRM_RESPONSE, async (payload: any) => {
+    const { requestId, confirmed } = payload;
+    const resolve = pendingConfirms.get(requestId);
+    if (resolve) {
+      pendingConfirms.delete(requestId);
+      resolve(confirmed);
+    }
   });
 
   // ============ Settings Handlers ============
@@ -688,15 +709,19 @@ export function registerIpcHandlers(services: IpcServices): void {
               const lru = await gitWorktreeService.getLruWorktrees(workingDirectory, 1);
               if (lru.length > 0) {
                 const branchList = lru.map(w => `  • ${w.branch} (last used: ${w.lastModified.toLocaleDateString()})`).join('\n');
-                const { response } = await dialog.showMessageBox(mainWindow, {
-                  type: 'question',
-                  buttons: ['Clean up & continue', 'Cancel'],
-                  defaultId: 0,
-                  title: 'Worktree Limit Reached',
-                  message: `All ${active.length} worktree slots are in use.`,
-                  detail: `Remove the oldest worktree to make room?\n\n${branchList}`,
+                const confirmId = uuidv4();
+                const confirmed = await new Promise<boolean>((resolve) => {
+                  pendingConfirms.set(confirmId, resolve);
+                  broadcaster.send(IPC_CHANNELS.CONFIRM_REQUEST, {
+                    requestId: confirmId,
+                    title: 'Worktree Limit Reached',
+                    message: `All ${active.length} worktree slots are in use.`,
+                    detail: `Remove the oldest worktree to make room?\n\n${branchList}`,
+                    confirmText: 'Clean up & continue',
+                    cancelText: 'Cancel',
+                  });
                 });
-                if (response === 0) {
+                if (confirmed) {
                   await gitWorktreeService.cleanupWorktrees(lru);
                   worktreeResult = await gitWorktreeService.createWorktree(workingDirectory, task.title, taskId, task.kind, baseBranch);
                 }

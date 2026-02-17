@@ -118,6 +118,12 @@ export interface ElectronAPI {
     getMessages: (conversationId: string, limit?: number, offset?: number) => Promise<ChatMessage[]>;
   };
 
+  // Confirm dialog (main → renderer)
+  confirm: {
+    onRequest: (callback: (data: { requestId: string; title: string; message: string; detail?: string; confirmText?: string; cancelText?: string }) => void) => () => void;
+    respond: (requestId: string, confirmed: boolean) => void;
+  };
+
   // Worktree operations
   worktree: {
     create: (repoPath: string, taskTitle: string, taskId: string, kind?: string) => Promise<{ worktreePath: string; branchName: string }>;
@@ -306,6 +312,16 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_DELETE_ALL, { agentId }),
     getMessages: (conversationId: string, limit?: number, offset?: number) =>
       ipcRenderer.invoke(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, { conversationId, limit, offset }),
+  },
+
+  confirm: {
+    onRequest: (callback: (data: { requestId: string; title: string; message: string; detail?: string; confirmText?: string; cancelText?: string }) => void) => {
+      const handler = (_event: IpcRendererEvent, data: { requestId: string; title: string; message: string; detail?: string; confirmText?: string; cancelText?: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.CONFIRM_REQUEST, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.CONFIRM_REQUEST, handler);
+    },
+    respond: (requestId: string, confirmed: boolean) =>
+      ipcRenderer.send(IPC_CHANNELS.CONFIRM_RESPONSE, { requestId, confirmed }),
   },
 
   worktree: {

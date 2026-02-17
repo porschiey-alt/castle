@@ -286,4 +286,13 @@ export class WebSocketAPI implements ElectronAPI {
       this.on(IPC_CHANNELS.WORKTREE_LIFECYCLE, callback);
     },
   };
+
+  confirm = {
+    onRequest: (callback: (data: { requestId: string; title: string; message: string; detail?: string; confirmText?: string; cancelText?: string }) => void): () => void => {
+      return this.on(IPC_CHANNELS.CONFIRM_REQUEST, callback);
+    },
+    respond: (requestId: string, confirmed: boolean): void => {
+      this.invoke(IPC_CHANNELS.CONFIRM_RESPONSE, { requestId, confirmed });
+    },
+  };
 }
