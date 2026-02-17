@@ -33,6 +33,10 @@ export interface CastleTheme {
   textSecondary?: string;
   textMuted?: string;
   borderColor?: string;
+  // Built-in gradient
+  gradientEnabled?: boolean;
+  gradientEndColor?: string;
+  gradientDirection?: string;
 }
 
 @Injectable({
@@ -59,7 +63,10 @@ export class ThemeService {
       textPrimary: '#e5e5e5',
       textSecondary: '#a3a3a3',
       textMuted: '#737373',
-      borderColor: '#262626'
+      borderColor: '#262626',
+      gradientEnabled: true,
+      gradientEndColor: '#0a0a1a',
+      gradientDirection: 'to bottom right'
     },
     {
       id: 'castle-light',
@@ -68,7 +75,10 @@ export class ThemeService {
       primary: '#6366F1',
       accent: '#14B8A6',
       secondaryAccent: '#8B5CF6',
-      warn: '#F59E0B'
+      warn: '#F59E0B',
+      gradientEnabled: true,
+      gradientEndColor: '#f0f0ff',
+      gradientDirection: 'to bottom right'
     },
     {
       id: 'midnight',
@@ -85,7 +95,10 @@ export class ThemeService {
       textPrimary: '#e5e5e5',
       textSecondary: '#a3a3a3',
       textMuted: '#737373',
-      borderColor: '#2a2a3c'
+      borderColor: '#2a2a3c',
+      gradientEnabled: true,
+      gradientEndColor: '#060618',
+      gradientDirection: 'to bottom right'
     },
     {
       id: 'amoled',
@@ -103,7 +116,10 @@ export class ThemeService {
       textPrimary: '#ffffff',
       textSecondary: '#a3a3a3',
       textMuted: '#666666',
-      borderColor: '#1f1f1f'
+      borderColor: '#1f1f1f',
+      gradientEnabled: true,
+      gradientEndColor: '#050510',
+      gradientDirection: 'to bottom right'
     }
   ];
 
@@ -212,10 +228,12 @@ export class ThemeService {
     root.style.setProperty('--agent-bubble', derived.bgTertiary);
     root.style.setProperty('--code-bg', relativeLuminance(bgPrimary) > 0.179 ? '#f7fafc' : '#0d0d0d');
 
-    // Gradient support
-    if (custom.gradientEnabled && custom.gradientEndColor) {
-      const dir = custom.gradientDirection || 'to bottom';
-      root.style.setProperty('--bg-gradient', `linear-gradient(${dir}, ${bgPrimary}, ${custom.gradientEndColor})`);
+    // Gradient support (theme-level defaults, customization overrides)
+    const gradientEnabled = custom.gradientEnabled !== undefined ? custom.gradientEnabled : (theme.gradientEnabled || false);
+    const gradientEndColor = custom.gradientEndColor || theme.gradientEndColor;
+    const gradientDirection = custom.gradientDirection || theme.gradientDirection || 'to bottom';
+    if (gradientEnabled && gradientEndColor) {
+      root.style.setProperty('--bg-gradient', `linear-gradient(${gradientDirection}, ${bgPrimary}, ${gradientEndColor})`);
       body.style.setProperty('background', `var(--bg-gradient)`);
       body.classList.add('gradient-active');
     } else {
