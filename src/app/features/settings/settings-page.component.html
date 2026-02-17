@@ -192,7 +192,8 @@
 
     <mat-divider />
 
-    <!-- Remote Access Section -->
+    <!-- Remote Access Section (only shown on local Electron app, not remote browsers) -->
+    @if (isElectron) {
     <section class="settings-section">
       <h3>
         <mat-icon>lan</mat-icon>
@@ -244,6 +245,7 @@
         }
       }
     </section>
+    }
 
     <mat-divider />
 

@@ -127,6 +127,21 @@ export class WsBridgeService implements EventSink {
       return;
     }
 
+    // Remote clients must not control the remote server (tailscale) settings
+    if (request.channel === 'tailscale:restart' || request.channel === 'tailscale:status') {
+      const response: WSResponse = { id: request.id, error: 'Remote server settings cannot be changed from a remote client' };
+      ws.send(JSON.stringify(response));
+      return;
+    }
+
+    // Strip tailscale fields from settings updates by remote clients
+    if (request.channel === 'settings:update' && request.payload && typeof request.payload === 'object') {
+      const sanitized = { ...(request.payload as Record<string, unknown>) };
+      delete sanitized['tailscaleEnabled'];
+      delete sanitized['tailscalePort'];
+      request = { ...request, payload: sanitized };
+    }
+
     try {
       // Use Electron's internal handler registry.
       // ipcMain._invokeHandlers is not public API, but we can emit a

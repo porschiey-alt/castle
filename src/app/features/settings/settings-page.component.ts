@@ -16,6 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { ThemeService, CastleTheme } from '../../core/services/theme.service';
 import { ElectronService } from '../../core/services/electron.service';
+import { ApiService } from '../../core/services/api.service';
 import { APP_NAME, APP_VERSION, DEFAULT_TAILSCALE_PORT } from '../../../shared/constants';
 import type { ThemeCustomization, PermissionGrant } from '../../../shared/types/settings.types';
 import { getContrastingTextColor, contrastRatio } from '../../shared/utils/color.utils';
@@ -41,6 +42,7 @@ import { getContrastingTextColor, contrastRatio } from '../../shared/utils/color
 export class SettingsPageComponent implements OnInit {
   private themeService = inject(ThemeService);
   private electronService = inject(ElectronService);
+  private apiService = inject(ApiService);
 
   currentTheme = this.themeService.currentTheme;
   availableThemes = this.themeService.availableThemes;
@@ -62,6 +64,11 @@ export class SettingsPageComponent implements OnInit {
     { value: 'to bottom right', label: 'Diagonal ↘' },
     { value: 'to bottom left', label: 'Diagonal ↙' },
   ];
+
+  /** True when running in the native Electron shell (not a remote browser) */
+  get isElectron(): boolean {
+    return this.apiService.isElectron;
+  }
 
   // Remote access state
   tailscaleEnabled = false;

@@ -13,6 +13,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 
 import { ElectronService } from '../../../core/services/electron.service';
+import { ApiService } from '../../../core/services/api.service';
 import { DEFAULT_TAILSCALE_PORT } from '../../../../shared/constants';
 
 @Component({
@@ -33,7 +34,13 @@ import { DEFAULT_TAILSCALE_PORT } from '../../../../shared/constants';
 })
 export class SettingsDialogComponent implements OnInit {
   private electronService = inject(ElectronService);
+  private apiService = inject(ApiService);
   private dialogRef = inject(MatDialogRef<SettingsDialogComponent>);
+
+  /** True when running in the native Electron shell (not a remote browser) */
+  get isElectron(): boolean {
+    return this.apiService.isElectron;
+  }
 
   tailscaleEnabled = false;
   tailscalePort = DEFAULT_TAILSCALE_PORT;
