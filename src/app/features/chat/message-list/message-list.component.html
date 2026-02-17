@@ -12,8 +12,18 @@
       </div>
     }
 
-    <!-- Standalone thinking bubble (only during streaming) -->
     @if (streamingMessage(); as streaming) {
+      <!-- Streaming message (segments + content, no thinking) -->
+      <app-message-bubble
+        [streamingContent]="streaming.content"
+        [streamingToolCalls]="streaming.toolCalls"
+        [streamingSegments]="streaming.segments"
+        [isStreaming]="true"
+        [agentName]="agentName()"
+        [agentIcon]="agentIcon()"
+      />
+
+      <!-- Thinking bubble always at bottom -->
       @if (latestThinking()) {
         <div class="thinking-bubble">
           <div class="avatar">
@@ -29,16 +39,6 @@
           </div>
         </div>
       }
-
-      <!-- Streaming message (segments + content, no thinking) -->
-      <app-message-bubble
-        [streamingContent]="streaming.content"
-        [streamingToolCalls]="streaming.toolCalls"
-        [streamingSegments]="streaming.segments"
-        [isStreaming]="true"
-        [agentName]="agentName()"
-        [agentIcon]="agentIcon()"
-      />
     }
   </div>
 </div>
