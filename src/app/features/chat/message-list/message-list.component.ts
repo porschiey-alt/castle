@@ -76,6 +76,23 @@ export class MessageListComponent implements AfterViewInit {
     return message.id;
   }
 
+  /** Whether a message has visible content worth rendering */
+  hasVisibleContent(message: ChatMessage): boolean {
+    if (message.role === 'user') return true;
+    if (message.content?.trim()) return true;
+    if (message.metadata?.segments?.length) return true;
+    if (message.metadata?.toolCalls?.length) return true;
+    return false;
+  }
+
+  /** Whether a streaming message has content worth rendering */
+  hasStreamingContent(streaming: StreamingMessage): boolean {
+    if (streaming.content?.trim()) return true;
+    if ((streaming.segments?.length ?? 0) > 0) return true;
+    if ((streaming.toolCalls?.length ?? 0) > 0) return true;
+    return false;
+  }
+
   /** Render thinking text with markdown support */
   renderThinking(text: string): string {
     return marked.parse(text, { async: false }) as string;

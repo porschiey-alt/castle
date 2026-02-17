@@ -1,11 +1,13 @@
 <div class="message-list-container" #scrollContainer (scroll)="onScroll()">
   <div class="messages-wrapper">
     @for (message of messages(); track trackByMessageId($index, message)) {
-      <app-message-bubble
-        [message]="message"
-        [agentName]="agentName()"
-        [agentIcon]="agentIcon()"
-      />
+      @if (hasVisibleContent(message)) {
+        <app-message-bubble
+          [message]="message"
+          [agentName]="agentName()"
+          [agentIcon]="agentIcon()"
+        />
+      }
     } @empty {
       <div class="empty-state">
         <p>No messages yet. Start a conversation!</p>
@@ -14,14 +16,16 @@
 
     @if (streamingMessage(); as streaming) {
       <!-- Streaming message (segments + content, no thinking) -->
-      <app-message-bubble
-        [streamingContent]="streaming.content"
-        [streamingToolCalls]="streaming.toolCalls"
-        [streamingSegments]="streaming.segments"
-        [isStreaming]="true"
-        [agentName]="agentName()"
-        [agentIcon]="agentIcon()"
-      />
+      @if (hasStreamingContent(streaming)) {
+        <app-message-bubble
+          [streamingContent]="streaming.content"
+          [streamingToolCalls]="streaming.toolCalls"
+          [streamingSegments]="streaming.segments"
+          [isStreaming]="true"
+          [agentName]="agentName()"
+          [agentIcon]="agentIcon()"
+        />
+      }
 
       <!-- Thinking bubble always at bottom -->
       @if (latestThinking()) {
