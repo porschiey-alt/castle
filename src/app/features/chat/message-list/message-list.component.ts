@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { marked } from 'marked';
 
 import { MessageBubbleComponent } from '../message-bubble/message-bubble.component';
+import { AgentIconComponent } from '../../../shared/components/agent-icon/agent-icon.component';
 import type { ChatMessage, StreamingMessage } from '../../../../shared/types/message.types';
 
 @Component({
@@ -18,7 +19,8 @@ import type { ChatMessage, StreamingMessage } from '../../../../shared/types/mes
     CommonModule,
     ScrollingModule,
     MatIconModule,
-    MessageBubbleComponent
+    MessageBubbleComponent,
+    AgentIconComponent,
   ],
   templateUrl: './message-list.component.html',
   styleUrl: './message-list.component.scss'
