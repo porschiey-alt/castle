@@ -165,6 +165,7 @@ export type AgentDialogResult =
       min-width: 64px;
       height: 56px;
       font-size: 24px;
+      color: var(--text-primary);
     }
     .icon-preview-btn app-agent-icon {
       font-size: 24px;

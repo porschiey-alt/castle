@@ -421,11 +421,13 @@ pre {
       align-items: center;
       justify-content: center;
       border-radius: 8px;
+      color: var(--text-primary);
 
       mat-icon {
         font-size: 22px;
         width: 22px;
         height: 22px;
+        color: inherit;
       }
 
       &.selected {

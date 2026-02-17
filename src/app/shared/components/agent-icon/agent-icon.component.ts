@@ -21,7 +21,8 @@ import { isMatIcon, getMatIconName } from '../../../../shared/utils/icon.utils';
     }
   `,
   styles: [`
-    :host { display: inline-flex; align-items: center; justify-content: center; }
+    :host { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
+    mat-icon { color: inherit; }
     .emoji-icon { line-height: 1; }
   `]
 })
