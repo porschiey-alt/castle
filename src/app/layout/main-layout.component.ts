@@ -290,6 +290,14 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.closeSidebar();
   }
 
+  async goToAgentWithNewConversation(event: { agentId: string; title: string }): Promise<void> {
+    this.agentService.selectAgent(event.agentId);
+    await this.conversationService.loadConversations(event.agentId);
+    await this.conversationService.createConversation(event.agentId, event.title);
+    this.activeView = 'chat';
+    this.closeSidebar();
+  }
+
   minimizeWindow(): void {
     this.electronService.minimizeWindow();
   }

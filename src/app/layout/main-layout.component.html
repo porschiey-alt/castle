@@ -150,7 +150,7 @@
           @if (activeView === 'settings') {
             <app-settings-page />
           } @else if (activeView === 'tasks') {
-            <app-task-list (goToAgent)="goToAgent($event)" />
+            <app-task-list (goToAgent)="goToAgent($event)" (goToAgentNewConvo)="goToAgentWithNewConversation($event)" />
           } @else if (selectedAgent()) {
             <app-chat [agent]="selectedAgent()!" />
           } @else {

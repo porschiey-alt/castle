@@ -54,6 +54,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   /** Emitted when user clicks "Take me to the Researcher/Agent" */
   goToAgent = output<string>();
+  goToAgentNewConvo = output<{ agentId: string; title: string }>();
 
   private diagnosisCleanupUnsub?: () => void;
 
@@ -155,6 +156,8 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   async onResearchRequested(event: TaskResearchEvent): Promise<void> {
     this.taskService.markResearchRunning(event.task.id);
+    // Navigate to agent chat with a fresh "Research: <name>" conversation
+    this.goToAgentNewConvo.emit({ agentId: event.agentId, title: `Research: ${event.task.title}` });
     await this.taskService.runResearch(event.task.id, event.agentId, event.outputPath);
   }
 
@@ -164,8 +167,8 @@ export class TaskListComponent implements OnInit, OnDestroy {
     if (event.task.state !== 'in_progress' && event.task.state !== 'done') {
       await this.taskService.updateTask(event.task.id, { state: 'in_progress' });
     }
-    // Navigate to agent chat so user can watch
-    this.goToAgent.emit(event.agentId);
+    // Navigate to agent chat with a fresh "CODE: <name>" conversation
+    this.goToAgentNewConvo.emit({ agentId: event.agentId, title: `CODE: ${event.task.title}` });
     // Run implementation via IPC (main process handles completion)
     await this.taskService.runImplementation(event.task.id, event.agentId);
   }
