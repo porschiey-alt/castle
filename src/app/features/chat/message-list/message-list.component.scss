@@ -109,10 +109,32 @@
     }
 
     .thinking-text {
-      white-space: pre-wrap;
-      word-break: break-word;
       line-height: 1.4;
+      min-width: 0;
+      overflow: hidden;
     }
+  }
+}
+
+// Thinking text rendered via [innerHTML] needs ::ng-deep
+:host ::ng-deep .thinking-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+
+  p {
+    margin: 0 0 4px 0;
+    &:last-child { margin-bottom: 0; }
+  }
+
+  strong { font-weight: 700; }
+  em { font-style: italic; }
+
+  code {
+    background-color: rgba(255, 255, 255, 0.08);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.9em;
   }
 }
 
