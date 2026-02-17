@@ -25,12 +25,58 @@ export function findMatchingGrant(
 ): PermissionGrant | null {
   const candidates = grants.filter(g => g.toolKind === toolKind);
 
+  // For chained commands, check that every sub-command is covered by some grant
+  if (toolKind === 'execute') {
+    const cmd = normalizeCommand(rawInput);
+    if (cmd) {
+      const subCmds = splitChainedCommands(cmd);
+      if (subCmds.length > 1) {
+        return findMatchingGrantForChain(candidates, subCmds, projectPath);
+      }
+    }
+  }
+
   const scored = candidates
     .map(grant => ({ grant, score: matchScore(grant, locations, rawInput, projectPath) }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score);
 
   return scored.length > 0 ? scored[0].grant : null;
+}
+
+/**
+ * For chained commands (e.g. "cd dir && git log"), every sub-command must be
+ * covered by at least one grant. Returns the lowest-specificity grant if all
+ * sub-commands match, or null if any sub-command is uncovered.
+ */
+function findMatchingGrantForChain(
+  grants: PermissionGrant[],
+  subCmds: string[],
+  projectPath: string,
+): PermissionGrant | null {
+  let weakestGrant: PermissionGrant | null = null;
+  let weakestScore = Infinity;
+
+  for (const sub of subCmds) {
+    // Create a fake rawInput for each sub-command
+    const subInput = { command: sub };
+    let bestScore = 0;
+    let bestGrant: PermissionGrant | null = null;
+    for (const grant of grants) {
+      const score = matchScore(grant, null, subInput, projectPath);
+      if (score > bestScore) {
+        bestScore = score;
+        bestGrant = grant;
+      }
+    }
+    if (!bestGrant || bestScore === 0) return null; // Uncovered sub-command
+    if (bestScore < weakestScore) {
+      weakestScore = bestScore;
+      weakestGrant = bestGrant;
+    }
+  }
+
+  return weakestGrant;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,9 +96,20 @@ function matchScore(
     case 'command_prefix': {
       const cmd = normalizeCommand(rawInput);
       if (!cmd) return 0;
-      // Reject if command chains multiple operations (&&, ||, ;, |)
-      if (/[&|;]/.test(cmd)) return 0;
-      // Match on word boundary: "npm" matches "npm install" but not "npmevil"
+      // For chained commands (&&, ||, ;), check that EVERY sub-command
+      // matches the prefix. e.g. "cd dir && git log" matches prefix "git"
+      // only if "cd" is also allowed — but here we check a single prefix,
+      // so for chains, each sub-command's first word must equal the grant prefix.
+      const subCmds = splitChainedCommands(cmd);
+      if (subCmds.length > 1) {
+        // Every sub-command's binary must match the grant prefix
+        const allMatch = subCmds.every(sub => {
+          const bin = sub.split(/\s+/)[0];
+          return bin === grant.scopeValue;
+        });
+        return allMatch ? 75 : 0;
+      }
+      // Single command: match on word boundary
       if (cmd === grant.scopeValue) return 80;
       if (cmd.startsWith(grant.scopeValue + ' ')) return 80;
       return 0;
@@ -102,6 +159,11 @@ function normalizeCommand(rawInput: unknown): string | null {
     if (typeof obj['cmd'] === 'string') return (obj['cmd'] as string).trim();
   }
   return null;
+}
+
+/** Split a chained command string into individual commands (by &&, ||, ;) */
+function splitChainedCommands(cmd: string): string[] {
+  return cmd.split(/\s*(?:&&|\|\||;)\s*/).map(s => s.trim()).filter(Boolean);
 }
 
 function normalizePath(filePath: string, _projectPath: string): string {
@@ -168,10 +230,19 @@ export function deriveScopeOptions(
   if (toolKind === 'execute' && rawInput) {
     const cmd = normalizeCommand(rawInput);
     if (cmd) {
-      options.push({ scopeType: 'command', scopeValue: cmd, label: `This exact command (\`${cmd}\`)` });
-      const prefix = cmd.split(/\s+/)[0];
-      if (prefix !== cmd) {
-        options.push({ scopeType: 'command_prefix', scopeValue: prefix, label: `All \`${prefix}\` commands` });
+      const subCmds = splitChainedCommands(cmd);
+      // For chained commands, offer per-binary prefixes for each unique binary
+      if (subCmds.length > 1) {
+        const binaries = [...new Set(subCmds.map(s => s.split(/\s+/)[0]))];
+        for (const bin of binaries) {
+          options.push({ scopeType: 'command_prefix', scopeValue: bin, label: `All \`${bin}\` commands` });
+        }
+      } else {
+        options.push({ scopeType: 'command', scopeValue: cmd, label: `This exact command` });
+        const prefix = cmd.split(/\s+/)[0];
+        if (prefix !== cmd) {
+          options.push({ scopeType: 'command_prefix', scopeValue: prefix, label: `All \`${prefix}\` commands` });
+        }
       }
     }
   }
