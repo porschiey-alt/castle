@@ -43,6 +43,10 @@ export interface TaskImplementEvent {
   agentId: string;
 }
 
+export interface TaskCreatePREvent {
+  task: Task;
+}
+
 export interface TaskReviewSubmitEvent {
   taskId: string;
   comments: ResearchComment[];
@@ -91,6 +95,7 @@ export class TaskDetailComponent implements OnInit {
   stateChanged = output<{ task: Task; state: TaskState; closeReason?: BugCloseReason }>();
   researchRequested = output<TaskResearchEvent>();
   implementRequested = output<TaskImplementEvent>();
+  createPRRequested = output<TaskCreatePREvent>();
   reviewSubmitted = output<TaskReviewSubmitEvent>();
   goToResearcher = output<string>();
   goToImplementer = output<string>();
@@ -116,6 +121,10 @@ export class TaskDetailComponent implements OnInit {
   // Research review comments
   pendingComments: ResearchComment[] = [];
   reviewSubmitting = false;
+  // PR creation state
+  prCreating = false;
+  prUrl: string | null = null;
+  prError: string | null = null;
 
   /** Clear review state when reviewRunning transitions from true to false */
   private reviewRunningEffect = effect(() => {
@@ -262,6 +271,25 @@ export class TaskDetailComponent implements OnInit {
       task: t,
       agentId: this.selectedImplementAgentId,
     });
+  }
+
+  createPR(): void {
+    const t = this.task();
+    if (!t || !t.worktreePath) return;
+    this.prCreating = true;
+    this.prUrl = null;
+    this.prError = null;
+    this.createPRRequested.emit({ task: t });
+  }
+
+  /** Called by parent when PR creation completes */
+  onPRResult(result: { success: boolean; url?: string; error?: string }): void {
+    this.prCreating = false;
+    if (result.success && result.url) {
+      this.prUrl = result.url;
+    } else {
+      this.prError = result.error || 'Failed to create pull request';
+    }
   }
 
   getAgentById(id: string): Agent | undefined {

@@ -295,6 +295,12 @@
               <mat-icon class="research-spinner">sync</mat-icon>
               <h3>Implementation in progress...</h3>
               <p>The agent is implementing this task. You can watch its progress live.</p>
+              @if (task()!.branchName) {
+                <div class="branch-info">
+                  <mat-icon>account_tree</mat-icon>
+                  <span class="branch-name">{{ task()!.branchName }}</span>
+                </div>
+              }
               <button mat-stroked-button color="primary" (click)="goToImplementer.emit(task()!.implementAgentId || selectedImplementAgentId)">
                 <mat-icon>open_in_new</mat-icon>
                 Take me to the Agent
@@ -306,6 +312,13 @@
               <h3>Implementation Complete</h3>
               <p>The agent has finished implementing this task.</p>
 
+              @if (task()!.branchName) {
+                <div class="branch-info">
+                  <mat-icon>account_tree</mat-icon>
+                  <span class="branch-name">{{ task()!.branchName }}</span>
+                </div>
+              }
+
               <div class="implementation-actions">
                 <button mat-stroked-button color="primary"
                         (click)="goToImplementer.emit(task()!.implementAgentId!)">
@@ -313,12 +326,34 @@
                   View Agent Conversation
                 </button>
 
+                @if (task()!.worktreePath) {
+                  <button mat-flat-button color="primary"
+                          [disabled]="prCreating"
+                          (click)="createPR()">
+                    <mat-icon>merge</mat-icon>
+                    {{ prCreating ? 'Creating...' : 'Create Pull Request' }}
+                  </button>
+                }
+
                 <button mat-flat-button color="warn"
                         (click)="requestRevision()">
                   <mat-icon>replay</mat-icon>
                   Request Revision
                 </button>
               </div>
+
+              @if (prUrl) {
+                <div class="pr-success">
+                  <mat-icon>check_circle</mat-icon>
+                  <span>PR created: {{ prUrl }}</span>
+                </div>
+              }
+              @if (prError) {
+                <div class="pr-error">
+                  <mat-icon>error</mat-icon>
+                  <span>{{ prError }}</span>
+                </div>
+              }
             </div>
           } @else {
             <div class="research-empty">

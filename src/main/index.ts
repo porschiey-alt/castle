@@ -10,6 +10,7 @@ import { DatabaseService } from './services/database.service';
 import { AgentDiscoveryService } from './services/agent-discovery.service';
 import { ProcessManagerService } from './services/process-manager.service';
 import { DirectoryService } from './services/directory.service';
+import { GitWorktreeService } from './services/git-worktree.service';
 import { TailscaleServerService } from './services/tailscale-server.service';
 import { WsBridgeService } from './services/ws-bridge.service';
 import { EventBroadcaster } from './services/event-broadcaster';
@@ -21,6 +22,7 @@ let databaseService: DatabaseService;
 let agentDiscoveryService: AgentDiscoveryService;
 let processManagerService: ProcessManagerService;
 let directoryService: DirectoryService;
+let gitWorktreeService: GitWorktreeService;
 let tailscaleServer: TailscaleServerService | null = null;
 let wsBridge: WsBridgeService | null = null;
 let broadcaster: EventBroadcaster | null = null;
@@ -62,6 +64,7 @@ async function initializeServices(): Promise<void> {
   directoryService = new DirectoryService(databaseService);
   agentDiscoveryService = new AgentDiscoveryService();
   processManagerService = new ProcessManagerService();
+  gitWorktreeService = new GitWorktreeService();
   
   console.log('Services initialized successfully');
 }
@@ -94,6 +97,7 @@ async function createWindow(): Promise<void> {
     agentDiscoveryService,
     processManagerService,
     directoryService,
+    gitWorktreeService,
     mainWindow,
     broadcaster
   });

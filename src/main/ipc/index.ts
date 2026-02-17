@@ -9,6 +9,7 @@ import { DatabaseService } from '../services/database.service';
 import { AgentDiscoveryService } from '../services/agent-discovery.service';
 import { ProcessManagerService } from '../services/process-manager.service';
 import { DirectoryService } from '../services/directory.service';
+import { GitWorktreeService } from '../services/git-worktree.service';
 import { EventBroadcaster } from '../services/event-broadcaster';
 import { IPC_CHANNELS } from '../../shared/types/ipc.types';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,6 +21,7 @@ export interface IpcServices {
   agentDiscoveryService: AgentDiscoveryService;
   processManagerService: ProcessManagerService;
   directoryService: DirectoryService;
+  gitWorktreeService: GitWorktreeService;
   mainWindow: BrowserWindow;
   broadcaster: EventBroadcaster;
 }
@@ -39,6 +41,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     agentDiscoveryService,
     processManagerService,
     directoryService,
+    gitWorktreeService,
     mainWindow,
     broadcaster
   } = services;
@@ -607,10 +610,26 @@ export function registerIpcHandlers(services: IpcServices): void {
     const workingDirectory = directoryService.getCurrentDirectory();
     if (!workingDirectory) throw new Error('No workspace directory selected');
 
-    // Ensure agent has a session
+    // Try to create a git worktree for isolated parallel work
+    let effectiveWorkDir = workingDirectory;
+    let worktreePath: string | undefined;
+    let branchName: string | undefined;
+    try {
+      if (gitWorktreeService.isGitRepo(workingDirectory)) {
+        const result = gitWorktreeService.createWorktree(workingDirectory, task.title, taskId);
+        effectiveWorkDir = result.worktreePath;
+        worktreePath = result.worktreePath;
+        branchName = result.branchName;
+        console.log(`[Implementation] Using worktree: ${effectiveWorkDir} (branch: ${branchName})`);
+      }
+    } catch (error) {
+      console.warn('[Implementation] Could not create worktree, using main directory:', error);
+    }
+
+    // Ensure agent has a session (using worktree directory if available)
     let sessionProcess = processManagerService.getSessionByAgentId(agentId);
     if (!sessionProcess) {
-      const session = await processManagerService.startSession(agent, workingDirectory);
+      const session = await processManagerService.startSession(agent, effectiveWorkDir);
       subscribeToSession(session.id, agentId);
       sessionProcess = processManagerService.getSessionByAgentId(agentId);
       if (!sessionProcess) throw new Error('Failed to start implementation agent session');
@@ -622,9 +641,15 @@ export function registerIpcHandlers(services: IpcServices): void {
       prompt += `\n\nResearch Analysis:\n${task.researchContent}`;
     }
     prompt += `\n\nPlease implement the changes described above.`;
+    if (branchName) {
+      prompt += `\n\nYou are working on branch "${branchName}". When done, commit your changes with a descriptive message.`;
+    }
 
-    // Save implementAgentId
-    await databaseService.updateTask(taskId, { implementAgentId: agentId });
+    // Save implementAgentId and worktree info
+    const taskUpdates: any = { implementAgentId: agentId };
+    if (worktreePath) taskUpdates.worktreePath = worktreePath;
+    if (branchName) taskUpdates.branchName = branchName;
+    await databaseService.updateTask(taskId, taskUpdates);
 
     // Track the conversation so assistant replies go to the right place
     if (conversationId) {
@@ -794,6 +819,28 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   handle(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, async (_event, { conversationId, limit, offset }) => {
     return databaseService.getMessagesByConversation(conversationId, limit, offset);
+  });
+
+  // ============ Worktree Handlers ============
+
+  handle(IPC_CHANNELS.WORKTREE_CREATE, async (_event, { repoPath, taskTitle, taskId }: { repoPath: string; taskTitle: string; taskId: string }) => {
+    return gitWorktreeService.createWorktree(repoPath, taskTitle, taskId);
+  });
+
+  handle(IPC_CHANNELS.WORKTREE_REMOVE, async (_event, { worktreePath, deleteBranch }: { worktreePath: string; deleteBranch?: boolean }) => {
+    gitWorktreeService.removeWorktree(worktreePath, deleteBranch);
+  });
+
+  handle(IPC_CHANNELS.WORKTREE_LIST, async (_event, { repoPath }: { repoPath: string }) => {
+    return gitWorktreeService.listWorktrees(repoPath);
+  });
+
+  handle(IPC_CHANNELS.WORKTREE_STATUS, async (_event, { worktreePath }: { worktreePath: string }) => {
+    return gitWorktreeService.getWorktreeStatus(worktreePath);
+  });
+
+  handle(IPC_CHANNELS.WORKTREE_CREATE_PR, async (_event, { worktreePath, title, body }: { worktreePath: string; title: string; body: string }) => {
+    return gitWorktreeService.createPullRequest(worktreePath, title, body);
   });
 
   console.log('IPC handlers registered');

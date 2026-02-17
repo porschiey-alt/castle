@@ -191,6 +191,14 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE tasks ADD COLUMN implement_agent_id TEXT`);
     } catch { /* column already exists */ }
 
+    // Migration: add worktree columns if missing
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN worktree_path TEXT`);
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE tasks ADD COLUMN branch_name TEXT`);
+    } catch { /* column already exists */ }
+
     // Research reviews table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS research_reviews (
@@ -877,6 +885,8 @@ export class DatabaseService {
     if (updates.researchAgentId !== undefined) { sets.push('research_agent_id = ?'); params.push(updates.researchAgentId); }
     if (updates.closeReason !== undefined) { sets.push('close_reason = ?'); params.push(updates.closeReason); }
     if (updates.implementAgentId !== undefined) { sets.push('implement_agent_id = ?'); params.push(updates.implementAgentId); }
+    if (updates.worktreePath !== undefined) { sets.push('worktree_path = ?'); params.push(updates.worktreePath); }
+    if (updates.branchName !== undefined) { sets.push('branch_name = ?'); params.push(updates.branchName); }
 
     if (sets.length > 0) {
       sets.push("updated_at = datetime('now')");
@@ -909,7 +919,7 @@ export class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
+      `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, worktree_path, branch_name, created_at, updated_at
        FROM tasks WHERE id = ?`
     );
     stmt.bind([taskId]);
@@ -923,6 +933,7 @@ export class DatabaseService {
       implement_agent_id: string | null;
       github_issue_number: number | null; github_repo: string | null;
       close_reason: string | null;
+      worktree_path: string | null; branch_name: string | null;
       created_at: string; updated_at: string;
     };
     stmt.free();
@@ -943,6 +954,8 @@ export class DatabaseService {
       githubIssueNumber: row.github_issue_number ?? undefined,
       githubRepo: row.github_repo ?? undefined,
       closeReason: (row.close_reason as BugCloseReason) ?? undefined,
+      worktreePath: row.worktree_path ?? undefined,
+      branchName: row.branch_name ?? undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
@@ -951,7 +964,7 @@ export class DatabaseService {
   async getTasks(stateFilter?: string, kindFilter?: string, projectPath?: string): Promise<Task[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, created_at, updated_at
+    let sql = `SELECT id, title, description, state, kind, project_path, research_content, research_agent_id, implement_agent_id, github_issue_number, github_repo, close_reason, worktree_path, branch_name, created_at, updated_at
                FROM tasks`;
     const params: unknown[] = [];
     const conditions: string[] = [];
@@ -985,6 +998,7 @@ export class DatabaseService {
         implement_agent_id: string | null;
         github_issue_number: number | null; github_repo: string | null;
         close_reason: string | null;
+        worktree_path: string | null; branch_name: string | null;
         created_at: string; updated_at: string;
       };
 
@@ -1002,6 +1016,8 @@ export class DatabaseService {
         githubIssueNumber: row.github_issue_number ?? undefined,
         githubRepo: row.github_repo ?? undefined,
         closeReason: (row.close_reason as BugCloseReason) ?? undefined,
+        worktreePath: row.worktree_path ?? undefined,
+        branchName: row.branch_name ?? undefined,
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
       });

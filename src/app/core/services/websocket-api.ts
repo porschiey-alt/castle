@@ -260,4 +260,17 @@ export class WebSocketAPI implements ElectronAPI {
     getMessages: (conversationId: string, limit?: number, offset?: number): Promise<ChatMessage[]> =>
       this.invoke(IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES, { conversationId, limit, offset }),
   };
+
+  worktree = {
+    create: (repoPath: string, taskTitle: string, taskId: string): Promise<{ worktreePath: string; branchName: string }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_CREATE, { repoPath, taskTitle, taskId }),
+    remove: (worktreePath: string, deleteBranch?: boolean): Promise<void> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_REMOVE, { worktreePath, deleteBranch }),
+    list: (repoPath: string): Promise<{ path: string; branch: string; head: string; isMainWorktree: boolean }[]> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_LIST, { repoPath }),
+    status: (worktreePath: string): Promise<{ exists: boolean; branch?: string; hasChanges?: boolean }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_STATUS, { worktreePath }),
+    createPR: (worktreePath: string, title: string, body: string): Promise<{ success: boolean; url?: string; error?: string }> =>
+      this.invoke(IPC_CHANNELS.WORKTREE_CREATE_PR, { worktreePath, title, body }),
+  };
 }

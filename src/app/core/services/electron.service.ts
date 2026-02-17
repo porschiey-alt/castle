@@ -325,4 +325,26 @@ export class ElectronService {
   async getConversationMessages(conversationId: string, limit?: number, offset?: number): Promise<ChatMessage[]> {
     return this.api.conversations.getMessages(conversationId, limit, offset);
   }
+
+  // ============ Worktree Methods ============
+
+  async createWorktree(repoPath: string, taskTitle: string, taskId: string): Promise<{ worktreePath: string; branchName: string }> {
+    return this.api.worktree.create(repoPath, taskTitle, taskId);
+  }
+
+  async removeWorktree(worktreePath: string, deleteBranch?: boolean): Promise<void> {
+    return this.api.worktree.remove(worktreePath, deleteBranch);
+  }
+
+  async listWorktrees(repoPath: string): Promise<{ path: string; branch: string; head: string; isMainWorktree: boolean }[]> {
+    return this.api.worktree.list(repoPath);
+  }
+
+  async getWorktreeStatus(worktreePath: string): Promise<{ exists: boolean; branch?: string; hasChanges?: boolean }> {
+    return this.api.worktree.status(worktreePath);
+  }
+
+  async createPullRequest(worktreePath: string, title: string, body: string): Promise<{ success: boolean; url?: string; error?: string }> {
+    return this.api.worktree.createPR(worktreePath, title, body);
+  }
 }

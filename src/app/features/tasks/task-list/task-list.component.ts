@@ -2,7 +2,7 @@
  * Task List Component - Main task management view
  */
 
-import { Component, inject, output, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, output, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,7 +17,7 @@ import { AgentService } from '../../../core/services/agent.service';
 import { ElectronService } from '../../../core/services/electron.service';
 import { ConversationService } from '../../../core/services/conversation.service';
 import { ConfirmDialogComponent, type ConfirmDialogData } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
-import { TaskDetailComponent, type TaskSaveEvent, type TaskResearchEvent, type TaskImplementEvent, type TaskReviewSubmitEvent } from '../task-detail/task-detail.component';
+import { TaskDetailComponent, type TaskSaveEvent, type TaskResearchEvent, type TaskImplementEvent, type TaskCreatePREvent, type TaskReviewSubmitEvent } from '../task-detail/task-detail.component';
 import { TASK_STATES, TASK_KINDS, type Task, type TaskState, type TaskKind, type BugCloseReason } from '../../../../shared/types/task.types';
 
 @Component({
@@ -53,6 +53,8 @@ export class TaskListComponent implements OnInit, OnDestroy {
   filterKind = this.taskService.filterKind;
 
   creating = false;
+
+  @ViewChild(TaskDetailComponent) taskDetailComponent?: TaskDetailComponent;
 
   /** Emitted when user clicks "Take me to the Researcher/Agent" */
   goToAgent = output<string>();
@@ -178,6 +180,16 @@ export class TaskListComponent implements OnInit, OnDestroy {
   async onReviewSubmitted(event: TaskReviewSubmitEvent): Promise<void> {
     this.taskService.markReviewRunning(event.taskId);
     await this.taskService.submitResearchReview(event.taskId, event.comments, event.researchSnapshot);
+  }
+
+  async onCreatePR(event: TaskCreatePREvent): Promise<void> {
+    const task = event.task;
+    if (!task.worktreePath) return;
+    const body = task.description
+      ? `## ${task.title}\n\n${task.description}`
+      : task.title;
+    const result = await this.electronService.createPullRequest(task.worktreePath, task.title, body);
+    this.taskDetailComponent?.onPRResult(result);
   }
 
   private openConfirmDialog(data: ConfirmDialogData): Promise<boolean> {

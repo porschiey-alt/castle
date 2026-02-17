@@ -74,6 +74,13 @@ export const IPC_CHANNELS = {
   TASKS_DIAGNOSIS_FILE_CLEANUP: 'tasks:diagnosisFileCleanup',
   TASKS_DELETE_DIAGNOSIS_FILE: 'tasks:deleteDiagnosisFile',
 
+  // Worktree operations
+  WORKTREE_CREATE: 'worktree:create',
+  WORKTREE_REMOVE: 'worktree:remove',
+  WORKTREE_LIST: 'worktree:list',
+  WORKTREE_STATUS: 'worktree:status',
+  WORKTREE_CREATE_PR: 'worktree:createPR',
+
   // Cross-device sync push events
   SYNC_TASKS_CHANGED: 'sync:tasksChanged',
   SYNC_CHAT_MESSAGE_ADDED: 'sync:chatMessageAdded',
@@ -277,6 +284,28 @@ export interface IPCPayloads {
   [IPC_CHANNELS.CONVERSATIONS_GET_MESSAGES]:{
     request: { conversationId: string; limit?: number; offset?: number };
     response: ChatMessage[];
+  };
+
+  // Worktree
+  [IPC_CHANNELS.WORKTREE_CREATE]: {
+    request: { repoPath: string; taskTitle: string; taskId: string };
+    response: { worktreePath: string; branchName: string };
+  };
+  [IPC_CHANNELS.WORKTREE_REMOVE]: {
+    request: { worktreePath: string; deleteBranch?: boolean };
+    response: void;
+  };
+  [IPC_CHANNELS.WORKTREE_LIST]: {
+    request: { repoPath: string };
+    response: { path: string; branch: string; head: string; isMainWorktree: boolean }[];
+  };
+  [IPC_CHANNELS.WORKTREE_STATUS]: {
+    request: { worktreePath: string };
+    response: { exists: boolean; branch?: string; hasChanges?: boolean };
+  };
+  [IPC_CHANNELS.WORKTREE_CREATE_PR]: {
+    request: { worktreePath: string; title: string; body: string };
+    response: { success: boolean; url?: string; error?: string };
   };
 }
 

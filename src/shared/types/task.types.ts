@@ -50,6 +50,8 @@ export interface Task {
   githubIssueNumber?: number;
   githubRepo?: string;
   closeReason?: BugCloseReason;
+  worktreePath?: string;
+  branchName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,7 +60,7 @@ export type CreateTaskInput = Pick<Task, 'title' | 'description' | 'state' | 'ki
   labelIds?: string[];
 };
 
-export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId' | 'implementAgentId' | 'closeReason'>> & {
+export type UpdateTaskInput = Partial<Pick<Task, 'title' | 'description' | 'state' | 'kind' | 'researchContent' | 'researchAgentId' | 'implementAgentId' | 'closeReason' | 'worktreePath' | 'branchName'>> & {
   labelIds?: string[];
 };
 
