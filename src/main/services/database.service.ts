@@ -247,6 +247,12 @@ export class DatabaseService {
     } catch { /* column already exists */ }
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)`);
 
+    // Migration: add task_id to conversations
+    try {
+      this.db.run(`ALTER TABLE conversations ADD COLUMN task_id TEXT`);
+    } catch { /* column already exists */ }
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_conversations_task_id ON conversations(task_id)`);
+
     // Migration: create legacy conversations for existing messages without conversation_id
     this.migrateLegacyConversations();
 
@@ -555,9 +561,9 @@ export class DatabaseService {
     const id = uuidv4();
     const now = new Date().toISOString();
     this.db.run(
-      `INSERT INTO conversations (id, agent_id, title, working_directory, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, input.agentId, input.title || null, input.workingDirectory || null, now, now]
+      `INSERT INTO conversations (id, agent_id, title, working_directory, task_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.agentId, input.title || null, input.workingDirectory || null, input.taskId || null, now, now]
     );
 
     this.saveDatabase();
@@ -568,7 +574,7 @@ export class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(
-      `SELECT c.id, c.agent_id, c.acp_session_id, c.title, c.working_directory, c.created_at, c.updated_at,
+      `SELECT c.id, c.agent_id, c.acp_session_id, c.title, c.working_directory, c.task_id, c.created_at, c.updated_at,
               (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count,
               (SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message
        FROM conversations c WHERE c.id = ?`
@@ -579,7 +585,7 @@ export class DatabaseService {
 
     const row = stmt.getAsObject() as {
       id: string; agent_id: string; acp_session_id: string | null;
-      title: string | null; working_directory: string | null;
+      title: string | null; working_directory: string | null; task_id: string | null;
       created_at: string; updated_at: string;
       message_count: number; last_message: string | null;
     };
@@ -589,6 +595,7 @@ export class DatabaseService {
       id: row.id,
       agentId: row.agent_id,
       acpSessionId: row.acp_session_id || undefined,
+      taskId: row.task_id || undefined,
       title: row.title || undefined,
       workingDirectory: row.working_directory || undefined,
       createdAt: new Date(row.created_at),
@@ -603,7 +610,7 @@ export class DatabaseService {
 
     const conversations: Conversation[] = [];
     const stmt = this.db.prepare(
-      `SELECT c.id, c.agent_id, c.acp_session_id, c.title, c.working_directory, c.created_at, c.updated_at,
+      `SELECT c.id, c.agent_id, c.acp_session_id, c.title, c.working_directory, c.task_id, c.created_at, c.updated_at,
               (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count,
               (SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message
        FROM conversations c
@@ -615,7 +622,7 @@ export class DatabaseService {
     while (stmt.step()) {
       const row = stmt.getAsObject() as {
         id: string; agent_id: string; acp_session_id: string | null;
-        title: string | null; working_directory: string | null;
+        title: string | null; working_directory: string | null; task_id: string | null;
         created_at: string; updated_at: string;
         message_count: number; last_message: string | null;
       };
@@ -623,6 +630,7 @@ export class DatabaseService {
         id: row.id,
         agentId: row.agent_id,
         acpSessionId: row.acp_session_id || undefined,
+        taskId: row.task_id || undefined,
         title: row.title || undefined,
         workingDirectory: row.working_directory || undefined,
         createdAt: new Date(row.created_at),

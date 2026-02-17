@@ -667,8 +667,16 @@ export function registerIpcHandlers(services: IpcServices): void {
     // Phase: Implementation
     sendLifecycle('implementing');
 
-    // Ensure agent has a session (using worktree directory if available)
+    // Ensure agent has a session whose cwd matches the worktree (or main dir).
+    // If an existing session points at a different directory we must restart it
+    // so the ACP agent actually works inside the worktree.
     let sessionProcess = processManagerService.getSessionByAgentId(agentId);
+    if (sessionProcess && worktreePath) {
+      // Existing session was started with a different cwd — kill and recreate
+      console.log('[Implementation] Restarting agent session for worktree cwd');
+      await processManagerService.stopSession(sessionProcess.session.id);
+      sessionProcess = undefined;
+    }
     if (!sessionProcess) {
       const session = await processManagerService.startSession(agent, effectiveWorkDir);
       subscribeToSession(session.id, agentId);

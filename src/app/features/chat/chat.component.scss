@@ -14,7 +14,7 @@
   min-height: 0;
 }
 
-.lifecycle-banner {
+.task-banner {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -24,6 +24,28 @@
   font-size: 0.82rem;
   color: var(--text-secondary, #8b949e);
   flex-shrink: 0;
+  min-height: 32px;
+
+  .task-icon {
+    flex-shrink: 0;
+  }
+
+  .task-link {
+    color: var(--theme-primary, #58a6ff);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .task-separator {
+    color: var(--text-secondary, #8b949e);
+    flex-shrink: 0;
+  }
 
   .lifecycle-spinner {
     width: 14px;

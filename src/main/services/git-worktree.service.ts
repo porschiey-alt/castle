@@ -69,9 +69,17 @@ class GitHubProvider implements PullRequestProvider {
 
   async isAuthenticated(cwd: string): Promise<boolean> {
     try {
-      await execFileAsync('gh', ['auth', 'status'], { cwd });
+      const { stdout, stderr } = await execFileAsync('gh', ['auth', 'status'], { cwd });
+      console.log('[GitHubProvider] gh auth status OK:', stdout.trim());
       return true;
-    } catch {
+    } catch (error: any) {
+      console.warn('[GitHubProvider] gh auth status FAILED:', {
+        message: error.message,
+        stderr: error.stderr,
+        stdout: error.stdout,
+        code: error.code,
+        path: process.env.PATH?.split(';').filter((p: string) => /github|gh/i.test(p)),
+      });
       return false;
     }
   }
@@ -537,7 +545,9 @@ export class GitWorktreeService {
       return { success: false, error: 'No supported Git hosting provider detected for this repository.' };
     }
 
+    console.log(`[GitWorktree] pushAndCreatePR: provider=${provider.name}, cwd=${worktreePath}`);
     const authenticated = await provider.isAuthenticated(worktreePath);
+    console.log(`[GitWorktree] pushAndCreatePR: authenticated=${authenticated}`);
     if (!authenticated) {
       return { success: false, error: `Not authenticated with ${provider.name}. Run the appropriate login command.` };
     }

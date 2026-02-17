@@ -6,6 +6,7 @@ export interface Conversation {
   id: string;
   agentId: string;
   acpSessionId?: string;
+  taskId?: string;
   title?: string;
   workingDirectory?: string;
   createdAt: Date;
@@ -18,6 +19,7 @@ export interface CreateConversationInput {
   agentId: string;
   title?: string;
   workingDirectory?: string;
+  taskId?: string;
 }
 
 export interface UpdateConversationInput {

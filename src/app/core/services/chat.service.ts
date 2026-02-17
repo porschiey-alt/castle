@@ -396,15 +396,15 @@ export class ChatService {
     this.chatStatesSignal.set(states);
   }
 
-  /** Map a worktree lifecycle phase to a human-readable banner label */
-  private lifecyclePhaseLabel(taskTitle: string, phase: string, message?: string): string | null {
+  /** Map a worktree lifecycle phase to a human-readable status label */
+  private lifecyclePhaseLabel(_taskTitle: string, phase: string, message?: string): string | null {
     switch (phase) {
-      case 'creating_worktree': return `${taskTitle}: Creating worktree…`;
-      case 'installing_deps':   return `${taskTitle}: Installing dependencies…`;
-      case 'implementing':      return `${taskTitle}: Agent is working…`;
-      case 'committing':        return `${taskTitle}: Committing changes…`;
-      case 'creating_pr':       return `${taskTitle}: Creating pull request…`;
-      case 'warning':           return `${taskTitle}: ${message || 'Warning'}`;
+      case 'creating_worktree': return 'Creating worktree…';
+      case 'installing_deps':   return 'Installing dependencies…';
+      case 'implementing':      return 'Agent is working…';
+      case 'committing':        return 'Committing changes…';
+      case 'creating_pr':       return 'Creating pull request…';
+      case 'warning':           return message || 'Warning';
       default:                  return null;
     }
   }
