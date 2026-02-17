@@ -239,10 +239,18 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   toggleSidebar(): void {
     this.sidebarOpen = !this.sidebarOpen;
+    // On mobile, also expand the conversation panel when opening the sidebar
+    if (this.sidebarOpen && window.innerWidth <= 768) {
+      this.conversationPanelOpen = true;
+    }
   }
 
   closeSidebar(): void {
     this.sidebarOpen = false;
+    // On mobile, also close the conversation panel when closing the sidebar
+    if (window.innerWidth <= 768) {
+      this.conversationPanelOpen = false;
+    }
   }
 
   showTasks(): void {

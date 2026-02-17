@@ -350,7 +350,7 @@
     position: fixed;
     inset: 0;
     z-index: 999;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--bg-primary, #1e1e2e);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease;
@@ -391,7 +391,7 @@
     right: 0;
     bottom: 0;
     z-index: 997;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--bg-primary, #1e1e2e);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease;
