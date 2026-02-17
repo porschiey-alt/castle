@@ -1,4 +1,12 @@
 <div class="chat-wrapper">
+  <!-- Lifecycle status banner pinned to top -->
+  @if (lifecycleStatus(); as status) {
+    <div class="lifecycle-banner">
+      <span class="lifecycle-spinner"></span>
+      <span class="lifecycle-text">{{ status }}</span>
+    </div>
+  }
+
   <!-- Todo banner pinned to top -->
   @if (todoItems().length > 0) {
     <app-todo-banner [items]="todoItems()" />

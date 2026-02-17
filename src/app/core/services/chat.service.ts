@@ -94,6 +94,17 @@ export class ChatService {
     return this.isStreamingConversationActive() ? state.accumulatedThinking : '';
   });
 
+  /** Per-agent lifecycle status (taskTitle + label) */
+  private _lifecycleStatus = signal<Map<string, { taskId: string; label: string }>>(new Map());
+
+  /** Lifecycle status banner text for the currently selected agent, or null */
+  readonly lifecycleStatus = computed<string | null>(() => {
+    const agentId = this.agentService.selectedAgentId();
+    if (!agentId) return null;
+    const entry = this._lifecycleStatus().get(agentId);
+    return entry?.label ?? null;
+  });
+
   constructor() {
     this.setupStreamingListeners();
   }
@@ -153,6 +164,20 @@ export class ChatService {
     this.electronService.streamingStarted$.subscribe(({ agentId, conversationId }) => {
       this.setStreamingConversationId(agentId, conversationId ?? null);
       this.setLoading(agentId, true);
+    });
+
+    // Worktree lifecycle status → update pinned banner per agent
+    this.electronService.worktreeLifecycle$.subscribe((event) => {
+      const label = this.lifecyclePhaseLabel(event.taskTitle, event.phase, event.message);
+      if (event.phase === 'done') {
+        this._lifecycleStatus.update(m => { const n = new Map(m); n.delete(event.agentId); return n; });
+      } else if (label) {
+        this._lifecycleStatus.update(m => {
+          const n = new Map(m);
+          n.set(event.agentId, { taskId: event.taskId, label });
+          return n;
+        });
+      }
     });
   }
 
@@ -369,5 +394,18 @@ export class ChatService {
     });
     
     this.chatStatesSignal.set(states);
+  }
+
+  /** Map a worktree lifecycle phase to a human-readable banner label */
+  private lifecyclePhaseLabel(taskTitle: string, phase: string, message?: string): string | null {
+    switch (phase) {
+      case 'creating_worktree': return `${taskTitle}: Creating worktree…`;
+      case 'installing_deps':   return `${taskTitle}: Installing dependencies…`;
+      case 'implementing':      return `${taskTitle}: Agent is working…`;
+      case 'committing':        return `${taskTitle}: Committing changes…`;
+      case 'creating_pr':       return `${taskTitle}: Creating pull request…`;
+      case 'warning':           return `${taskTitle}: ${message || 'Warning'}`;
+      default:                  return null;
+    }
   }
 }

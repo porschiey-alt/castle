@@ -278,7 +278,7 @@ export class WebSocketAPI implements ElectronAPI {
       this.invoke(IPC_CHANNELS.WORKTREE_COMMIT, { worktreePath, message }),
     checkGit: (repoPath: string): Promise<{ isGitRepo: boolean; hasUncommittedChanges: boolean; currentBranch: string | null }> =>
       this.invoke(IPC_CHANNELS.WORKTREE_CHECK_GIT, { repoPath }),
-    onLifecycle: (callback: (event: { taskId: string; phase: string; message?: string }) => void): void => {
+    onLifecycle: (callback: (event: { taskId: string; agentId: string; taskTitle: string; phase: string; message?: string }) => void): void => {
       this.on(IPC_CHANNELS.WORKTREE_LIFECYCLE, callback);
     },
   };
