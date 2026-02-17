@@ -46,6 +46,8 @@ interface SessionProcess {
 export class ProcessManagerService {
   private sessions: Map<string, SessionProcess> = new Map();
   private cachedBestModel: string | null = null;
+  // Maps permission requestId → sessionId for correct routing when multiple sessions share an agentId
+  private pendingPermissions: Map<string, string> = new Map();
 
   getActiveModel(): string | null {
     return this.cachedBestModel;
@@ -83,6 +85,7 @@ export class ProcessManagerService {
    * If acpSessionIdToResume is provided, attempts to resume that session.
    */
   async startSession(agent: Agent, workingDirectory: string, acpSessionIdToResume?: string): Promise<AgentSession> {
+    const self = this;
     const existingSession = this.getSessionByAgentId(agent.id, workingDirectory);
     if (existingSession) {
       log.info(`Reusing existing session for agent "${agent.name}" (${agent.id}) in ${workingDirectory}`);
@@ -176,6 +179,8 @@ export class ProcessManagerService {
         return new Promise((resolve) => {
           const requestId = uuidv4();
           log.info(`Permission requested: requestId=${requestId}, tool=${params.toolCall?.kind}, options=[${params.options.map(o => `${o.optionId}:${o.kind}`).join(', ')}]`);
+          // Track which session owns this request for correct routing
+          self.pendingPermissions.set(requestId, sessionId);
           const permissionData = {
             requestId,
             agentId: agent.id,
@@ -190,9 +195,9 @@ export class ProcessManagerService {
 
           // Listen for the response
           const onResponse = (response: { requestId: string; optionId: string }) => {
-            log.info(`Permission event received: expected=${requestId}, got=${response.requestId}, optionId=${response.optionId}, match=${response.requestId === requestId}`);
             if (response.requestId === requestId) {
               eventEmitter.off('permissionResponse', onResponse);
+              self.pendingPermissions.delete(requestId);
               log.info(`Permission resolved: requestId=${requestId}, optionId=${response.optionId}`);
               resolve({ outcome: { outcome: 'selected' as const, optionId: response.optionId } });
             }
@@ -538,12 +543,17 @@ export class ProcessManagerService {
    * Send a permission response back to the ACP client handler
    */
   respondToPermission(agentId: string, requestId: string, optionId: string): void {
-    const sessionProcess = this.getSessionByAgentId(agentId);
+    // Use requestId mapping to find the correct session (avoids wrong session when
+    // the same agent has multiple sessions, e.g. main + worktree)
+    const targetSessionId = this.pendingPermissions.get(requestId);
+    const sessionProcess = targetSessionId
+      ? this.sessions.get(targetSessionId)
+      : this.getSessionByAgentId(agentId);
     if (sessionProcess) {
-      log.info(`Permission response forwarded to agent ${agentId}: requestId=${requestId}, optionId=${optionId}`);
+      log.info(`Permission response forwarded to agent ${agentId}: requestId=${requestId}, optionId=${optionId}, sessionId=${sessionProcess.session.id}`);
       sessionProcess.eventEmitter.emit('permissionResponse', { requestId, optionId });
     } else {
-      log.error(`Permission response failed: no session found for agent ${agentId}`);
+      log.error(`Permission response failed: no session found for agent ${agentId} (requestId=${requestId})`);
     }
   }
 
