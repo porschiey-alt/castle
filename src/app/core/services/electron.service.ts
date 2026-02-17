@@ -34,6 +34,7 @@ export class ElectronService {
   private streamingStartedSubject = new Subject<{ agentId: string; conversationId?: string }>();
   private conversationsChangedSubject = new Subject<{ action: string; conversation?: Conversation; conversationId?: string }>();
   private worktreeLifecycleSubject = new Subject<{ taskId: string; agentId: string; taskTitle: string; phase: string; message?: string }>();
+  private confirmRequestSubject = new Subject<{ requestId: string; title: string; message: string; detail?: string; confirmText?: string; cancelText?: string }>();
 
   // Observables
   readonly streamChunk$ = this.streamChunkSubject.asObservable();
@@ -46,6 +47,7 @@ export class ElectronService {
   readonly streamingStarted$ = this.streamingStartedSubject.asObservable();
   readonly conversationsChanged$ = this.conversationsChangedSubject.asObservable();
   readonly worktreeLifecycle$ = this.worktreeLifecycleSubject.asObservable();
+  readonly confirmRequest$ = this.confirmRequestSubject.asObservable();
 
   constructor(private ngZone: NgZone) {
     this.api = this.apiService.api;
@@ -112,6 +114,12 @@ export class ElectronService {
     this.api.worktree.onLifecycle((event) => {
       this.ngZone.run(() => {
         this.worktreeLifecycleSubject.next(event);
+      });
+    });
+
+    this.api.confirm.onRequest((data) => {
+      this.ngZone.run(() => {
+        this.confirmRequestSubject.next(data);
       });
     });
   }
@@ -194,6 +202,10 @@ export class ElectronService {
 
   respondToPermissionRequest(requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string, scopeType?: string, scopeValue?: string): void {
     this.api.permissions.respond(requestId, agentId, optionId, optionKind, toolKind, scopeType, scopeValue);
+  }
+
+  respondToConfirmRequest(requestId: string, confirmed: boolean): void {
+    this.api.confirm.respond(requestId, confirmed);
   }
 
   // ============ Permission Grant Methods ============

@@ -85,6 +85,10 @@ export const IPC_CHANNELS = {
   WORKTREE_CHECK_GIT: 'worktree:checkGit',
   WORKTREE_LIFECYCLE: 'worktree:lifecycle',
 
+  // Confirm dialog (main → renderer → main)
+  CONFIRM_REQUEST: 'confirm:request',
+  CONFIRM_RESPONSE: 'confirm:response',
+
   // Cross-device sync push events
   SYNC_TASKS_CHANGED: 'sync:tasksChanged',
   SYNC_CHAT_MESSAGE_ADDED: 'sync:chatMessageAdded',
@@ -322,6 +326,16 @@ export interface IPCPayloads {
   [IPC_CHANNELS.WORKTREE_CHECK_GIT]: {
     request: { repoPath: string };
     response: { isGitRepo: boolean; hasUncommittedChanges: boolean; currentBranch: string | null };
+  };
+
+  // Confirm dialog
+  [IPC_CHANNELS.CONFIRM_REQUEST]: {
+    request: never;
+    response: { requestId: string; title: string; message: string; detail?: string; confirmText?: string; cancelText?: string };
+  };
+  [IPC_CHANNELS.CONFIRM_RESPONSE]: {
+    request: { requestId: string; confirmed: boolean };
+    response: void;
   };
 }
 

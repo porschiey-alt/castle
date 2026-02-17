@@ -19,6 +19,7 @@ import { TaskListComponent } from '../features/tasks/task-list/task-list.compone
 import { SettingsPageComponent } from '../features/settings/settings-page.component';
 import { StatusBarComponent } from '../shared/components/status-bar/status-bar.component';
 import { PermissionDialogComponent, PermissionDialogResult } from '../shared/components/permission-dialog/permission-dialog.component';
+import { ConfirmDialogComponent, type ConfirmDialogData } from '../shared/components/confirm-dialog/confirm-dialog.component';
 
 import { AgentDialogComponent, AgentDialogData, AgentDialogResult } from '../shared/components/agent-dialog/agent-dialog.component';
 import { AgentIconComponent } from '../shared/components/agent-icon/agent-icon.component';
@@ -63,6 +64,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private permissionSub?: Subscription;
   private permissionRespondedSub?: Subscription;
+  private confirmSub?: Subscription;
   private openPermissionDialogs = new Map<string, import('@angular/material/dialog').MatDialogRef<any>>();
 
   @ViewChild(StatusBarComponent) statusBar!: StatusBarComponent;
@@ -92,6 +94,11 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
         dialogRef.close(); // close without emitting a response
         this.openPermissionDialogs.delete(requestId);
       }
+    });
+
+    // Listen for confirm dialog requests from main process
+    this.confirmSub = this.electronService.confirmRequest$.subscribe((request) => {
+      this.showConfirmDialog(request);
     });
 
     // Load current directory
@@ -124,6 +131,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.permissionSub?.unsubscribe();
     this.permissionRespondedSub?.unsubscribe();
+    this.confirmSub?.unsubscribe();
   }
 
   private showPermissionDialog(request: any): void {
@@ -151,6 +159,25 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
           result.scopeValue,
         );
       }
+    });
+  }
+
+  private showConfirmDialog(request: { requestId: string; title: string; message: string; detail?: string; confirmText?: string; cancelText?: string }): void {
+    const message = request.detail ? `${request.message}\n\n${request.detail}` : request.message;
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: request.title,
+        message,
+        confirmText: request.confirmText ?? 'Confirm',
+        cancelText: request.cancelText ?? 'Cancel',
+      } as ConfirmDialogData,
+      width: '480px',
+      disableClose: true,
+      panelClass: 'confirm-dialog'
+    });
+
+    dialogRef.afterClosed().subscribe((confirmed: boolean | undefined) => {
+      this.electronService.respondToConfirmRequest(request.requestId, !!confirmed);
     });
   }
 
