@@ -384,3 +384,60 @@ pre {
   font-family: var(--font-mono);
   margin: 0;
 }
+
+// ============ Icon Picker Menu (rendered in CDK overlay) ============
+
+.icon-picker-menu {
+  .icon-grid {
+    padding: 8px 12px;
+    width: 320px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .icon-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin: 8px 0 4px;
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
+  .icon-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+
+    button {
+      width: 38px;
+      height: 38px;
+      font-size: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+
+      mat-icon {
+        font-size: 22px;
+        width: 22px;
+        height: 22px;
+      }
+
+      &.selected {
+        background-color: var(--theme-primary);
+        color: #fff;
+      }
+    }
+  }
+
+  .custom-emoji-field {
+    width: 100%;
+    margin-top: 8px;
+    font-size: 13px;
+  }
+}

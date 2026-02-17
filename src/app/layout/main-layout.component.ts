@@ -21,6 +21,7 @@ import { StatusBarComponent } from '../shared/components/status-bar/status-bar.c
 import { PermissionDialogComponent } from '../shared/components/permission-dialog/permission-dialog.component';
 
 import { AgentDialogComponent, AgentDialogData, AgentDialogResult } from '../shared/components/agent-dialog/agent-dialog.component';
+import { AgentIconComponent } from '../shared/components/agent-icon/agent-icon.component';
 
 import { ElectronService } from '../core/services/electron.service';
 import { AgentService } from '../core/services/agent.service';
@@ -48,6 +49,7 @@ import type { CastleAgentConfig } from '../../shared/types/agent.types';
     TaskListComponent,
     SettingsPageComponent,
     StatusBarComponent,
+    AgentIconComponent,
   ],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.scss'

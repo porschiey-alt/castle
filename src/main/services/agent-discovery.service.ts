@@ -183,7 +183,7 @@ export class AgentDiscoveryService {
         description: source === 'builtin' 
           ? 'General purpose coding assistant' 
           : 'Agent configured for this workspace',
-        icon: source === 'builtin' ? '🤖' : '📁',
+        icon: source === 'builtin' ? 'mat:smart_toy' : 'mat:folder',
         color: BUILTIN_AGENT_COLORS[0],
         systemPrompt: this.extractSystemPrompt(content),
         source
@@ -302,7 +302,7 @@ export class AgentDiscoveryService {
         id: stableAgentId('General Assistant', 'builtin'),
         name: 'General Assistant',
         description: 'All-purpose coding help',
-        icon: '🤖',
+        icon: 'mat:smart_toy',
         color: BUILTIN_AGENT_COLORS[0],
         source: 'builtin'
       },
@@ -310,7 +310,7 @@ export class AgentDiscoveryService {
         id: stableAgentId('Researcher', 'builtin'),
         name: 'Researcher',
         description: 'Researches tasks and produces detailed analysis documents',
-        icon: '🔬',
+        icon: 'mat:science',
         color: '#06B6D4',
         systemPrompt: `You are a research specialist. When given a task, you produce a thorough
 research document in Markdown format. Your output should include:
@@ -329,7 +329,7 @@ headings, bullet points, and code references. Be thorough but concise.`,
         id: stableAgentId('Debugger', 'builtin'),
         name: 'Debugger',
         description: 'Diagnoses bugs and suggests fixes',
-        icon: '🐛',
+        icon: 'mat:bug_report',
         color: '#EF4444',
         systemPrompt: `You are a debugging specialist. Your job is to systematically diagnose
 issues and suggest precise fixes. When given a bug report, you should:

@@ -3,10 +3,8 @@
   <div class="avatar">
     @if (isUser) {
       <mat-icon>person</mat-icon>
-    } @else if (agentIcon()) {
-      <span class="agent-icon">{{ agentIcon() }}</span>
     } @else {
-      <mat-icon>smart_toy</mat-icon>
+      <app-agent-icon [icon]="agentIcon()" />
     }
   </div>
 
@@ -46,16 +44,7 @@
           </div>
         } @else {
           <div class="message-body">
-            @for (part of segment.parsedContent; track $index) {
-              @if (part.type === 'text') {
-                <div class="text-content" [innerHTML]="renderMarkdown(part.content)"></div>
-              } @else {
-                <app-code-block
-                  [code]="part.content"
-                  [language]="part.language || 'plaintext'"
-                />
-              }
-            }
+            <div class="text-content" [innerHTML]="renderMarkdown(segment.content)" (click)="onContentClick($event)"></div>
           </div>
         }
       }
@@ -90,16 +79,7 @@
 
       @if (content) {
         <div class="message-body">
-          @for (part of parsedContent; track $index) {
-            @if (part.type === 'text') {
-              <div class="text-content" [innerHTML]="renderMarkdown(part.content)"></div>
-            } @else {
-              <app-code-block
-                [code]="part.content"
-                [language]="part.language || 'plaintext'"
-              />
-            }
-          }
+          <div class="text-content" [innerHTML]="renderMarkdown(content)" (click)="onContentClick($event)"></div>
 
           @if (isStreaming()) {
             <span class="cursor">▊</span>

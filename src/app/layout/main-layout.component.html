@@ -91,7 +91,7 @@
             <span class="agent-name">Settings</span>
           } @else {
             @if (selectedAgent(); as agent) {
-              <span class="agent-icon">{{ agent.icon || '🤖' }}</span>
+              <app-agent-icon [icon]="agent.icon || 'mat:smart_toy'" />
               <span class="agent-name">{{ agent.name }}</span>
               @if (activeConversation(); as conv) {
                 <span class="conversation-title-badge">{{ conv.title || 'New conversation' }}</span>

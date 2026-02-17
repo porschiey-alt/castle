@@ -5,15 +5,38 @@
 import { Component, input, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
-import { marked } from 'marked';
+import { marked, Renderer } from 'marked';
+import hljs from 'highlight.js';
 
-import { CodeBlockComponent } from '../code-block/code-block.component';
+import { AgentIconComponent } from '../../../shared/components/agent-icon/agent-icon.component';
 import type { ChatMessage, ToolCall, MessageSegment } from '../../../../shared/types/message.types';
+
+// Custom renderer so fenced code blocks get syntax highlighting + copy button
+const renderer = new Renderer();
+renderer.code = function(code: string, infostring: string | undefined): string {
+  const lang = (infostring || '').match(/^\S*/)?.[0] || '';
+  const language = lang || 'plaintext';
+  let highlighted: string;
+  try {
+    if (lang && hljs.getLanguage(lang)) {
+      highlighted = hljs.highlight(code, { language: lang }).value;
+    } else {
+      highlighted = hljs.highlightAuto(code).value;
+    }
+  } catch {
+    highlighted = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+  return `<div class="code-block-inline"><div class="code-header"><span class="language-label">${language}</span><button class="copy-code-btn" title="Copy code"><span class="material-icons">content_copy</span></button></div><pre class="code-content"><code>${highlighted}</code></pre></div>`;
+};
 
 // Configure marked for chat rendering
 marked.setOptions({
   breaks: true,
   gfm: true,
+  renderer,
 });
 
 /** Resolved tool-calls segment with visible/hidden split */
@@ -23,10 +46,10 @@ interface ResolvedToolCallsSegment {
   hiddenCount: number;
 }
 
-/** Resolved text segment with parsed content blocks */
+/** Resolved text segment */
 interface ResolvedTextSegment {
   type: 'text';
-  parsedContent: Array<{ type: 'text' | 'code'; content: string; language?: string }>;
+  content: string;
 }
 
 export type ResolvedSegment = ResolvedToolCallsSegment | ResolvedTextSegment;
@@ -37,7 +60,7 @@ export type ResolvedSegment = ResolvedToolCallsSegment | ResolvedTextSegment;
   imports: [
     CommonModule,
     MatIconModule,
-    CodeBlockComponent
+    AgentIconComponent,
   ],
   templateUrl: './message-bubble.component.html',
   styleUrl: './message-bubble.component.scss'
@@ -97,7 +120,7 @@ export class MessageBubbleComponent {
       }
       return {
         type: 'text' as const,
-        parsedContent: this.parseContent(seg.content)
+        content: seg.content
       };
     });
   }
@@ -125,52 +148,29 @@ export class MessageBubbleComponent {
     return !this.content && hasToolCalls;
   }
 
-  // Parse content for code blocks
-  get parsedContent(): Array<{ type: 'text' | 'code'; content: string; language?: string }> {
-    return this.parseContent(this.content);
-  }
-
-  /** Parse a content string into text and code block parts */
-  private parseContent(content: string): Array<{ type: 'text' | 'code'; content: string; language?: string }> {
-    const parts: Array<{ type: 'text' | 'code'; content: string; language?: string }> = [];
-
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-    let lastIndex = 0;
-    let match;
-
-    while ((match = codeBlockRegex.exec(content)) !== null) {
-      if (match.index > lastIndex) {
-        const text = content.slice(lastIndex, match.index).trim();
-        if (text) {
-          parts.push({ type: 'text', content: text });
-        }
-      }
-
-      parts.push({
-        type: 'code',
-        content: match[2].trim(),
-        language: match[1] || 'plaintext'
-      });
-
-      lastIndex = match.index + match[0].length;
-    }
-
-    if (lastIndex < content.length) {
-      const text = content.slice(lastIndex).trim();
-      if (text) {
-        parts.push({ type: 'text', content: text });
-      }
-    }
-
-    if (parts.length === 0 && content) {
-      parts.push({ type: 'text', content });
-    }
-
-    return parts;
-  }
-
   /** Render a markdown text fragment to HTML */
   renderMarkdown(text: string): string {
     return marked.parse(text, { async: false }) as string;
+  }
+
+  /** Handle clicks inside rendered markdown (e.g. copy-code buttons) */
+  onContentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const copyBtn = target.closest('.copy-code-btn');
+    if (copyBtn) {
+      event.preventDefault();
+      const codeBlock = copyBtn.closest('.code-block-inline');
+      const codeEl = codeBlock?.querySelector('code');
+      if (codeEl) {
+        navigator.clipboard.writeText(codeEl.textContent || '');
+        // Brief visual feedback
+        const icon = copyBtn.querySelector('.material-icons');
+        if (icon) {
+          const prev = icon.textContent;
+          icon.textContent = 'check';
+          setTimeout(() => { icon.textContent = prev; }, 1500);
+        }
+      }
+    }
   }
 }

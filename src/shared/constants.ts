@@ -48,3 +48,32 @@ export const PERMISSION_LABELS: Record<string, string> = {
 };
 
 export const DEFAULT_TAILSCALE_PORT = 39417;
+
+/** Curated Material Icons for the agent icon picker */
+export const AGENT_MATERIAL_ICONS = [
+  // AI & Technology
+  'smart_toy', 'psychology', 'auto_awesome', 'memory', 'hub',
+  // Development
+  'code', 'terminal', 'bug_report', 'build', 'integration_instructions',
+  'data_object', 'developer_mode', 'api',
+  // Research & Analysis
+  'science', 'search', 'analytics', 'biotech', 'query_stats',
+  'troubleshoot', 'manage_search',
+  // Tools & Actions
+  'handyman', 'construction', 'tune', 'settings', 'engineering',
+  // Communication
+  'forum', 'chat', 'support_agent', 'record_voice_over',
+  // Security & Shield
+  'security', 'shield', 'lock', 'verified_user',
+  // Files & Data
+  'folder', 'description', 'storage', 'inventory',
+  // Misc
+  'rocket_launch', 'speed', 'bolt', 'star', 'eco', 'palette'
+] as const;
+
+/** Curated emoji options for the agent icon picker */
+export const AGENT_EMOJI_OPTIONS = [
+  '🤖', '🔬', '🐛', '💡', '🎯', '🛡️', '📊', '🔧',
+  '⚡', '🎨', '📝', '🧪', '🔍', '📁', '🌐', '🧠',
+  '🚀', '💻', '🔒', '📈', '🎭', '🤝', '⭐', '🔮'
+] as const;

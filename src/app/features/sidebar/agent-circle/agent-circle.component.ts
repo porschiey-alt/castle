@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatBadgeModule } from '@angular/material/badge';
 
+import { AgentIconComponent } from '../../../shared/components/agent-icon/agent-icon.component';
 import type { AgentWithSession } from '../../../../shared/types/agent.types';
 
 @Component({
@@ -19,7 +20,8 @@ import type { AgentWithSession } from '../../../../shared/types/agent.types';
     MatButtonModule,
     MatIconModule,
     MatTooltipModule,
-    MatBadgeModule
+    MatBadgeModule,
+    AgentIconComponent
   ],
   templateUrl: './agent-circle.component.html',
   styleUrl: './agent-circle.component.scss'

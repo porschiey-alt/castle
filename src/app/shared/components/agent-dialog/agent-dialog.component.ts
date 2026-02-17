@@ -10,9 +10,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 
+import { AgentIconComponent } from '../agent-icon/agent-icon.component';
 import type { CastleAgentConfig } from '../../../../shared/types/agent.types';
-import { BUILTIN_AGENT_COLORS } from '../../../../shared/constants';
+import { BUILTIN_AGENT_COLORS, AGENT_MATERIAL_ICONS, AGENT_EMOJI_OPTIONS } from '../../../../shared/constants';
 
 export interface AgentDialogData {
   agent?: CastleAgentConfig;
@@ -33,6 +35,8 @@ export type AgentDialogResult =
     MatFormFieldModule,
     MatInputModule,
     MatIconModule,
+    MatMenuModule,
+    AgentIconComponent,
   ],
   template: `
     <h2 mat-dialog-title>{{ isEditing ? 'Edit Agent' : 'New Agent' }}</h2>
@@ -43,10 +47,46 @@ export type AgentDialogResult =
       </mat-form-field>
 
       <div class="icon-color-row">
-        <mat-form-field appearance="outline" class="icon-field">
-          <mat-label>Icon (emoji)</mat-label>
-          <input matInput [(ngModel)]="icon" placeholder="🤖" />
-        </mat-form-field>
+        <div class="icon-picker-field">
+          <label class="icon-picker-label">Icon</label>
+          <button mat-stroked-button [matMenuTriggerFor]="iconMenu" class="icon-preview-btn"
+                  type="button">
+            <app-agent-icon [icon]="icon || 'mat:smart_toy'" />
+            <mat-icon class="dropdown-arrow">arrow_drop_down</mat-icon>
+          </button>
+
+          <mat-menu #iconMenu="matMenu" class="icon-picker-menu">
+            <div class="icon-grid" (click)="$event.stopPropagation()">
+              <div class="icon-section-label">Material Icons</div>
+              <div class="icon-options">
+                @for (mi of materialIconOptions; track mi) {
+                  <button mat-icon-button type="button"
+                          (click)="selectIcon('mat:' + mi)"
+                          [class.selected]="icon === 'mat:' + mi"
+                          [attr.aria-label]="mi">
+                    <mat-icon>{{ mi }}</mat-icon>
+                  </button>
+                }
+              </div>
+              <div class="icon-section-label">Emoji</div>
+              <div class="icon-options">
+                @for (em of emojiOptions; track em) {
+                  <button mat-icon-button type="button"
+                          (click)="selectIcon(em)"
+                          [class.selected]="icon === em"
+                          [attr.aria-label]="em">
+                    {{ em }}
+                  </button>
+                }
+              </div>
+              <mat-form-field appearance="outline" class="custom-emoji-field">
+                <mat-label>Custom emoji</mat-label>
+                <input matInput [(ngModel)]="customEmoji" placeholder="Paste emoji..."
+                       (ngModelChange)="onCustomEmojiChange($event)" />
+              </mat-form-field>
+            </div>
+          </mat-menu>
+        </div>
 
         <mat-form-field appearance="outline" class="color-field">
           <mat-label>Color</mat-label>
@@ -107,6 +147,33 @@ export type AgentDialogResult =
       gap: 12px;
     }
     .icon-field { flex: 0 0 120px; }
+    .icon-picker-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+    .icon-picker-label {
+      font-size: 12px;
+      color: var(--text-secondary, rgba(255,255,255,0.7));
+      margin-bottom: 2px;
+    }
+    .icon-preview-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 64px;
+      height: 56px;
+      font-size: 24px;
+    }
+    .icon-preview-btn app-agent-icon {
+      font-size: 24px;
+    }
+    .icon-preview-btn mat-icon.dropdown-arrow {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
     .color-field { flex: 1; }
     .color-swatches {
       display: flex;
@@ -141,6 +208,19 @@ export class AgentDialogComponent {
   systemPrompt = this.data.agent?.systemPrompt ?? '';
 
   colorOptions = [...BUILTIN_AGENT_COLORS];
+  materialIconOptions = [...AGENT_MATERIAL_ICONS];
+  emojiOptions = [...AGENT_EMOJI_OPTIONS];
+  customEmoji = '';
+
+  selectIcon(value: string): void {
+    this.icon = value;
+  }
+
+  onCustomEmojiChange(value: string): void {
+    if (value) {
+      this.icon = value;
+    }
+  }
 
   save(): void {
     if (!this.name.trim()) return;

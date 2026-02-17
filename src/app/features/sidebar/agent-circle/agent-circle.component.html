@@ -13,11 +13,7 @@
   (click)="onSelect()"
   (contextmenu)="onContextMenu($event)">
   
-  @if (agent().icon) {
-    <span class="agent-icon">{{ agent().icon }}</span>
-  } @else {
-    <mat-icon>smart_toy</mat-icon>
-  }
+  <app-agent-icon [icon]="agent().icon" />
   
   <!-- Status indicator dot -->
   @if (agent().session) {
