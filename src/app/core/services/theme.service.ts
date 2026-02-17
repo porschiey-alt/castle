@@ -183,6 +183,11 @@ export class ThemeService {
     root.style.setProperty('--theme-secondary-accent', secondaryAccent);
     root.style.setProperty('--theme-warn', theme.warn);
 
+    // Contrast-aware text colors for filled buttons / colored surfaces
+    root.style.setProperty('--theme-primary-contrast', getContrastingTextColor(accent));
+    root.style.setProperty('--theme-warn-contrast', getContrastingTextColor(theme.warn));
+    root.style.setProperty('--theme-accent-contrast', getContrastingTextColor(theme.accent));
+
     // Determine effective background
     const bgPrimary = custom.bgPrimary || (theme.mode === 'dark' ? (theme.bgPrimary || '#0a0a0a') : '#ffffff');
 
