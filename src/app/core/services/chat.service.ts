@@ -15,10 +15,14 @@ interface ChatState {
   streamingConversationId: string | null;
   isLoading: boolean;
   todoItems: TodoItem[];
-  /** Only the most recent thinking chunk (not accumulated) */
-  latestThinking: string;
+  /** Accumulated thinking text shown in the bubble, persists across non-thinking chunks */
+  accumulatedThinking: string;
   /** Length of accumulated thinking as of last chunk – used to compute delta */
   previousThinkingLength: number;
+  /** Length of content buffer as of last chunk – used to detect content updates */
+  previousContentLength: number;
+  /** Number of tool calls as of last chunk – used to detect tool-call updates */
+  previousToolCallsCount: number;
 }
 
 function defaultChatState(): ChatState {
@@ -28,8 +32,10 @@ function defaultChatState(): ChatState {
     streamingConversationId: null,
     isLoading: false,
     todoItems: [],
-    latestThinking: '',
-    previousThinkingLength: 0
+    accumulatedThinking: '',
+    previousThinkingLength: 0,
+    previousContentLength: 0,
+    previousToolCallsCount: 0
   };
 }
 
@@ -81,11 +87,11 @@ export class ChatService {
     return this.isStreamingConversationActive() ? state.todoItems : [];
   });
 
-  /** Only the most recent thinking chunk from the streaming agent */
-  readonly latestThinking = computed<string>(() => {
+  /** Accumulated thinking text, reset when a non-thinking chunk arrives */
+  readonly accumulatedThinking = computed<string>(() => {
     const state = this.currentChatState();
-    if (!state?.latestThinking) return '';
-    return this.isStreamingConversationActive() ? state.latestThinking : '';
+    if (!state?.accumulatedThinking) return '';
+    return this.isStreamingConversationActive() ? state.accumulatedThinking : '';
   });
 
   constructor() {
@@ -141,6 +147,12 @@ export class ChatService {
     // Cross-device sync: a message was added from another device — reload full history
     this.electronService.chatMessageAdded$.subscribe((message: ChatMessage) => {
       this.loadHistory(message.agentId);
+    });
+
+    // Task research/implementation started streaming in a specific conversation
+    this.electronService.streamingStarted$.subscribe(({ agentId, conversationId }) => {
+      this.setStreamingConversationId(agentId, conversationId ?? null);
+      this.setLoading(agentId, true);
     });
   }
 
@@ -256,18 +268,38 @@ export class ChatService {
     const states = new Map(this.chatStatesSignal());
     const currentState = states.get(agentId) || defaultChatState();
 
-    // Compute latest thinking chunk (delta since last update)
-    const prevLen = currentState.previousThinkingLength;
     const fullThinking = message.thinking || '';
-    const latestThinking = fullThinking.length > prevLen
-      ? fullThinking.substring(prevLen).trim()
-      : currentState.latestThinking;
+    const contentLength = message.content?.length || 0;
+    const toolCallsCount = message.toolCalls?.length || 0;
+
+    // Check if new thinking text arrived
+    const prevLen = currentState.previousThinkingLength;
+    const hasNewThinking = fullThinking.length > prevLen;
+
+    // Keep accumulated thinking visible even when non-thinking chunks arrive.
+    // Only reset when a new thinking block starts after a non-thinking gap.
+    let accumulatedThinking = currentState.accumulatedThinking;
+
+    if (hasNewThinking) {
+      const contentChanged = contentLength !== currentState.previousContentLength;
+      const toolCallsChanged = toolCallsCount !== currentState.previousToolCallsCount;
+      const hadNonThinkingGap = contentChanged || toolCallsChanged;
+
+      if (hadNonThinkingGap) {
+        // New thinking block after tool calls / content — start fresh
+        accumulatedThinking = fullThinking.substring(prevLen);
+      } else {
+        accumulatedThinking += fullThinking.substring(prevLen);
+      }
+    }
     
     states.set(agentId, {
       ...currentState,
       streamingMessage: message,
-      latestThinking: latestThinking || currentState.latestThinking,
-      previousThinkingLength: fullThinking.length
+      accumulatedThinking,
+      previousThinkingLength: fullThinking.length,
+      previousContentLength: contentLength,
+      previousToolCallsCount: toolCallsCount
     });
     
     this.chatStatesSignal.set(states);
@@ -285,8 +317,10 @@ export class ChatService {
         ...currentState,
         streamingMessage: null,
         streamingConversationId: null,
-        latestThinking: '',
-        previousThinkingLength: 0
+        accumulatedThinking: '',
+        previousThinkingLength: 0,
+        previousContentLength: 0,
+        previousToolCallsCount: 0
       });
       this.chatStatesSignal.set(states);
     }
