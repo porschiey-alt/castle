@@ -6,6 +6,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { ElectronService } from './electron.service';
 import { AgentService } from './agent.service';
 import { ConversationService } from './conversation.service';
+import { LoggerService } from './logger.service';
 import type { ChatMessage, StreamingMessage, TodoItem } from '../../../shared/types/message.types';
 
 interface ChatState {
@@ -52,6 +53,7 @@ export class ChatService {
   private electronService = inject(ElectronService);
   private agentService = inject(AgentService);
   private conversationService = inject(ConversationService);
+  private logger = inject(LoggerService);
   
   // Current agent's chat state
   readonly currentChatState = computed<ChatState | null>(() => {
@@ -213,6 +215,7 @@ export class ChatService {
    * Send a message to an agent, creating a conversation if needed
    */
   async sendMessage(agentId: string, content: string): Promise<void> {
+    this.logger.info('Chat', `Sending message to agent ${agentId}, length=${content.length}`);
     this.setLoading(agentId, true);
 
     try {
@@ -241,6 +244,7 @@ export class ChatService {
    * Cancel the in-progress message for an agent
    */
   async cancelMessage(agentId: string): Promise<void> {
+    this.logger.info('Chat', `Cancelling message for agent ${agentId}`);
     await this.electronService.cancelMessage(agentId);
     this.clearStreamingMessage(agentId);
     this.setLoading(agentId, false);
