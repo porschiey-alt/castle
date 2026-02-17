@@ -12,8 +12,8 @@ function timestamp(): string {
 }
 
 function formatMessage(level: LogLevel, category: string, message: string, data?: unknown): string {
-  const base = `[${timestamp()}] [${level.toUpperCase()}] [${category}] ${message}`;
-  return base;
+  const dataStr = data !== undefined ? ' ' + JSON.stringify(data, null, 0) : '';
+  return `[${timestamp()}] [${level.toUpperCase().padEnd(5)}] [${category}] ${message}${dataStr}`;
 }
 
 class Logger {
@@ -24,30 +24,15 @@ class Logger {
   }
 
   info(message: string, data?: unknown): void {
-    const formatted = formatMessage('info', this.category, message, data);
-    if (data !== undefined) {
-      console.log(formatted, data);
-    } else {
-      console.log(formatted);
-    }
+    console.log(formatMessage('info', this.category, message, data));
   }
 
   warn(message: string, data?: unknown): void {
-    const formatted = formatMessage('warn', this.category, message, data);
-    if (data !== undefined) {
-      console.warn(formatted, data);
-    } else {
-      console.warn(formatted);
-    }
+    console.warn(formatMessage('warn', this.category, message, data));
   }
 
   error(message: string, data?: unknown): void {
-    const formatted = formatMessage('error', this.category, message, data);
-    if (data !== undefined) {
-      console.error(formatted, data);
-    } else {
-      console.error(formatted);
-    }
+    console.error(formatMessage('error', this.category, message, data));
   }
 }
 
