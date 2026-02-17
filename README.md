@@ -1,4 +1,4 @@
-# Castle 🏰
+# Castle
 
 A Discord-like desktop application for GitHub Copilot CLI agents. Castle provides a beautiful, intuitive interface for managing multiple AI coding agents, each running its own GitHub Copilot CLI session — accessible from your desktop, phone, or any device on your network.
 
@@ -6,18 +6,18 @@ A Discord-like desktop application for GitHub Copilot CLI agents. Castle provide
 
 ## Features
 
-- **📱 Use from Your Phone**: Built-in Tailscale-powered web server lets you chat with your agents from any device — phone, tablet, or another computer — right in the browser
-- **🤖 Multiple Agents**: Run multiple specialized AI agents simultaneously
-- **💬 Discord-like UI**: Familiar chat interface with agent circles in the sidebar
-- **📁 Project-aware**: Open Castle on any directory, just like VS Code
-- **🎨 Theme Engine**: Beautiful dark theme with more themes coming
-- **💾 Persistent Sessions**: Chat history and permissions are saved via embedded SQLite
-- **🔐 Permission Control**: Fine-grained control over what agents can do
-- **🔗 Inter-agent Communication**: Agents can communicate with each other
-- **📝 Rich Markdown**: Agent responses rendered with syntax-highlighted code blocks
-- **🔌 Agent Client Protocol**: ACP SDK integration for standardized agent communication
+- **Use from Your Phone**: Built-in Tailscale-powered web server lets you chat with your agents from any device — phone, tablet, or another computer — right in the browser
+- **Multiple Agents**: Run multiple specialized AI agents simultaneously
+- **Discord-like UI**: Familiar chat interface with agent circles in the sidebar
+- **Project-aware**: Open Castle on any directory, just like VS Code
+- **Theme Engine**: Beautiful dark theme with more themes coming
+- **Persistent Sessions**: Chat history and permissions are saved via embedded SQLite
+- **Permission Control**: Fine-grained control over what agents can do
+- **Inter-agent Communication**: Agents can communicate with each other
+- **Rich Markdown**: Agent responses rendered with syntax-highlighted code blocks
+- **Agent Client Protocol**: ACP SDK integration for standardized agent communication
 
-## 📱 Access from Your Phone
+## Access from Your Phone
 
 Castle includes a built-in web server that lets you interact with your agents from any device on your [Tailscale](https://tailscale.com/) network — no extra apps needed, just a browser.
 
@@ -106,7 +106,7 @@ Add an `AGENTS.md` file to your project root:
 <!-- castle-config
 agents:
   - name: My Custom Agent
-    icon: 🚀
+    icon: "mat:rocket_launch"
     color: "#FF6B6B"
     description: A custom agent for my project
     systemPrompt: |
@@ -123,13 +123,13 @@ agents:
 
 ## Built-in Agents
 
-| Agent | Icon | Description |
-|-------|------|-------------|
-| General Assistant | 🤖 | All-purpose coding help |
-| Researcher | 🔬 | Researches tasks and produces detailed analysis documents |
-| Debugger | 🐛 | Diagnoses bugs and suggests fixes |
-| Git Agent | 💫 | Helps with Git operations, PRs, commits, and merge conflicts |
-| Primary Coder | 💻 | Primary coding agent for implementation tasks |
+| Agent | Description |
+|-------|-------------|
+| General Assistant | All-purpose coding help |
+| Researcher | Researches tasks and produces detailed analysis documents |
+| Debugger | Diagnoses bugs and suggests fixes |
+| Git Agent | Helps with Git operations, PRs, commits, and merge conflicts |
+| Primary Coder | Primary coding agent for implementation tasks |
 
 ## Configuration
 
