@@ -175,6 +175,7 @@ export class ProcessManagerService {
         // Forward to renderer and wait for user response
         return new Promise((resolve) => {
           const requestId = uuidv4();
+          log.info(`Permission requested: requestId=${requestId}, tool=${params.toolCall?.kind}, options=[${params.options.map(o => `${o.optionId}:${o.kind}`).join(', ')}]`);
           const permissionData = {
             requestId,
             agentId: agent.id,
@@ -189,8 +190,10 @@ export class ProcessManagerService {
 
           // Listen for the response
           const onResponse = (response: { requestId: string; optionId: string }) => {
+            log.info(`Permission event received: expected=${requestId}, got=${response.requestId}, optionId=${response.optionId}, match=${response.requestId === requestId}`);
             if (response.requestId === requestId) {
               eventEmitter.off('permissionResponse', onResponse);
+              log.info(`Permission resolved: requestId=${requestId}, optionId=${response.optionId}`);
               resolve({ outcome: { outcome: 'selected' as const, optionId: response.optionId } });
             }
           };
@@ -537,7 +540,10 @@ export class ProcessManagerService {
   respondToPermission(agentId: string, requestId: string, optionId: string): void {
     const sessionProcess = this.getSessionByAgentId(agentId);
     if (sessionProcess) {
+      log.info(`Permission response forwarded to agent ${agentId}: requestId=${requestId}, optionId=${optionId}`);
       sessionProcess.eventEmitter.emit('permissionResponse', { requestId, optionId });
+    } else {
+      log.error(`Permission response failed: no session found for agent ${agentId}`);
     }
   }
 
