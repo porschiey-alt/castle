@@ -470,8 +470,17 @@ export class GitWorktreeService {
       log.info(`Removed worktree: ${worktreePath}`);
     } catch (error) {
       log.warn('Error removing worktree', error);
-      // Fallback: forcibly delete the directory and prune the worktree list
-      await forceRemoveDirectory(worktreePath);
+      // Retry with increasing delay — process may need time to release cwd handle (Windows)
+      let removed = !fs.existsSync(worktreePath);
+      for (let attempt = 1; attempt <= 3 && !removed; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        try {
+          await forceRemoveDirectory(worktreePath);
+          removed = !fs.existsSync(worktreePath);
+        } catch (retryErr) {
+          log.warn(`Retry ${attempt}/3 failed to delete worktree directory`, retryErr);
+        }
+      }
       try {
         await gitExec(['worktree', 'prune'], repoRoot);
       } catch { /* ignore */ }
