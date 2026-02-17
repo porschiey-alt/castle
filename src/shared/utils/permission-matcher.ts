@@ -50,6 +50,8 @@ function matchScore(
     case 'command_prefix': {
       const cmd = normalizeCommand(rawInput);
       if (!cmd) return 0;
+      // Reject if command chains multiple operations (&&, ||, ;, |)
+      if (/[&|;]/.test(cmd)) return 0;
       // Match on word boundary: "npm" matches "npm install" but not "npmevil"
       if (cmd === grant.scopeValue) return 80;
       if (cmd.startsWith(grant.scopeValue + ' ')) return 80;

@@ -193,22 +193,28 @@ export function registerIpcHandlers(services: IpcServices): void {
     processManagerService.onPermissionRequest(sessionId, async (data) => {
       log.info(`Permission request from agent ${agentId}: tool=${data.toolCall?.kind || 'unknown'}`);
       // Check for persisted scoped grants before prompting the user
-      const projectPath = directoryService.getCurrentDirectory();
-      const toolKind = data.toolCall?.kind;
-      if (projectPath && toolKind) {
-        const grants = await databaseService.getPermissionGrantsByToolKind(projectPath, toolKind);
-        const match = findMatchingGrant(grants, toolKind, data.toolCall?.locations, data.toolCall?.rawInput, projectPath);
-        if (match) {
-          const targetKind = match.granted ? 'allow_always' : 'reject_always';
-          const fallbackKind = match.granted ? 'allow_once' : 'reject_once';
-          const option = data.options.find((o: any) => o.kind === targetKind)
-                      || data.options.find((o: any) => o.kind === fallbackKind);
-          if (option) {
-            processManagerService.respondToPermission(agentId, data.requestId, option.optionId);
-            return;
+      try {
+        const projectPath = directoryService.getCurrentDirectory();
+        const toolKind = data.toolCall?.kind;
+        if (projectPath && toolKind) {
+          const grants = await databaseService.getPermissionGrantsByToolKind(projectPath, toolKind);
+          const match = findMatchingGrant(grants, toolKind, data.toolCall?.locations, data.toolCall?.rawInput, projectPath);
+          if (match) {
+            log.info(`Permission auto-resolved: tool=${toolKind}, grant scope=${match.scopeType}:${match.scopeValue}, granted=${match.granted}`);
+            const targetKind = match.granted ? 'allow_always' : 'reject_always';
+            const fallbackKind = match.granted ? 'allow_once' : 'reject_once';
+            const option = data.options.find((o: any) => o.kind === targetKind)
+                        || data.options.find((o: any) => o.kind === fallbackKind);
+            if (option) {
+              processManagerService.respondToPermission(agentId, data.requestId, option.optionId);
+              return;
+            }
           }
         }
+      } catch (err) {
+        log.error('Permission auto-resolve failed, falling through to prompt', err);
       }
+      log.info(`Permission prompt sent to renderer: requestId=${data.requestId}, tool=${data.toolCall?.kind}`);
       broadcaster.send(IPC_CHANNELS.PERMISSION_REQUEST, data);
     });
 

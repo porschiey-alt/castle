@@ -266,7 +266,10 @@ export class ProcessManagerService {
             existing.status = s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'in_progress' ? 'running' : 'pending';
             if (update.title) existing.name = update.title;
             if (existing.status === 'error') {
-              log.error(`Agent "${agent.name}" tool call failed: ${existing.name} (${update.toolCallId})`);
+              const u = update as any;
+              log.error(`Agent "${agent.name}" tool call failed: ${existing.name} (${update.toolCallId})`, {
+                error: u.error || u.message || u.result,
+              });
             } else {
               log.debug(`Agent "${agent.name}" tool call update: ${existing.name} (${update.toolCallId}) status=${existing.status}`);
             }
