@@ -83,9 +83,9 @@ export class ProcessManagerService {
    * If acpSessionIdToResume is provided, attempts to resume that session.
    */
   async startSession(agent: Agent, workingDirectory: string, acpSessionIdToResume?: string): Promise<AgentSession> {
-    const existingSession = this.getSessionByAgentId(agent.id);
+    const existingSession = this.getSessionByAgentId(agent.id, workingDirectory);
     if (existingSession) {
-      log.info(`Reusing existing session for agent "${agent.name}" (${agent.id})`);
+      log.info(`Reusing existing session for agent "${agent.name}" (${agent.id}) in ${workingDirectory}`);
       return existingSession.session;
     }
 
@@ -649,11 +649,16 @@ export class ProcessManagerService {
   }
 
   /**
-   * Get session by agent ID
+   * Get session by agent ID, optionally filtering by working directory.
+   * When workingDirectory is provided, only returns a session whose cwd matches.
+   * This allows an agent to have multiple concurrent sessions in different worktrees.
    */
-  getSessionByAgentId(agentId: string): SessionProcess | undefined {
+  getSessionByAgentId(agentId: string, workingDirectory?: string): SessionProcess | undefined {
     for (const sessionProcess of this.sessions.values()) {
       if (sessionProcess.session.agentId === agentId) {
+        if (workingDirectory && sessionProcess.session.workingDirectory !== workingDirectory) {
+          continue;
+        }
         return sessionProcess;
       }
     }
