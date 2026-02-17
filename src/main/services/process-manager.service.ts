@@ -30,8 +30,7 @@ interface SessionProcess {
   toolCalls: Map<string, ToolCall>;
   todoItems: TodoItem[];
   segments: MessageSegment[];
-  currentOperation: string | null;
-  lastPromptSnippet: string | null;
+  currentOperation: string;
   capabilities: {
     canLoadSession: boolean;
     canResumeSession: boolean;
@@ -113,19 +112,18 @@ export class ProcessManagerService {
 
     const eventEmitter = new EventEmitter();
 
-    // Log stderr with context for debugging
+    // Log stderr with context about the current operation and session status
     childProcess.stderr?.on('data', (data: Buffer) => {
       const msg = data.toString().trim();
-      const status = sessionProcess?.session?.status ?? 'unknown';
-      const op = sessionProcess?.currentOperation ?? 'none';
-      const prompt = sessionProcess?.lastPromptSnippet ?? 'n/a';
+      const status = sessionProcess.session.status;
+      const operation = sessionProcess.currentOperation || 'unknown';
       console.error(
-        `[Agent ${agent.name}] stderr (status=${status}, operation=${op}, lastPrompt="${prompt}"): ${msg}`
+        `[Agent ${agent.name}] stderr (status=${status}, operation=${operation}): ${msg}`
       );
     });
 
     childProcess.on('error', (error) => {
-      const op = sessionProcess?.currentOperation ?? 'none';
+      const op = sessionProcess?.currentOperation ?? 'unknown';
       console.error(`[Agent ${agent.name}] Process error (operation=${op}):`, error);
       sessionProcess.session.status = 'error';
       eventEmitter.emit('error', error.message);
@@ -155,8 +153,7 @@ export class ProcessManagerService {
       toolCalls: new Map(),
       todoItems: [],
       segments: [],
-      currentOperation: 'initialize',
-      lastPromptSnippet: null,
+      currentOperation: 'spawning',
       capabilities: { canLoadSession: false, canResumeSession: false, canListSessions: false }
     };
 
@@ -295,7 +292,7 @@ export class ProcessManagerService {
 
     try {
       // Initialize ACP protocol
-      sessionProcess.currentOperation = 'acp.initialize';
+      sessionProcess.currentOperation = 'initialize';
       const initResult = await connection.initialize({
         protocolVersion: 1,
         clientInfo: { name: 'Castle', version: '0.1.0' }
@@ -322,7 +319,7 @@ export class ProcessManagerService {
       if (acpSessionIdToResume) {
         if (sessionProcess.capabilities.canResumeSession) {
           try {
-            sessionProcess.currentOperation = 'acp.unstable_resumeSession';
+            sessionProcess.currentOperation = 'unstable_resumeSession';
             const resumed = await connection.unstable_resumeSession({
               sessionId: acpSessionIdToResume,
               cwd: workingDirectory,
@@ -337,7 +334,7 @@ export class ProcessManagerService {
 
         if (!acpSessionId && sessionProcess.capabilities.canLoadSession) {
           try {
-            sessionProcess.currentOperation = 'acp.loadSession';
+            sessionProcess.currentOperation = 'loadSession';
             const loaded = await connection.loadSession({
               sessionId: acpSessionIdToResume,
               cwd: workingDirectory,
@@ -353,7 +350,7 @@ export class ProcessManagerService {
 
       // Fall back to new session
       if (!acpSessionId) {
-        sessionProcess.currentOperation = 'acp.newSession';
+        sessionProcess.currentOperation = 'newSession';
         const acpSession = await connection.newSession({
           cwd: workingDirectory,
           mcpServers
@@ -363,7 +360,7 @@ export class ProcessManagerService {
       }
 
       sessionProcess.acpSessionId = acpSessionId;
-      sessionProcess.currentOperation = null;
+      sessionProcess.currentOperation = 'idle';
       session.status = 'ready';
     } catch (error) {
       console.error(`[Agent ${agent.name}] ACP initialization failed:`, error);
@@ -428,11 +425,10 @@ export class ProcessManagerService {
     sessionProcess.toolCalls.clear();
     sessionProcess.todoItems = [];
     sessionProcess.segments = [];
-    sessionProcess.lastPromptSnippet = content.length > 120 ? content.substring(0, 120) + '…' : content;
 
     try {
       // Send prompt and wait for full response
-      sessionProcess.currentOperation = 'acp.prompt';
+      sessionProcess.currentOperation = 'prompt';
       const response = await sessionProcess.connection.prompt({
         sessionId: sessionProcess.acpSessionId,
         prompt: [{ type: 'text', text: content }]
@@ -451,14 +447,14 @@ export class ProcessManagerService {
       };
       sessionProcess.eventEmitter.emit('complete', completeMessage);
 
-      sessionProcess.currentOperation = null;
+      sessionProcess.currentOperation = 'idle';
       sessionProcess.session.status = 'ready';
     } catch (error) {
       console.error(
-        `[Agent ${sessionProcess.session.agentId}] Error during ${sessionProcess.currentOperation ?? 'unknown'} (lastPrompt="${sessionProcess.lastPromptSnippet}"):`,
+        `[Agent ${sessionProcess.session.agentId}] Error during operation="${sessionProcess.currentOperation}":`,
         error
       );
-      sessionProcess.currentOperation = null;
+      sessionProcess.currentOperation = 'idle';
       sessionProcess.session.status = 'ready';
       throw error;
     }
