@@ -109,7 +109,7 @@
         
         <div class="toolbar-right">
           @if (activeView === 'chat' && selectedAgent()) {
-            <button mat-icon-button matTooltip="Toggle conversations" (click)="toggleConversationPanel()">
+            <button mat-icon-button class="conversation-toggle" matTooltip="Toggle conversations" (click)="toggleConversationPanel()">
               <mat-icon>{{ conversationPanelOpen ? 'view_sidebar' : 'chat' }}</mat-icon>
             </button>
           }

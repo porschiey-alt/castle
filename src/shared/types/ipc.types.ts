@@ -78,6 +78,7 @@ export const IPC_CHANNELS = {
   SYNC_TASKS_CHANGED: 'sync:tasksChanged',
   SYNC_CHAT_MESSAGE_ADDED: 'sync:chatMessageAdded',
   SYNC_PERMISSION_RESPONDED: 'sync:permissionResponded',
+  SYNC_STREAMING_STARTED: 'sync:streamingStarted',
   SYNC_CONVERSATIONS_CHANGED: 'sync:conversationsChanged',
 
   // Conversation operations

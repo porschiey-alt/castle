@@ -3,7 +3,7 @@
 <!-- castle-config
 agents:
   - name: General Assistant
-    icon: 🤖
+    icon: mat:psychology
     color: "#7C3AED"
     description: All-purpose coding help
 
@@ -48,6 +48,13 @@ agents:
     description: Helpful Git Guy
     systemPrompt: |
       You are a helpful Git agent - you know all the git commands and help the user prepare pull requests, commit changes, resolve merge conflicts, etc. When asked to merge in latest from main, prefer rebase.
+
+  - name: Primary Coder
+    icon: 💻
+    color: "#8B5CF6"
+    description: Primary coding agent.
+    systemPrompt: |
+      You are a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices. Follow any coding rules found in `coding-rules.md` if it exists. You do not need to stage or commit your changes to git.
 -->
 
 ## About Castle Agents

@@ -6,6 +6,7 @@ import { Component, input, ElementRef, ViewChild, AfterViewChecked } from '@angu
 import { CommonModule } from '@angular/common';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatIconModule } from '@angular/material/icon';
+import { marked } from 'marked';
 
 import { MessageBubbleComponent } from '../message-bubble/message-bubble.component';
 import type { ChatMessage, StreamingMessage } from '../../../../shared/types/message.types';
@@ -55,5 +56,10 @@ export class MessageListComponent implements AfterViewChecked {
 
   trackByMessageId(_index: number, message: ChatMessage): string {
     return message.id;
+  }
+
+  /** Render thinking text with markdown support */
+  renderThinking(text: string): string {
+    return marked.parse(text, { async: false }) as string;
   }
 }

@@ -7,7 +7,7 @@ import { Readable, Writable } from 'stream';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent, AgentSession } from '../../shared/types/agent.types';
-import { StreamingMessage, ToolCall, TodoItem } from '../../shared/types/message.types';
+import { StreamingMessage, ToolCall, TodoItem, MessageSegment } from '../../shared/types/message.types';
 
 // Lazy-loaded ESM module — use Function to prevent tsc from converting import() to require()
 let acpModule: typeof import('@agentclientprotocol/sdk') | null = null;
@@ -29,6 +29,7 @@ interface SessionProcess {
   thinkingBuffer: string;
   toolCalls: Map<string, ToolCall>;
   todoItems: TodoItem[];
+  segments: MessageSegment[];
   capabilities: {
     canLoadSession: boolean;
     canResumeSession: boolean;
@@ -144,6 +145,7 @@ export class ProcessManagerService {
       thinkingBuffer: '',
       toolCalls: new Map(),
       todoItems: [],
+      segments: [],
       capabilities: { canLoadSession: false, canResumeSession: false, canListSessions: false }
     };
 
@@ -193,13 +195,25 @@ export class ProcessManagerService {
             thinking: sessionProcess.thinkingBuffer,
             isComplete: false,
             toolCalls: Array.from(sessionProcess.toolCalls.values()),
-            todoItems: sessionProcess.todoItems.length > 0 ? [...sessionProcess.todoItems] : undefined
+            todoItems: sessionProcess.todoItems.length > 0 ? [...sessionProcess.todoItems] : undefined,
+            segments: sessionProcess.segments.map(seg =>
+              seg.type === 'tool-calls'
+                ? { ...seg, toolCalls: seg.toolCalls.map(tc => ({ ...tc })) }
+                : { ...seg }
+            )
           };
           eventEmitter.emit('output', streamingMessage);
         };
 
         if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
           sessionProcess.contentBuffer += update.content.text;
+          // Append to existing text segment or create a new one
+          const last = sessionProcess.segments[sessionProcess.segments.length - 1];
+          if (last && last.type === 'text') {
+            last.content += update.content.text;
+          } else {
+            sessionProcess.segments.push({ type: 'text', content: update.content.text });
+          }
           emitOutput();
         }
 
@@ -217,6 +231,13 @@ export class ProcessManagerService {
             status: acpStatus === 'completed' ? 'success' : acpStatus === 'failed' ? 'error' : acpStatus === 'in_progress' ? 'running' : 'pending'
           };
           sessionProcess.toolCalls.set(update.toolCallId, toolCall);
+          // Add to existing tool-calls segment or create a new one
+          const last = sessionProcess.segments[sessionProcess.segments.length - 1];
+          if (last && last.type === 'tool-calls') {
+            last.toolCalls.push(toolCall);
+          } else {
+            sessionProcess.segments.push({ type: 'tool-calls', toolCalls: [toolCall] });
+          }
           emitOutput();
         }
 
@@ -226,6 +247,17 @@ export class ProcessManagerService {
             const s = update.status;
             existing.status = s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'in_progress' ? 'running' : 'pending';
             if (update.title) existing.name = update.title;
+            // Update the tool call in segments too
+            for (const seg of sessionProcess.segments) {
+              if (seg.type === 'tool-calls') {
+                const tc = seg.toolCalls.find(t => t.id === update.toolCallId);
+                if (tc) {
+                  tc.status = existing.status;
+                  if (update.title) tc.name = update.title;
+                  break;
+                }
+              }
+            }
           }
           emitOutput();
         }
@@ -360,6 +392,11 @@ export class ProcessManagerService {
       throw new Error(`Session ${sessionId} not found`);
     }
 
+    // If the session is still starting, wait for it to become ready
+    if (sessionProcess.session.status === 'starting') {
+      await this.waitForReady(sessionProcess);
+    }
+
     if (sessionProcess.session.status !== 'ready') {
       throw new Error(`Session ${sessionId} is not ready (status: ${sessionProcess.session.status})`);
     }
@@ -374,6 +411,7 @@ export class ProcessManagerService {
     sessionProcess.thinkingBuffer = '';
     sessionProcess.toolCalls.clear();
     sessionProcess.todoItems = [];
+    sessionProcess.segments = [];
 
     try {
       // Send prompt and wait for full response
@@ -390,7 +428,8 @@ export class ProcessManagerService {
         thinking: sessionProcess.thinkingBuffer,
         isComplete: true,
         toolCalls: Array.from(sessionProcess.toolCalls.values()),
-        todoItems: sessionProcess.todoItems.length > 0 ? [...sessionProcess.todoItems] : undefined
+        todoItems: sessionProcess.todoItems.length > 0 ? [...sessionProcess.todoItems] : undefined,
+        segments: [...sessionProcess.segments]
       };
       sessionProcess.eventEmitter.emit('complete', completeMessage);
 
@@ -503,6 +542,7 @@ export class ProcessManagerService {
     sessionProcess.thinkingBuffer = '';
     sessionProcess.toolCalls.clear();
     sessionProcess.todoItems = [];
+    sessionProcess.segments = [];
 
     // Emit a cancellation event so the UI can clean up
     sessionProcess.eventEmitter.emit('cancelled', { agentId });
@@ -571,6 +611,32 @@ export class ProcessManagerService {
    */
   getAllSessions(): AgentSession[] {
     return Array.from(this.sessions.values()).map(sp => sp.session);
+  }
+
+  /**
+   * Wait for a session to leave the 'starting' state (become ready, error, or stopped).
+   */
+  private waitForReady(sessionProcess: SessionProcess, timeoutMs = 60_000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Already done
+      if (sessionProcess.session.status !== 'starting') {
+        return resolve();
+      }
+
+      const pollInterval = 200;
+      let elapsed = 0;
+      const timer = setInterval(() => {
+        elapsed += pollInterval;
+        if (sessionProcess.session.status !== 'starting') {
+          clearInterval(timer);
+          return resolve();
+        }
+        if (elapsed >= timeoutMs) {
+          clearInterval(timer);
+          return reject(new Error(`Timed out waiting for session ${sessionProcess.session.id} to become ready`));
+        }
+      }, pollInterval);
+    });
   }
 
   /**

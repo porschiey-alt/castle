@@ -91,8 +91,8 @@ export interface ElectronAPI {
     getLabels: () => Promise<TaskLabel[]>;
     createLabel: (name: string, color: string) => Promise<TaskLabel>;
     deleteLabel: (labelId: string) => Promise<void>;
-    runResearch: (taskId: string, agentId: string, outputPath?: string) => Promise<{ taskId: string }>;
-    runImplementation: (taskId: string, agentId: string) => Promise<{ taskId: string }>;
+    runResearch: (taskId: string, agentId: string, outputPath?: string, conversationId?: string) => Promise<{ taskId: string }>;
+    runImplementation: (taskId: string, agentId: string, conversationId?: string) => Promise<{ taskId: string }>;
     submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) => Promise<{ reviewId: string }>;
     deleteDiagnosisFile: (filePath: string) => Promise<{ deleted: boolean }>;
     onDiagnosisFileCleanup: (callback: (data: { taskId: string; filePath: string }) => void) => () => void;
@@ -103,6 +103,7 @@ export interface ElectronAPI {
     onTasksChanged: (callback: (data: { action: string; task?: Task; taskId?: string }) => void) => () => void;
     onChatMessageAdded: (callback: (message: ChatMessage) => void) => () => void;
     onPermissionResponded: (callback: (data: { requestId: string }) => void) => () => void;
+    onStreamingStarted: (callback: (data: { agentId: string; conversationId?: string }) => void) => () => void;
     onConversationsChanged: (callback: (data: { action: string; conversation?: Conversation; conversationId?: string }) => void) => () => void;
   };
 
@@ -234,10 +235,10 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_LABELS_CREATE, { name, color }),
     deleteLabel: (labelId: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_LABELS_DELETE, { labelId }),
-    runResearch: (taskId: string, agentId: string, outputPath?: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_RESEARCH, { taskId, agentId, outputPath }),
-    runImplementation: (taskId: string, agentId: string) =>
-      ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, { taskId, agentId }),
+    runResearch: (taskId: string, agentId: string, outputPath?: string, conversationId?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_RESEARCH, { taskId, agentId, outputPath, conversationId }),
+    runImplementation: (taskId: string, agentId: string, conversationId?: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, { taskId, agentId, conversationId }),
     submitResearchReview: (taskId: string, comments: ResearchComment[], researchSnapshot: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, { taskId, comments, researchSnapshot }),
     deleteDiagnosisFile: (filePath: string) =>
@@ -264,6 +265,11 @@ const electronAPI: ElectronAPI = {
       const handler = (_event: IpcRendererEvent, data: { requestId: string }) => callback(data);
       ipcRenderer.on(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, handler);
+    },
+    onStreamingStarted: (callback: (data: { agentId: string; conversationId?: string }) => void) => {
+      const handler = (_event: IpcRendererEvent, data: { agentId: string; conversationId?: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.SYNC_STREAMING_STARTED, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.SYNC_STREAMING_STARTED, handler);
     },
     onConversationsChanged: (callback: (data: { action: string; conversation?: Conversation; conversationId?: string }) => void) => {
       const handler = (_event: IpcRendererEvent, data: { action: string; conversation?: Conversation; conversationId?: string }) => callback(data);

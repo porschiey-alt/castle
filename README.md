@@ -179,6 +179,10 @@ castle/
 | `npm test` | Run tests |
 | `npm run electron:dev` | Run Electron only (no Angular) |
 
+## Contributors
+
+- **[@Porschiey](https://github.com/Porschiey)** — Primary contributor and maintainer
+
 ## Contributing
 
 1. Fork the repository

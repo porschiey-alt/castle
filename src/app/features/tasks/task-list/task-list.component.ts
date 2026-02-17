@@ -15,6 +15,7 @@ import { firstValueFrom } from 'rxjs';
 import { TaskService } from '../../../core/services/task.service';
 import { AgentService } from '../../../core/services/agent.service';
 import { ElectronService } from '../../../core/services/electron.service';
+import { ConversationService } from '../../../core/services/conversation.service';
 import { ConfirmDialogComponent, type ConfirmDialogData } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { TaskDetailComponent, type TaskSaveEvent, type TaskResearchEvent, type TaskImplementEvent, type TaskReviewSubmitEvent } from '../task-detail/task-detail.component';
 import { TASK_STATES, TASK_KINDS, type Task, type TaskState, type TaskKind, type BugCloseReason } from '../../../../shared/types/task.types';
@@ -38,6 +39,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
   taskService = inject(TaskService);
   private agentService = inject(AgentService);
   private electronService = inject(ElectronService);
+  private conversationService = inject(ConversationService);
   private dialog = inject(MatDialog);
 
   states = TASK_STATES;
@@ -157,8 +159,8 @@ export class TaskListComponent implements OnInit, OnDestroy {
   async onResearchRequested(event: TaskResearchEvent): Promise<void> {
     this.taskService.markResearchRunning(event.task.id);
     // Navigate to agent chat with a fresh "Research: <name>" conversation
-    this.goToAgentNewConvo.emit({ agentId: event.agentId, title: `Research: ${event.task.title}` });
-    await this.taskService.runResearch(event.task.id, event.agentId, event.outputPath);
+    const convId = await this.createAndNavigateToConversation(event.agentId, `Research: ${event.task.title}`);
+    await this.taskService.runResearch(event.task.id, event.agentId, event.outputPath, convId);
   }
 
   async onImplementRequested(event: TaskImplementEvent): Promise<void> {
@@ -168,9 +170,9 @@ export class TaskListComponent implements OnInit, OnDestroy {
       await this.taskService.updateTask(event.task.id, { state: 'in_progress' });
     }
     // Navigate to agent chat with a fresh "CODE: <name>" conversation
-    this.goToAgentNewConvo.emit({ agentId: event.agentId, title: `CODE: ${event.task.title}` });
+    const convId = await this.createAndNavigateToConversation(event.agentId, `CODE: ${event.task.title}`);
     // Run implementation via IPC (main process handles completion)
-    await this.taskService.runImplementation(event.task.id, event.agentId);
+    await this.taskService.runImplementation(event.task.id, event.agentId, convId);
   }
 
   async onReviewSubmitted(event: TaskReviewSubmitEvent): Promise<void> {
@@ -181,5 +183,13 @@ export class TaskListComponent implements OnInit, OnDestroy {
   private openConfirmDialog(data: ConfirmDialogData): Promise<boolean> {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, { data });
     return firstValueFrom(dialogRef.afterClosed()).then(result => !!result);
+  }
+
+  /** Create a conversation, navigate to the agent chat, and return the conversation ID */
+  private async createAndNavigateToConversation(agentId: string, title: string): Promise<string | undefined> {
+    await this.conversationService.loadConversations(agentId);
+    const conv = await this.conversationService.createConversation(agentId, title);
+    this.goToAgent.emit(agentId);
+    return conv?.id ?? undefined;
   }
 }

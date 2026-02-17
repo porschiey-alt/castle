@@ -141,11 +141,21 @@ export function registerIpcHandlers(services: IpcServices): void {
     processManagerService.onComplete(sessionId, async (message) => {
       // Save assistant message to database with active conversation context
       const conversationId = activeConversationIds.get(agentId);
+      // Preserve segments & tool calls so the full conversation history
+      // (including interleaved tool-call blocks) survives across reloads
+      const metadata: Record<string, unknown> = {};
+      if (message.segments && message.segments.length > 0) {
+        metadata.segments = message.segments;
+      }
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        metadata.toolCalls = message.toolCalls;
+      }
       const assistantMessage = await databaseService.saveMessage({
         agentId,
         conversationId,
         role: 'assistant',
         content: message.content,
+        metadata: Object.keys(metadata).length > 0 ? metadata as any : undefined,
         timestamp: new Date()
       });
       broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, assistantMessage);
@@ -449,7 +459,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     return databaseService.deleteTaskLabel(labelId);
   });
 
-  handle(IPC_CHANNELS.TASKS_RUN_RESEARCH, async (_event, { taskId, agentId, outputPath }) => {
+  handle(IPC_CHANNELS.TASKS_RUN_RESEARCH, async (_event, { taskId, agentId, outputPath, conversationId }) => {
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
@@ -512,6 +522,11 @@ export function registerIpcHandlers(services: IpcServices): void {
     // Save agentId to task immediately
     await databaseService.updateTask(taskId, { researchAgentId: agentId });
 
+    // Track the conversation so assistant replies go to the right place
+    if (conversationId) {
+      activeConversationIds.set(agentId, conversationId);
+    }
+
     // Record start time to detect agent-created files
     const researchStartTime = Date.now();
 
@@ -567,6 +582,9 @@ export function registerIpcHandlers(services: IpcServices): void {
       onComplete(message);
     });
 
+    // Tell all clients to associate streaming with this conversation
+    broadcaster.send(IPC_CHANNELS.SYNC_STREAMING_STARTED, { agentId, conversationId });
+
     // Send the prompt (async — responses come via events)
     processManagerService.sendMessage(sessionProcess.session.id, researchPrompt).catch((error) => {
       console.error(`[Research] Error:`, error);
@@ -578,7 +596,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // ============ Implementation Handler ============
 
-  handle(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, async (_event, { taskId, agentId }: { taskId: string; agentId: string }) => {
+  handle(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, async (_event, { taskId, agentId, conversationId }: { taskId: string; agentId: string; conversationId?: string }) => {
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
@@ -608,6 +626,11 @@ export function registerIpcHandlers(services: IpcServices): void {
     // Save implementAgentId
     await databaseService.updateTask(taskId, { implementAgentId: agentId });
 
+    // Track the conversation so assistant replies go to the right place
+    if (conversationId) {
+      activeConversationIds.set(agentId, conversationId);
+    }
+
     // Listen for completion
     const unsubscribeImpl = processManagerService.onComplete(sessionProcess.session.id, async () => {
       unsubscribeImpl();
@@ -635,6 +658,9 @@ export function registerIpcHandlers(services: IpcServices): void {
         timestamp: new Date(),
       });
     });
+
+    // Tell all clients to associate streaming with this conversation
+    broadcaster.send(IPC_CHANNELS.SYNC_STREAMING_STARTED, { agentId, conversationId });
 
     // Send prompt (async — responses come via events)
     processManagerService.sendMessage(sessionProcess.session.id, prompt).catch((error) => {

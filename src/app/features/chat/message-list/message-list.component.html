@@ -35,7 +35,7 @@
           </div>
           <div class="thinking-content">
             <mat-icon class="thinking-pulse-icon">psychology</mat-icon>
-            <span class="thinking-text">{{ latestThinking() }}</span>
+            <span class="thinking-text" [innerHTML]="renderThinking(latestThinking())"></span>
           </div>
         </div>
       }

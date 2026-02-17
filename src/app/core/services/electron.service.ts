@@ -31,6 +31,7 @@ export class ElectronService {
   private tasksChangedSubject = new Subject<{ action: string; task?: Task; taskId?: string }>();
   private chatMessageAddedSubject = new Subject<ChatMessage>();
   private permissionRespondedSubject = new Subject<{ requestId: string }>();
+  private streamingStartedSubject = new Subject<{ agentId: string; conversationId?: string }>();
   private conversationsChangedSubject = new Subject<{ action: string; conversation?: Conversation; conversationId?: string }>();
 
   // Observables
@@ -41,6 +42,7 @@ export class ElectronService {
   readonly tasksChanged$ = this.tasksChangedSubject.asObservable();
   readonly chatMessageAdded$ = this.chatMessageAddedSubject.asObservable();
   readonly permissionResponded$ = this.permissionRespondedSubject.asObservable();
+  readonly streamingStarted$ = this.streamingStartedSubject.asObservable();
   readonly conversationsChanged$ = this.conversationsChangedSubject.asObservable();
 
   constructor(private ngZone: NgZone) {
@@ -90,6 +92,12 @@ export class ElectronService {
     this.api.sync.onPermissionResponded((data) => {
       this.ngZone.run(() => {
         this.permissionRespondedSubject.next(data);
+      });
+    });
+
+    this.api.sync.onStreamingStarted((data) => {
+      this.ngZone.run(() => {
+        this.streamingStartedSubject.next(data);
       });
     });
 
@@ -268,12 +276,12 @@ export class ElectronService {
     return this.api.tasks.deleteLabel(labelId);
   }
 
-  async runTaskResearch(taskId: string, agentId: string, outputPath?: string): Promise<{ taskId: string } | null> {
-    return this.api.tasks.runResearch(taskId, agentId, outputPath);
+  async runTaskResearch(taskId: string, agentId: string, outputPath?: string, conversationId?: string): Promise<{ taskId: string } | null> {
+    return this.api.tasks.runResearch(taskId, agentId, outputPath, conversationId);
   }
 
-  async runTaskImplementation(taskId: string, agentId: string): Promise<{ taskId: string } | null> {
-    return this.api.tasks.runImplementation(taskId, agentId);
+  async runTaskImplementation(taskId: string, agentId: string, conversationId?: string): Promise<{ taskId: string } | null> {
+    return this.api.tasks.runImplementation(taskId, agentId, conversationId);
   }
 
   async submitResearchReview(taskId: string, comments: ResearchComment[], researchSnapshot: string): Promise<{ reviewId: string } | null> {

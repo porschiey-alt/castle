@@ -2,7 +2,7 @@
  * Castle - Electron Main Process Entry Point
  */
 
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog } from 'electron';
 import * as path from 'path';
 import { WindowManager } from './window';
 import { registerIpcHandlers, ipcHandlerRegistry } from './ipc';
@@ -139,6 +139,7 @@ async function createWindow(): Promise<void> {
 // App lifecycle
 app.whenReady().then(async () => {
   try {
+    Menu.setApplicationMenu(null);
     await initializeServices();
     await createWindow();
 

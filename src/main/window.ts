@@ -48,9 +48,7 @@ export class WindowManager {
         preload: path.join(__dirname, '../preload/index.js'),
         sandbox: false // Required for better-sqlite3
       },
-      // Frameless window with custom title bar (optional)
-      // frame: false,
-      // titleBarStyle: 'hidden',
+      frame: false,
     });
 
     // Show window when ready to prevent visual flash

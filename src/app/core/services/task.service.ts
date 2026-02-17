@@ -192,16 +192,16 @@ export class TaskService {
     this.labelsSignal.update(labels => labels.filter(l => l.id !== labelId));
   }
 
-  async runResearch(taskId: string, agentId: string, outputPath?: string): Promise<void> {
-    await this.electronService.runTaskResearch(taskId, agentId, outputPath);
+  async runResearch(taskId: string, agentId: string, outputPath?: string, conversationId?: string): Promise<void> {
+    await this.electronService.runTaskResearch(taskId, agentId, outputPath, conversationId);
     // Mark the task as having a research agent
     this.tasksSignal.update(tasks =>
       tasks.map(t => t.id === taskId ? { ...t, researchAgentId: agentId } : t)
     );
   }
 
-  async runImplementation(taskId: string, agentId: string): Promise<void> {
-    await this.electronService.runTaskImplementation(taskId, agentId);
+  async runImplementation(taskId: string, agentId: string, conversationId?: string): Promise<void> {
+    await this.electronService.runTaskImplementation(taskId, agentId, conversationId);
     // Mark the task as having an implementation agent
     this.tasksSignal.update(tasks =>
       tasks.map(t => t.id === taskId ? { ...t, implementAgentId: agentId } : t)

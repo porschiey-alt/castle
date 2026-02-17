@@ -329,6 +329,11 @@
     display: inline-flex;
   }
 
+  // Hide conversation toggle on mobile — sidebar controls it
+  .conversation-toggle {
+    display: none !important;
+  }
+
   .agent-sidebar {
     position: fixed;
     top: 0;
@@ -349,7 +354,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 999;
+    z-index: 996;
     background-color: var(--bg-primary, #1e1e2e);
     opacity: 0;
     pointer-events: none;
@@ -368,7 +373,7 @@
   .conversation-panel {
     position: fixed;
     top: 48px;
-    left: 0;
+    left: 72px;
     bottom: 0;
     z-index: 998;
     width: 260px;
@@ -383,23 +388,9 @@
     }
   }
 
+  // Not needed on mobile — sidebar-backdrop handles dismissal
   .conversation-backdrop {
-    display: block;
-    position: fixed;
-    top: 48px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 997;
-    background-color: var(--bg-primary, #1e1e2e);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s ease;
-
-    &.visible {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    display: none !important;
   }
 
   .window-controls {
