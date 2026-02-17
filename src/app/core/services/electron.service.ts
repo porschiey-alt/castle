@@ -192,8 +192,8 @@ export class ElectronService {
     return this.api.permissions.set(agentId, permission, granted);
   }
 
-  respondToPermissionRequest(requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string): void {
-    this.api.permissions.respond(requestId, agentId, optionId, optionKind, toolKind);
+  respondToPermissionRequest(requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string, scopeType?: string, scopeValue?: string): void {
+    this.api.permissions.respond(requestId, agentId, optionId, optionKind, toolKind, scopeType, scopeValue);
   }
 
   // ============ Permission Grant Methods ============

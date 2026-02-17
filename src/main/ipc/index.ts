@@ -12,6 +12,7 @@ import { DirectoryService } from '../services/directory.service';
 import { GitWorktreeService } from '../services/git-worktree.service';
 import { EventBroadcaster } from '../services/event-broadcaster';
 import { IPC_CHANNELS } from '../../shared/types/ipc.types';
+import { findMatchingGrant } from '../../shared/utils/permission-matcher';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../../shared/types/agent.types';
 import { Task, ResearchComment } from '../../shared/types/task.types';
@@ -187,16 +188,15 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     processManagerService.onPermissionRequest(sessionId, async (data) => {
       log.info(`Permission request from agent ${agentId}: tool=${data.toolCall?.kind || 'unknown'}`);
-      // Check for a persisted "always" grant before prompting the user
+      // Check for persisted scoped grants before prompting the user
       const projectPath = directoryService.getCurrentDirectory();
       const toolKind = data.toolCall?.kind;
       if (projectPath && toolKind) {
-        const existingGrant = await databaseService.getPermissionGrant(projectPath, toolKind);
-        if (existingGrant) {
-          // Find the matching option (allow_always or reject_always)
-          const targetKind = existingGrant.granted ? 'allow_always' : 'reject_always';
-          // Fall back to allow_once / reject_once if "always" option not present
-          const fallbackKind = existingGrant.granted ? 'allow_once' : 'reject_once';
+        const grants = await databaseService.getPermissionGrantsByToolKind(projectPath, toolKind);
+        const match = findMatchingGrant(grants, toolKind, data.toolCall?.locations, data.toolCall?.rawInput, projectPath);
+        if (match) {
+          const targetKind = match.granted ? 'allow_always' : 'reject_always';
+          const fallbackKind = match.granted ? 'allow_once' : 'reject_once';
           const option = data.options.find((o: any) => o.kind === targetKind)
                       || data.options.find((o: any) => o.kind === fallbackKind);
           if (option) {
@@ -316,14 +316,17 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   // Handle permission response from renderer
-  ipcMain.on(IPC_CHANNELS.PERMISSION_RESPONSE, async (_event, { requestId, agentId, optionId, optionKind, toolKind }) => {
+  ipcMain.on(IPC_CHANNELS.PERMISSION_RESPONSE, async (_event, { requestId, agentId, optionId, optionKind, toolKind, scopeType, scopeValue }) => {
     log.info(`Permission response: agentId=${agentId}, requestId=${requestId}, option=${optionKind || optionId}`);
     processManagerService.respondToPermission(agentId, requestId, optionId);
     // Persist "always" choices scoped to the current project
     if (optionKind && toolKind) {
       const projectPath = directoryService.getCurrentDirectory();
       if (projectPath && (optionKind === 'allow_always' || optionKind === 'reject_always')) {
-        await databaseService.savePermissionGrant(projectPath, toolKind, optionKind === 'allow_always');
+        await databaseService.savePermissionGrant(
+          projectPath, toolKind, optionKind === 'allow_always',
+          scopeType ?? 'any', scopeValue ?? ''
+        );
       }
     }
     // Notify all devices to dismiss the permission dialog
@@ -331,12 +334,15 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
   // Also register in handler registry so WebSocket clients can respond
   ipcHandlerRegistry.set(IPC_CHANNELS.PERMISSION_RESPONSE, async (payload: any) => {
-    const { requestId, agentId, optionId, optionKind, toolKind } = payload;
+    const { requestId, agentId, optionId, optionKind, toolKind, scopeType, scopeValue } = payload;
     processManagerService.respondToPermission(agentId, requestId, optionId);
     if (optionKind && toolKind) {
       const projectPath = directoryService.getCurrentDirectory();
       if (projectPath && (optionKind === 'allow_always' || optionKind === 'reject_always')) {
-        await databaseService.savePermissionGrant(projectPath, toolKind, optionKind === 'allow_always');
+        await databaseService.savePermissionGrant(
+          projectPath, toolKind, optionKind === 'allow_always',
+          scopeType ?? 'any', scopeValue ?? ''
+        );
       }
     }
     broadcaster.send(IPC_CHANNELS.SYNC_PERMISSION_RESPONDED, { requestId });

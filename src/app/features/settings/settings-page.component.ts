@@ -254,4 +254,17 @@ export class SettingsPageComponent implements OnInit {
       default: return 'build';
     }
   }
+
+  formatGrantScope(grant: PermissionGrant): string {
+    switch (grant.scopeType) {
+      case 'path': return grant.scopeValue;
+      case 'path_prefix': return grant.scopeValue ? `files in ${grant.scopeValue}` : 'project directory';
+      case 'glob': return grant.scopeValue;
+      case 'command': return `\`${grant.scopeValue}\``;
+      case 'command_prefix': return `${grant.scopeValue} *`;
+      case 'domain': return grant.scopeValue;
+      case 'url_prefix': return grant.scopeValue;
+      default: return 'all';
+    }
+  }
 }

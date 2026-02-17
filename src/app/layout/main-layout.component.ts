@@ -18,7 +18,7 @@ import { ConversationListComponent } from '../features/chat/conversation-list/co
 import { TaskListComponent } from '../features/tasks/task-list/task-list.component';
 import { SettingsPageComponent } from '../features/settings/settings-page.component';
 import { StatusBarComponent } from '../shared/components/status-bar/status-bar.component';
-import { PermissionDialogComponent } from '../shared/components/permission-dialog/permission-dialog.component';
+import { PermissionDialogComponent, PermissionDialogResult } from '../shared/components/permission-dialog/permission-dialog.component';
 
 import { AgentDialogComponent, AgentDialogData, AgentDialogResult } from '../shared/components/agent-dialog/agent-dialog.component';
 import { AgentIconComponent } from '../shared/components/agent-icon/agent-icon.component';
@@ -136,17 +136,19 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
     this.openPermissionDialogs.set(request.requestId, dialogRef);
 
-    dialogRef.afterClosed().subscribe((optionId: string) => {
+    dialogRef.afterClosed().subscribe((result: PermissionDialogResult | undefined) => {
       this.openPermissionDialogs.delete(request.requestId);
-      if (optionId) {
+      if (result?.optionId) {
         // Find the option to get its kind for persistence
-        const selectedOption = request.options?.find((o: any) => o.optionId === optionId);
+        const selectedOption = request.options?.find((o: any) => o.optionId === result.optionId);
         this.electronService.respondToPermissionRequest(
           request.requestId,
           request.agentId,
-          optionId,
+          result.optionId,
           selectedOption?.kind,
-          request.toolCall?.kind
+          request.toolCall?.kind,
+          result.scopeType,
+          result.scopeValue,
         );
       }
     });

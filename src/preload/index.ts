@@ -45,7 +45,7 @@ export interface ElectronAPI {
     get: (agentId: string) => Promise<PermissionSet>;
     set: (agentId: string, permission: keyof PermissionSet, granted: boolean) => Promise<void>;
     onRequest: (callback: (request: unknown) => void) => () => void;
-    respond: (requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string) => void;
+    respond: (requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string, scopeType?: string, scopeValue?: string) => void;
   };
 
   // Permission grant management
@@ -185,8 +185,8 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on(IPC_CHANNELS.PERMISSION_REQUEST, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.PERMISSION_REQUEST, handler);
     },
-    respond: (requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string) =>
-      ipcRenderer.send(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, agentId, optionId, optionKind, toolKind })
+    respond: (requestId: string, agentId: string, optionId: string, optionKind?: string, toolKind?: string, scopeType?: string, scopeValue?: string) =>
+      ipcRenderer.send(IPC_CHANNELS.PERMISSION_RESPONSE, { requestId, agentId, optionId, optionKind, toolKind, scopeType, scopeValue })
   },
 
   permissionGrants: {
