@@ -149,6 +149,48 @@ function gitExecSync(args: string[], cwd: string): string {
   return (execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }) as string).trim();
 }
 
+/**
+ * Forcibly remove a directory on disk, handling Windows-specific issues
+ * (read-only files, locked handles) with retries.
+ */
+async function forceRemoveDirectory(dirPath: string): Promise<void> {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 500;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // Make all files writable first (handles read-only .git internals on Windows)
+      makeWritableRecursive(dirPath);
+      fs.rmSync(dirPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+      return;
+    } catch (error) {
+      if (attempt < MAX_RETRIES) {
+        log.warn(`forceRemoveDirectory attempt ${attempt} failed, retrying...`, error);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      } else {
+        log.warn(`forceRemoveDirectory failed after ${MAX_RETRIES} attempts`, error);
+      }
+    }
+  }
+}
+
+/** Recursively clear the read-only flag on all files in a directory. */
+function makeWritableRecursive(dirPath: string): void {
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          makeWritableRecursive(fullPath);
+        } else {
+          fs.chmodSync(fullPath, 0o666);
+        }
+      } catch { /* skip individual file errors */ }
+    }
+  } catch { /* directory may already be gone */ }
+}
+
 export class GitWorktreeService {
   private static readonly WORKTREE_DIR = '.castle-worktrees';
   private static readonly MAX_CONCURRENT_DEFAULT = 5;
@@ -428,9 +470,8 @@ export class GitWorktreeService {
       log.info(`Removed worktree: ${worktreePath}`);
     } catch (error) {
       log.warn('Error removing worktree', error);
-      if (fs.existsSync(worktreePath)) {
-        fs.rmSync(worktreePath, { recursive: true, force: true });
-      }
+      // Fallback: forcibly delete the directory and prune the worktree list
+      await forceRemoveDirectory(worktreePath);
       try {
         await gitExec(['worktree', 'prune'], repoRoot);
       } catch { /* ignore */ }
