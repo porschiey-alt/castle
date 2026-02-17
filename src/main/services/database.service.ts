@@ -8,6 +8,9 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { app } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
+import { createLogger } from './logger.service';
+
+const log = createLogger('Database');
 import { 
   AppSettings, 
   DEFAULT_SETTINGS, 
@@ -65,7 +68,7 @@ export class DatabaseService {
     // Save to persist schema
     this.saveDatabase();
     
-    console.log(`Database initialized at: ${this.dbPath}`);
+    log.info(`Database initialized at: ${this.dbPath}`);
   }
 
   private runMigrations(): void {
@@ -333,7 +336,7 @@ export class DatabaseService {
       const buffer = Buffer.from(data);
       fs.writeFileSync(this.dbPath, buffer);
     } catch (error) {
-      console.error('Failed to save database:', error);
+      log.error('Failed to save database', error);
     }
   }
 

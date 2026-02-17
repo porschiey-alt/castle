@@ -8,6 +8,9 @@ import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent, AgentSession } from '../../shared/types/agent.types';
 import { StreamingMessage, ToolCall, TodoItem, MessageSegment } from '../../shared/types/message.types';
+import { createLogger } from './logger.service';
+
+const log = createLogger('ProcessManager');
 
 // Lazy-loaded ESM module — use Function to prevent tsc from converting import() to require()
 let acpModule: typeof import('@agentclientprotocol/sdk') | null = null;
@@ -64,13 +67,13 @@ export class ProcessManagerService {
         const modelIds = [...match[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
         if (modelIds.length > 0) {
           this.cachedBestModel = this.pickBestModel(modelIds);
-          console.log(`[ProcessManager] Available models: ${modelIds.join(', ')}`);
-          console.log(`[ProcessManager] Selected model: ${this.cachedBestModel}`);
+          log.info(`Available models: ${modelIds.join(', ')}`);
+          log.info(`Selected model: ${this.cachedBestModel}`);
           return this.cachedBestModel;
         }
       }
     } catch (e) {
-      console.warn('[ProcessManager] Could not query models from CLI:', e);
+      log.warn('Could not query models from CLI', e);
     }
     return null;
   }
@@ -82,9 +85,11 @@ export class ProcessManagerService {
   async startSession(agent: Agent, workingDirectory: string, acpSessionIdToResume?: string): Promise<AgentSession> {
     const existingSession = this.getSessionByAgentId(agent.id);
     if (existingSession) {
+      log.info(`Reusing existing session for agent "${agent.name}" (${agent.id})`);
       return existingSession.session;
     }
 
+    log.info(`Starting new session for agent "${agent.name}" in ${workingDirectory}`);
     const sessionId = uuidv4();
     const session: AgentSession = {
       id: sessionId,
@@ -119,20 +124,20 @@ export class ProcessManagerService {
       const msg = data.toString().trim();
       const status = sessionProcess.session.status;
       const operation = sessionProcess.currentOperation || 'unknown';
-      console.error(
-        `[Agent ${agent.name}] stderr (status=${status}, operation=${operation}): ${msg}`
+      log.error(
+        `Agent "${agent.name}" stderr (status=${status}, operation=${operation}): ${msg}`
       );
     });
 
     childProcess.on('error', (error) => {
       const op = sessionProcess?.currentOperation ?? 'unknown';
-      console.error(`[Agent ${agent.name}] Process error (operation=${op}):`, error);
+      log.error(`Agent "${agent.name}" process error (operation=${op})`, error);
       sessionProcess.session.status = 'error';
       eventEmitter.emit('error', error.message);
     });
 
     childProcess.on('exit', (code, signal) => {
-      console.log(`[Agent ${agent.name}] Process exited with code ${code}, signal ${signal}`);
+      log.info(`Agent "${agent.name}" process exited: code=${code}, signal=${signal}`);
       sessionProcess.session.status = 'stopped';
       eventEmitter.emit('exit', { code, signal });
       this.sessions.delete(sessionId);
@@ -242,6 +247,7 @@ export class ProcessManagerService {
             arguments: {},
             status: acpStatus === 'completed' ? 'success' : acpStatus === 'failed' ? 'error' : acpStatus === 'in_progress' ? 'running' : 'pending'
           };
+          log.info(`Agent "${agent.name}" tool call: ${toolCall.name} (${toolCall.id}) status=${toolCall.status}`);
           sessionProcess.toolCalls.set(update.toolCallId, toolCall);
           // Add to existing tool-calls segment or create a new one
           const last = sessionProcess.segments[sessionProcess.segments.length - 1];
@@ -259,6 +265,11 @@ export class ProcessManagerService {
             const s = update.status;
             existing.status = s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'in_progress' ? 'running' : 'pending';
             if (update.title) existing.name = update.title;
+            if (existing.status === 'error') {
+              log.error(`Agent "${agent.name}" tool call failed: ${existing.name} (${update.toolCallId})`);
+            } else {
+              log.info(`Agent "${agent.name}" tool call update: ${existing.name} (${update.toolCallId}) status=${existing.status}`);
+            }
             // Update the tool call in segments too
             for (const seg of sessionProcess.segments) {
               if (seg.type === 'tool-calls') {
@@ -330,9 +341,9 @@ export class ProcessManagerService {
               mcpServers
             });
             acpSessionId = (resumed as any)?.sessionId || acpSessionIdToResume;
-            console.log(`[Agent ${agent.name}] Resumed ACP session: ${acpSessionId}`);
+            log.info(`Agent "${agent.name}" resumed ACP session: ${acpSessionId}`);
           } catch (e) {
-            console.warn(`[Agent ${agent.name}] Resume failed, trying loadSession:`, e);
+            log.warn(`Agent "${agent.name}" resume failed, trying loadSession`, e);
           }
         }
 
@@ -345,9 +356,9 @@ export class ProcessManagerService {
               mcpServers
             });
             acpSessionId = (loaded as any)?.sessionId || acpSessionIdToResume;
-            console.log(`[Agent ${agent.name}] Loaded ACP session: ${acpSessionId}`);
+            log.info(`Agent "${agent.name}" loaded ACP session: ${acpSessionId}`);
           } catch (e) {
-            console.warn(`[Agent ${agent.name}] Load session failed, creating new:`, e);
+            log.warn(`Agent "${agent.name}" load session failed, creating new`, e);
           }
         }
       }
@@ -360,14 +371,14 @@ export class ProcessManagerService {
           mcpServers
         });
         acpSessionId = acpSession.sessionId;
-        console.log(`[Agent ${agent.name}] New ACP session: ${acpSessionId}`);
+        log.info(`Agent "${agent.name}" new ACP session: ${acpSessionId}`);
       }
 
       sessionProcess.acpSessionId = acpSessionId;
       sessionProcess.currentOperation = 'idle';
       session.status = 'ready';
     } catch (error) {
-      console.error(`[Agent ${agent.name}] ACP initialization failed:`, error);
+      log.error(`Agent "${agent.name}" ACP initialization failed`, error);
       session.status = 'error';
       this.sessions.delete(sessionId);
       throw error;
@@ -409,8 +420,11 @@ export class ProcessManagerService {
       throw new Error(`Session ${sessionId} not found`);
     }
 
+    log.info(`Sending message to agent ${sessionProcess.session.agentId}: contentLength=${content.length}`);
+
     // If the session is still starting, wait for it to become ready
     if (sessionProcess.session.status === 'starting') {
+      log.info(`Waiting for session ${sessionId} to become ready`);
       await this.waitForReady(sessionProcess);
     }
 
@@ -434,6 +448,7 @@ export class ProcessManagerService {
       // Build prompt content blocks, prepending system prompt on first message
       const promptBlocks: Array<{ type: 'text'; text: string }> = [];
       if (sessionProcess.systemPrompt && !sessionProcess.systemPromptSent) {
+        log.info(`Prepending system prompt for agent ${sessionProcess.session.agentId}`);
         promptBlocks.push({ type: 'text', text: sessionProcess.systemPrompt });
         sessionProcess.systemPromptSent = true;
       }
@@ -457,13 +472,15 @@ export class ProcessManagerService {
         todoItems: sessionProcess.todoItems.length > 0 ? [...sessionProcess.todoItems] : undefined,
         segments: [...sessionProcess.segments]
       };
+
+      log.info(`Agent ${sessionProcess.session.agentId} response complete: contentLength=${sessionProcess.contentBuffer.length}, toolCalls=${sessionProcess.toolCalls.size}`);
       sessionProcess.eventEmitter.emit('complete', completeMessage);
 
       sessionProcess.currentOperation = 'idle';
       sessionProcess.session.status = 'ready';
     } catch (error) {
-      console.error(
-        `[Agent ${sessionProcess.session.agentId}] Error during operation="${sessionProcess.currentOperation}":`,
+      log.error(
+        `Agent ${sessionProcess.session.agentId} error during operation="${sessionProcess.currentOperation}"`,
         error
       );
       sessionProcess.currentOperation = 'idle';
@@ -564,6 +581,8 @@ export class ProcessManagerService {
     const sessionProcess = this.getSessionByAgentId(agentId);
     if (!sessionProcess) return;
 
+    log.info(`Cancelling message for agent ${agentId}, killing process`);
+
     // Kill the child process to abort any in-flight ACP prompt
     if (sessionProcess.process.pid) {
       sessionProcess.process.kill('SIGTERM');
@@ -603,6 +622,8 @@ export class ProcessManagerService {
     const sessionProcess = this.sessions.get(sessionId);
     if (!sessionProcess) return;
 
+    log.info(`Stopping session ${sessionId} for agent ${sessionProcess.session.agentId}`);
+
     if (sessionProcess.process.pid) {
       sessionProcess.process.kill('SIGTERM');
     }
@@ -614,6 +635,7 @@ export class ProcessManagerService {
    * Stop all sessions
    */
   stopAllSessions(): void {
+    log.info(`Stopping all sessions (${this.sessions.size} active)`);
     for (const [sessionId] of this.sessions) {
       this.stopSession(sessionId);
     }

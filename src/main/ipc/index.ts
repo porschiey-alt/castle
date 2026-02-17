@@ -15,6 +15,9 @@ import { IPC_CHANNELS } from '../../shared/types/ipc.types';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent } from '../../shared/types/agent.types';
 import { Task, ResearchComment } from '../../shared/types/task.types';
+import { createLogger } from '../services/logger.service';
+
+const log = createLogger('IPC');
 
 export interface IpcServices {
   databaseService: DatabaseService;
@@ -48,8 +51,18 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   /** Register a handler for both Electron IPC and the shared registry */
   function handle(channel: string, handler: (event: any, payload: any) => any): void {
-    ipcMain.handle(channel, handler);
-    ipcHandlerRegistry.set(channel, (payload: any) => handler(null, payload));
+    const wrappedHandler = async (event: any, payload: any) => {
+      log.info(`Handler invoked: ${channel}`);
+      try {
+        const result = await handler(event, payload);
+        return result;
+      } catch (err) {
+        log.error(`Handler error: ${channel}`, err);
+        throw err;
+      }
+    };
+    ipcMain.handle(channel, wrappedHandler);
+    ipcHandlerRegistry.set(channel, (payload: any) => wrappedHandler(null, payload));
   }
 
   // ============ Directory Handlers ============
@@ -73,6 +86,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   // ============ Agent Handlers ============
 
   handle(IPC_CHANNELS.AGENTS_DISCOVER, async (_event, { workspacePath }) => {
+    log.info(`Discovering agents in workspace: ${workspacePath}`);
     const result = await agentDiscoveryService.discoverAgents(workspacePath);
     
     // Cache discovered agents and save to database
@@ -83,10 +97,12 @@ export function registerIpcHandlers(services: IpcServices): void {
       await databaseService.saveAgent(agent);
     }
     
+    log.info(`Discovered ${result.combined.length} agents (${result.builtinAgents.length} builtin, ${result.workspaceAgents.length} workspace)`);
     return result;
   });
 
   handle(IPC_CHANNELS.AGENTS_START_SESSION, async (_event, { agentId, workingDirectory, acpSessionId: resumeSessionId }) => {
+    log.info(`Starting session for agent ${agentId} in ${workingDirectory}`);
     // Reuse existing session if one is already running for this agent
     const existing = processManagerService.getSessionByAgentId(agentId);
     if (existing && existing.session.status !== 'stopped' && existing.session.status !== 'error') {
@@ -117,10 +133,12 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     const session = await processManagerService.startSession(agent, workingDirectory, acpSessionIdToResume);
     subscribeToSession(session.id, agentId);
+    log.info(`Session started for agent ${agentId}: sessionId=${session.id}, status=${session.status}`);
     return session;
   });
 
   handle(IPC_CHANNELS.AGENTS_STOP_SESSION, async (_event, { sessionId }) => {
+    log.info(`Stopping session: ${sessionId}`);
     await processManagerService.stopSession(sessionId);
   });
 
@@ -137,11 +155,13 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // Helper to wire up output/complete/error/permission listeners for a session
   function subscribeToSession(sessionId: string, agentId: string): void {
+    log.info(`Subscribing to session events: sessionId=${sessionId}, agentId=${agentId}`);
     processManagerService.onOutput(sessionId, (message) => {
       broadcaster.send(IPC_CHANNELS.CHAT_STREAM_CHUNK, message);
     });
 
     processManagerService.onComplete(sessionId, async (message) => {
+      log.info(`Agent response complete: agentId=${agentId}, contentLength=${message.content?.length || 0}, toolCalls=${message.toolCalls?.length || 0}`);
       // Save assistant message to database with active conversation context
       const conversationId = activeConversationIds.get(agentId);
       // Preserve segments & tool calls so the full conversation history
@@ -166,6 +186,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     });
 
     processManagerService.onPermissionRequest(sessionId, async (data) => {
+      log.info(`Permission request from agent ${agentId}: tool=${data.toolCall?.kind || 'unknown'}`);
       // Check for a persisted "always" grant before prompting the user
       const projectPath = directoryService.getCurrentDirectory();
       const toolKind = data.toolCall?.kind;
@@ -188,10 +209,12 @@ export function registerIpcHandlers(services: IpcServices): void {
     });
 
     processManagerService.onError(sessionId, (error) => {
+      log.error(`Agent session error: agentId=${agentId}`, error);
       broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error });
     });
 
     processManagerService.onCancelled(sessionId, () => {
+      log.info(`Agent message cancelled: agentId=${agentId}`);
       broadcaster.send(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, { agentId });
     });
 
@@ -215,6 +238,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   }
 
   handle(IPC_CHANNELS.CHAT_SEND_MESSAGE, async (_event, { agentId, content, conversationId }) => {
+    log.info(`Chat message from user to agent ${agentId}: conversationId=${conversationId || 'none'}, contentLength=${content.length}`);
     // Track active conversation for associating assistant replies
     if (conversationId) {
       activeConversationIds.set(agentId, conversationId);
@@ -261,7 +285,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     // Send message to Copilot CLI via ACP — runs async, responses come via events
     processManagerService.sendMessage(sessionProcess.session.id, content).catch((error) => {
-      console.error(`[Agent ${agentId}] sendMessage error:`, error);
+      log.error(`Agent sendMessage error: agentId=${agentId}`, error);
       broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
     });
 
@@ -277,6 +301,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   handle(IPC_CHANNELS.CHAT_CANCEL_MESSAGE, async (_event, { agentId }) => {
+    log.info(`Cancelling message for agent ${agentId}`);
     await processManagerService.cancelMessage(agentId);
   });
 
@@ -292,6 +317,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   // Handle permission response from renderer
   ipcMain.on(IPC_CHANNELS.PERMISSION_RESPONSE, async (_event, { requestId, agentId, optionId, optionKind, toolKind }) => {
+    log.info(`Permission response: agentId=${agentId}, requestId=${requestId}, option=${optionKind || optionId}`);
     processManagerService.respondToPermission(agentId, requestId, optionId);
     // Persist "always" choices scoped to the current project
     if (optionKind && toolKind) {
@@ -403,6 +429,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   handle(IPC_CHANNELS.TASKS_CREATE, async (_event, input) => {
+    log.info(`Creating task: title="${input.title}", kind=${input.kind || 'feature'}`);
     const projectPath = directoryService.getCurrentDirectory();
     const task = await databaseService.createTask(input, projectPath || undefined);
     broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'created', task });
@@ -410,6 +437,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   handle(IPC_CHANNELS.TASKS_UPDATE, async (_event, { taskId, updates }) => {
+    log.info(`Updating task ${taskId}`, updates);
     const updatedTask = await databaseService.updateTask(taskId, updates);
 
     // When a bug is marked done, notify the renderer so it can prompt to delete
@@ -433,6 +461,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   handle(IPC_CHANNELS.TASKS_DELETE, async (_event, { taskId }) => {
+    log.info(`Deleting task ${taskId}`);
     await databaseService.deleteTask(taskId);
     broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'deleted', taskId });
   });
@@ -445,7 +474,7 @@ export function registerIpcHandlers(services: IpcServices): void {
         return { deleted: true };
       }
     } catch (error) {
-      console.error(`[Diagnosis] Failed to delete file:`, error);
+      log.error(`Failed to delete diagnosis file: ${filePath}`, error);
     }
     return { deleted: false };
   });
@@ -463,6 +492,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   handle(IPC_CHANNELS.TASKS_RUN_RESEARCH, async (_event, { taskId, agentId, outputPath, conversationId }) => {
+    log.info(`Running research: taskId=${taskId}, agentId=${agentId}`);
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
@@ -535,13 +565,14 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     /** Send a follow-up prompt telling the agent to write the file */
     const promptAgentToWriteFile = () => {
+      log.info(`Research file not found, sending follow-up prompt to agent ${agentId}`);
       const followUp = `Your research output was not saved to disk. Please write the content you just produced to the file: ${expectedFilePath}`;
       const unsubFollowUp = processManagerService.onComplete(sessionProcess!.session.id, () => {
         unsubFollowUp();
         notifyComplete();
       });
       processManagerService.sendMessage(sessionProcess!.session.id, followUp).catch((error) => {
-        console.error(`[Research] Follow-up error:`, error);
+        log.error(`Research follow-up error for agent ${agentId}`, error);
         broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
       });
     };
@@ -571,11 +602,10 @@ export function registerIpcHandlers(services: IpcServices): void {
       } catch { /* treat as not written */ }
 
       if (agentWroteFile) {
-        console.log(`[Research] Agent wrote file: ${expectedFilePath}`);
+        log.info(`Research complete: agent wrote file ${expectedFilePath}`);
         notifyComplete();
       } else {
-        // Agent didn't write the file — prompt it again
-        console.log(`[Research] Agent did not write file, sending follow-up prompt`);
+        log.info(`Research complete: agent did not write file, sending follow-up prompt`);
         promptAgentToWriteFile();
       }
     };
@@ -590,7 +620,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     // Send the prompt (async — responses come via events)
     processManagerService.sendMessage(sessionProcess.session.id, researchPrompt).catch((error) => {
-      console.error(`[Research] Error:`, error);
+      log.error(`Research prompt error for task ${taskId}`, error);
       broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
     });
 
@@ -600,6 +630,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   // ============ Implementation Handler ============
 
   handle(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, async (_event, { taskId, agentId, conversationId }: { taskId: string; agentId: string; conversationId?: string }) => {
+    log.info(`Running implementation: taskId=${taskId}, agentId=${agentId}`);
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
@@ -633,7 +664,7 @@ export function registerIpcHandlers(services: IpcServices): void {
           // Warn about uncommitted changes
           const hasUncommitted = await gitWorktreeService.hasUncommittedChanges(workingDirectory);
           if (hasUncommitted) {
-            console.warn('[Implementation] Warning: uncommitted changes in main working directory');
+            log.warn('Uncommitted changes detected in main working directory');
             sendLifecycle('warning', 'Uncommitted changes detected in your working directory. The worktree will branch from the last commit.');
           }
 
@@ -671,7 +702,7 @@ export function registerIpcHandlers(services: IpcServices): void {
           effectiveWorkDir = worktreeResult.worktreePath;
           worktreePath = worktreeResult.worktreePath;
           branchName = worktreeResult.branchName;
-          console.log(`[Implementation] Using worktree: ${effectiveWorkDir} (branch: ${branchName})`);
+          log.info(`Implementation using worktree: ${effectiveWorkDir} (branch: ${branchName})`);
 
           // Phase: Installing dependencies
           const autoInstall = settings.worktreeAutoInstallDeps !== false;
@@ -680,13 +711,13 @@ export function registerIpcHandlers(services: IpcServices): void {
             try {
               await gitWorktreeService.installDependencies(effectiveWorkDir);
             } catch (depError) {
-              console.warn('[Implementation] Dependency install failed:', depError);
+              log.warn('Implementation dependency install failed', depError);
               sendLifecycle('warning', 'Dependency installation failed. The agent may encounter import errors.');
             }
           }
         }
       } catch (error) {
-        console.warn('[Implementation] Could not create worktree, using main directory:', error);
+        log.warn('Could not create worktree, using main directory', error);
         sendLifecycle('warning', `Worktree creation failed: ${error instanceof Error ? error.message : error}. Using main directory.`);
       }
     }
@@ -700,7 +731,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     let sessionProcess = processManagerService.getSessionByAgentId(agentId);
     if (sessionProcess && worktreePath) {
       // Existing session was started with a different cwd — kill and recreate
-      console.log('[Implementation] Restarting agent session for worktree cwd');
+      log.info('Restarting agent session for worktree cwd');
       await processManagerService.stopSession(sessionProcess.session.id);
       sessionProcess = undefined;
     }
@@ -764,14 +795,14 @@ export function registerIpcHandlers(services: IpcServices): void {
                 prNumber: prResult.prNumber,
                 prState: settings.worktreeDraftPR ? 'draft' : 'open',
               });
-              console.log(`[Implementation] PR created: ${prResult.url}`);
+              log.info(`PR created for task ${taskId}: ${prResult.url}`);
             } else {
-              console.warn(`[Implementation] PR creation failed: ${prResult.error}`);
+              log.warn(`PR creation failed for task ${taskId}: ${prResult.error}`);
               sendLifecycle('warning', `Auto-PR failed: ${prResult.error}. You can create one manually.`);
             }
           }
         } catch (commitError) {
-          console.warn('[Implementation] Auto-commit/PR failed:', commitError);
+          log.warn('Implementation auto-commit/PR failed', commitError);
         }
       }
 
@@ -805,7 +836,7 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     // Send prompt (async — responses come via events)
     processManagerService.sendMessage(sessionProcess.session.id, prompt).catch((error) => {
-      console.error('[Implementation] Error:', error);
+      log.error(`Implementation prompt error for task ${taskId}`, error);
       broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
     });
 
@@ -815,6 +846,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   // ============ Research Review Handler ============
 
   handle(IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW, async (_event, { taskId, comments, researchSnapshot }: { taskId: string; comments: ResearchComment[]; researchSnapshot: string }) => {
+    log.info(`Submitting research review for task ${taskId} with ${comments.length} comments`);
     const task = await databaseService.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
     if (!task.researchAgentId) throw new Error('No research agent assigned to task');
@@ -893,7 +925,7 @@ export function registerIpcHandlers(services: IpcServices): void {
       onComplete(message);
     });
     processManagerService.sendMessage(sessionProcess.session.id, revisionPrompt).catch((error) => {
-      console.error('[Research Review] Error:', error);
+      log.error(`Research review revision error for task ${taskId}`, error);
       databaseService.updateResearchReview(reviewId, { status: 'pending' });
       broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
     });
@@ -981,5 +1013,5 @@ export function registerIpcHandlers(services: IpcServices): void {
     return { isGitRepo, hasUncommittedChanges, currentBranch };
   });
 
-  console.log('IPC handlers registered');
+  log.info('IPC handlers registered');
 }
