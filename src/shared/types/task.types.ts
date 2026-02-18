@@ -2,14 +2,14 @@
  * Task Workflow Types
  */
 
-export type TaskState = 'new' | 'in_progress' | 'active' | 'blocked' | 'ready_for_review' | 'done';
+export type TaskState = 'new' | 'in_progress' | 'active' | 'blocked' | 'review' | 'done';
 
 export const TASK_STATES: { id: TaskState; label: string; icon: string; color: string }[] = [
   { id: 'new', label: 'New', icon: 'fiber_new', color: '#3b82f6' },
   { id: 'active', label: 'Active', icon: 'radio_button_checked', color: '#8b5cf6' },
   { id: 'in_progress', label: 'In Progress', icon: 'play_circle', color: '#f59e0b' },
   { id: 'blocked', label: 'Blocked', icon: 'block', color: '#ef4444' },
-  { id: 'ready_for_review', label: 'Ready for Review', icon: 'rate_review', color: '#0ea5e9' },
+  { id: 'review', label: 'Ready for Review', icon: 'rate_review', color: '#06b6d4' },
   { id: 'done', label: 'Done', icon: 'check_circle', color: '#22c55e' },
 ];
 

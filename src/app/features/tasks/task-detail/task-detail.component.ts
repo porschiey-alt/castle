@@ -339,11 +339,35 @@ export class TaskDetailComponent implements OnInit {
       case 'creating_worktree': return 'Creating worktree...';
       case 'installing_deps': return 'Installing dependencies...';
       case 'implementing': return 'Implementation in progress...';
-      case 'evaluating': return 'Self-evaluating work...';
+      case 'evaluating': return 'Evaluating implementation...';
       case 'committing': return 'Committing changes...';
       case 'creating_pr': return 'Creating pull request...';
       default: return '';
     }
+  }
+
+  private readonly phaseOrder = [
+    'creating_worktree', 'installing_deps', 'implementing',
+    'evaluating', 'committing', 'creating_pr'
+  ];
+
+  isPhaseAfter(phase: string): boolean {
+    if (!this.lifecyclePhase) return false;
+    return this.phaseOrder.indexOf(this.lifecyclePhase) > this.phaseOrder.indexOf(phase);
+  }
+
+  phaseIcon(phase: string): string {
+    if (this.lifecyclePhase === phase) return 'sync';
+    if (this.isPhaseAfter(phase)) return 'check_circle';
+    return 'radio_button_unchecked';
+  }
+
+  markDone(): void {
+    const t = this.task();
+    if (!t) return;
+    const updates: { task: Task; state: TaskState; closeReason?: BugCloseReason } = { task: t, state: 'done' };
+    if (t.kind === 'bug') updates.closeReason = 'fixed';
+    this.stateChanged.emit(updates);
   }
 
   /** Get PR state display info */
