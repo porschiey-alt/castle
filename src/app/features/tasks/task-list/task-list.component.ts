@@ -172,7 +172,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
   async onImplementRequested(event: TaskImplementEvent): Promise<void> {
     this.taskService.markImplementRunning(event.task.id);
     // Transition task to "in_progress" when implementation starts
-    if (event.task.state !== 'in_progress' && event.task.state !== 'done' && event.task.state !== 'ready_for_review') {
+    if (event.task.state !== 'in_progress' && event.task.state !== 'done' && event.task.state !== 'review') {
       await this.taskService.updateTask(event.task.id, { state: 'in_progress' });
     }
     const convId = await this.createAndNavigateToConversation(event.agentId, event.task.title, event.task.id);
