@@ -169,6 +169,7 @@ async function forceRemoveDirectory(dirPath: string): Promise<void> {
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
       } else {
         log.warn(`forceRemoveDirectory failed after ${MAX_RETRIES} attempts`, error);
+        throw error;
       }
     }
   }
