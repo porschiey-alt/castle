@@ -680,8 +680,12 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   handle(IPC_CHANNELS.TASKS_RUN_IMPLEMENTATION, async (_event, { taskId, agentId, conversationId }: { taskId: string; agentId: string; conversationId?: string }) => {
     log.info(`Running implementation: taskId=${taskId}, agentId=${agentId}`);
-    const task = await databaseService.getTask(taskId);
-    if (!task) throw new Error(`Task ${taskId} not found`);
+    const rawTask = await databaseService.getTask(taskId);
+    if (!rawTask) throw new Error(`Task ${taskId} not found`);
+
+    // Hydrate research content from the on-disk file so it is included in the prompt
+    const workingDirectoryForResearch = directoryService.getCurrentDirectory();
+    const task = hydrateResearchFromFile(rawTask, workingDirectoryForResearch);
 
     // Helper to send lifecycle updates with task metadata
     const sendLifecycle = (phase: string, message?: string) =>
