@@ -249,6 +249,13 @@ export function registerIpcHandlers(services: IpcServices): void {
 
   handle(IPC_CHANNELS.CHAT_SEND_MESSAGE, async (_event, { agentId, content, conversationId }) => {
     log.info(`Chat message from user to agent ${agentId}: conversationId=${conversationId || 'none'}, contentLength=${content.length}`);
+
+    // Reject if the agent's session is already busy processing a message
+    const existingSession = processManagerService.getSessionByAgentId(agentId);
+    if (existingSession && existingSession.session.status === 'busy') {
+      throw new Error('Agent is busy processing a message. Please wait for it to finish or cancel it first.');
+    }
+
     // Track active conversation for associating assistant replies
     if (conversationId) {
       activeConversationIds.set(agentId, conversationId);
@@ -295,8 +302,8 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     // Send message to Copilot CLI via ACP — runs async, responses come via events
     processManagerService.sendMessage(sessionProcess.session.id, content).catch((error) => {
-      log.error(`Agent sendMessage error: agentId=${agentId}`, error);
-      broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: String(error) });
+      log.error(`Agent sendMessage error: agentId=${agentId}`, { message: error?.message || String(error) });
+      broadcaster.send(IPC_CHANNELS.APP_ERROR, { agentId, error: error?.message || String(error) });
     });
 
     return userMessage;
