@@ -11,8 +11,11 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
 
+import { MatDialog } from '@angular/material/dialog';
+
 import { ConversationService } from '../../../core/services/conversation.service';
 import { AgentService } from '../../../core/services/agent.service';
+import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
 import type { Conversation } from '../../../../shared/types/conversation.types';
 
 @Component({
@@ -33,6 +36,7 @@ import type { Conversation } from '../../../../shared/types/conversation.types';
 export class ConversationListComponent {
   private conversationService = inject(ConversationService);
   private agentService = inject(AgentService);
+  private dialog = inject(MatDialog);
 
   conversationSelected = output<string>();
 
@@ -80,7 +84,20 @@ export class ConversationListComponent {
   }
 
   async clearAllConversations(): Promise<void> {
-    await this.conversationService.deleteAllConversations();
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete All Conversations',
+        message: 'Are you sure you want to delete all conversations? This action cannot be undone.',
+        confirmText: 'Delete All',
+        cancelText: 'Cancel'
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(async (confirmed: boolean) => {
+      if (confirmed) {
+        await this.conversationService.deleteAllConversations();
+      }
+    });
   }
 
   formatTime(date: Date | string): string {
