@@ -47,11 +47,33 @@ interface SessionProcess {
 export class ProcessManagerService {
   private sessions: Map<string, SessionProcess> = new Map();
   private cachedBestModel: string | null = null;
+  private databasePath: string | null = null;
   // Maps permission requestId → sessionId for correct routing when multiple sessions share an agentId
   private pendingPermissions: Map<string, string> = new Map();
 
   getActiveModel(): string | null {
     return this.cachedBestModel;
+  }
+
+  /** Set the castle.db file path so built-in MCP servers can be injected. */
+  setDatabasePath(dbPath: string): void {
+    this.databasePath = dbPath;
+  }
+
+  /** Return MCP server configs for Castle built-in tools. */
+  private getCastleBuiltinMcpServers(workingDirectory: string): Array<{ name: string; command: string; args: string[]; env: Array<{ name: string; value: string }> }> {
+    if (!this.databasePath) return [];
+
+    const serverScript = path.join(__dirname, '..', 'mcp', 'castle-tasks-server.js');
+    return [{
+      name: 'castle-tasks',
+      command: 'node',
+      args: [serverScript],
+      env: [
+        { name: 'CASTLE_DB_PATH', value: this.databasePath },
+        { name: 'CASTLE_PROJECT_PATH', value: workingDirectory },
+      ],
+    }];
   }
 
   /**
@@ -339,6 +361,9 @@ export class ProcessManagerService {
         args: s.args || [],
         env: Object.entries(s.env || {}).map(([name, value]) => ({ name, value }))
       }));
+
+      // Auto-inject Castle built-in MCP servers
+      mcpServers.push(...this.getCastleBuiltinMcpServers(workingDirectory));
 
       let acpSessionId: string | null = null;
 

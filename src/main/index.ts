@@ -92,6 +92,7 @@ async function initializeServices(): Promise<void> {
   directoryService = new DirectoryService(databaseService);
   agentDiscoveryService = new AgentDiscoveryService();
   processManagerService = new ProcessManagerService();
+  processManagerService.setDatabasePath(databaseService.getDatabasePath());
   gitWorktreeService = new GitWorktreeService();
   
   log.info('All services initialized successfully');
