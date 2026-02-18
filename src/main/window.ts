@@ -85,6 +85,15 @@ export class WindowManager {
       return { action: 'deny' };
     });
 
+    // Prevent in-app navigation to external URLs; open in default browser instead
+    this.mainWindow.webContents.on('will-navigate', (event, url) => {
+      const currentUrl = this.mainWindow?.webContents.getURL() ?? '';
+      if (url !== currentUrl) {
+        event.preventDefault();
+        shell.openExternal(url);
+      }
+    });
+
     // Handle window closed
     this.mainWindow.on('closed', () => {
       log.info('Main window closed');
