@@ -93,7 +93,7 @@ body {
 // ============ Links ============
 
 a {
-  color: var(--theme-primary);
+  color: var(--theme-secondary-accent, #a855f7);
   text-decoration: none;
 
   &:hover {

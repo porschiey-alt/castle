@@ -427,7 +427,7 @@
   }
 
   a {
-    color: #3b82f6;
+    color: var(--theme-secondary-accent, #a855f7);
     text-decoration: underline;
   }
 
