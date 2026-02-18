@@ -2,7 +2,7 @@
  * Process Manager Service - Manages Copilot CLI child processes via ACP
  */
 
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execFile, ChildProcess } from 'child_process';
 import { Readable, Writable } from 'stream';
 import { EventEmitter } from 'events';
 import * as path from 'path';
@@ -617,16 +617,54 @@ export class ProcessManagerService {
   }
 
   /**
-   * Stop a session
+   * Stop a session, killing the process tree and waiting for exit.
+   * On Windows, uses taskkill /T /F to kill the entire process tree
+   * (shell + child processes) so file handles are released before
+   * worktree directory removal.
    */
   async stopSession(sessionId: string): Promise<void> {
     const sessionProcess = this.sessions.get(sessionId);
     if (!sessionProcess) return;
 
-    log.info(`Stopping session ${sessionId} for agent ${sessionProcess.session.agentId}`);
+    const pid = sessionProcess.process.pid;
+    log.info(`Stopping session ${sessionId} for agent ${sessionProcess.session.agentId} (pid=${pid})`);
 
-    if (sessionProcess.process.pid) {
-      sessionProcess.process.kill('SIGTERM');
+    if (pid) {
+      // Build a promise that resolves when the process exits (or times out)
+      const exitPromise = new Promise<void>(resolve => {
+        const timeout = setTimeout(() => {
+          log.warn(`Process ${pid} did not exit within 10s, proceeding`);
+          resolve();
+        }, 10_000);
+
+        sessionProcess.process.once('exit', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+
+        // If the process is already dead, resolve immediately
+        if (sessionProcess.process.exitCode !== null || sessionProcess.process.killed) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+
+      if (process.platform === 'win32') {
+        // On Windows, SIGTERM doesn't reliably kill processes. Use taskkill
+        // with /T (tree kill) and /F (force) to kill the shell and all children.
+        try {
+          execFile('taskkill', ['/T', '/F', '/PID', String(pid)], (err) => {
+            if (err) log.warn(`taskkill failed for pid ${pid}`, err);
+          });
+        } catch (err) {
+          log.warn(`Failed to invoke taskkill for pid ${pid}`, err);
+          sessionProcess.process.kill();
+        }
+      } else {
+        sessionProcess.process.kill('SIGTERM');
+      }
+
+      await exitPromise;
     }
 
     this.sessions.delete(sessionId);
