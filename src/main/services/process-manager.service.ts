@@ -633,7 +633,8 @@ export class ProcessManagerService {
       // Build a promise that resolves when the process exits (or times out)
       const exitPromise = new Promise<void>(resolve => {
         const timeout = setTimeout(() => {
-          log.warn(`Process ${pid} did not exit within 10s, proceeding`);
+          log.warn(`Process ${pid} did not exit within 10s, force-killing`);
+          try { sessionProcess.process.kill('SIGKILL'); } catch { /* already dead */ }
           resolve();
         }, 10_000);
 
@@ -676,11 +677,17 @@ export class ProcessManagerService {
    */
   async stopSessionsByWorkDir(workDirPrefix: string): Promise<void> {
     const normalized = path.normalize(workDirPrefix);
+    let stoppedAny = false;
     for (const [sessionId, sp] of this.sessions) {
       if (path.normalize(sp.session.workingDirectory).startsWith(normalized)) {
         log.info(`Stopping session ${sessionId} (cwd: ${sp.session.workingDirectory}) before worktree removal`);
         await this.stopSession(sessionId);
+        stoppedAny = true;
       }
+    }
+    // Give Windows time to release directory handles after process tree death
+    if (stoppedAny && process.platform === 'win32') {
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
 
