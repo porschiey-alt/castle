@@ -216,6 +216,14 @@ export class ChatService {
    */
   async sendMessage(agentId: string, content: string): Promise<void> {
     this.logger.info('Chat', `Sending message to agent ${agentId}, length=${content.length}`);
+
+    // Don't allow sending while the agent is already processing
+    const currentState = this.chatStatesSignal().get(agentId);
+    if (currentState?.isLoading) {
+      this.logger.warn('Chat', `Agent ${agentId} is busy, ignoring send request`);
+      return;
+    }
+
     this.setLoading(agentId, true);
 
     try {
