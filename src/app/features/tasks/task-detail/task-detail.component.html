@@ -131,6 +131,23 @@
       }
 
       <span class="task-date">Created {{ task()!.createdAt | date:'medium' }}</span>
+
+      <!-- GitHub Issue badge -->
+      @if (task()!.githubIssueNumber) {
+        <a class="github-issue-badge" [href]="getIssueUrl(task()!)" target="_blank" rel="noopener"
+           matTooltip="Linked to GitHub Issue #{{ task()!.githubIssueNumber }}">
+          <mat-icon>link</mat-icon>
+          #{{ task()!.githubIssueNumber }}
+        </a>
+        <button mat-icon-button matTooltip="Unlink from GitHub Issue" (click)="unlinkFromGitHub()" class="unlink-btn">
+          <mat-icon>link_off</mat-icon>
+        </button>
+      } @else if (githubAvailable()) {
+        <button mat-stroked-button (click)="pushToGitHub()" [disabled]="pushingToGitHub" class="push-github-btn">
+          <mat-icon>cloud_upload</mat-icon>
+          {{ pushingToGitHub ? 'Pushing...' : 'Push to GitHub' }}
+        </button>
+      }
     }
   </div>
 

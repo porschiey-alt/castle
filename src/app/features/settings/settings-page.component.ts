@@ -83,6 +83,9 @@ export class SettingsPageComponent implements OnInit {
   worktreeAutoInstallDeps = true;
   worktreeDraftPR = false;
 
+  // GitHub Issues sync state
+  githubIssueSyncEnabled = false;
+
   // Logging state
   logLevel: 'debug' | 'info' | 'warn' | 'error' = 'info';
 
@@ -99,6 +102,7 @@ export class SettingsPageComponent implements OnInit {
       this.worktreeMaxConcurrent = settings.worktreeMaxConcurrent ?? 5;
       this.worktreeAutoInstallDeps = settings.worktreeAutoInstallDeps !== false;
       this.worktreeDraftPR = settings.worktreeDraftPR ?? false;
+      this.githubIssueSyncEnabled = settings.githubIssueSyncEnabled ?? false;
       this.logLevel = settings.logLevel ?? 'info';
 
       // Load existing customization
@@ -221,6 +225,12 @@ export class SettingsPageComponent implements OnInit {
       worktreeMaxConcurrent: Math.max(1, Math.min(20, this.worktreeMaxConcurrent)),
       worktreeAutoInstallDeps: this.worktreeAutoInstallDeps,
       worktreeDraftPR: this.worktreeDraftPR,
+    });
+  }
+
+  async saveGitHubSettings(): Promise<void> {
+    await this.electronService.updateSettings({
+      githubIssueSyncEnabled: this.githubIssueSyncEnabled,
     });
   }
 

@@ -946,9 +946,9 @@ export class DatabaseService {
     const id = uuidv4();
     const now = new Date().toISOString();
     this.db.run(
-      `INSERT INTO tasks (id, title, description, state, kind, project_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.title, input.description || '', input.state || 'new', input.kind || 'feature', projectPath || null, now, now]
+      `INSERT INTO tasks (id, title, description, state, kind, project_path, github_issue_number, github_repo, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.title, input.description || '', input.state || 'new', input.kind || 'feature', projectPath || null, input.githubIssueNumber || null, input.githubRepo || null, now, now]
     );
 
     if (input.labelIds?.length) {
@@ -983,6 +983,8 @@ export class DatabaseService {
     if (updates.prUrl !== undefined) { sets.push('pr_url = ?'); params.push(updates.prUrl); }
     if (updates.prNumber !== undefined) { sets.push('pr_number = ?'); params.push(updates.prNumber); }
     if (updates.prState !== undefined) { sets.push('pr_state = ?'); params.push(updates.prState); }
+    if (updates.githubIssueNumber !== undefined) { sets.push('github_issue_number = ?'); params.push(updates.githubIssueNumber || null); }
+    if (updates.githubRepo !== undefined) { sets.push('github_repo = ?'); params.push(updates.githubRepo || null); }
 
     if (sets.length > 0) {
       sets.push('updated_at = ?');

@@ -89,6 +89,8 @@ export class TaskDetailComponent implements OnInit {
   implementRunning = input(false);
   /** Whether a review revision is currently running */
   reviewRunning = input(false);
+  /** Whether GitHub Issues is available for this repo */
+  githubAvailable = input(false);
 
   saved = output<TaskSaveEvent>();
   deleteRequested = output<Task>();
@@ -98,6 +100,8 @@ export class TaskDetailComponent implements OnInit {
   createPRRequested = output<TaskCreatePREvent>();
   diffLoadRequested = output<string>();
   reviewSubmitted = output<TaskReviewSubmitEvent>();
+  pushToGitHubRequested = output<Task>();
+  unlinkFromGitHubRequested = output<Task>();
   goToResearcher = output<string>();
   goToImplementer = output<string>();
   closed = output<void>();
@@ -134,6 +138,8 @@ export class TaskDetailComponent implements OnInit {
   diffContent: string | null = null;
   showDiffPreview = false;
   loadingDiff = false;
+  // GitHub push state
+  pushingToGitHub = false;
 
   /** Clear review state when reviewRunning transitions from true to false */
   private reviewRunningEffect = effect(() => {
@@ -420,5 +426,29 @@ export class TaskDetailComponent implements OnInit {
     this.stateChanged.emit({ task: t, state: 'in_progress' });
     // Navigate to the implementing agent's chat
     this.goToImplementer.emit(t.implementAgentId!);
+  }
+
+  pushToGitHub(): void {
+    const t = this.task();
+    if (!t) return;
+    this.pushingToGitHub = true;
+    this.pushToGitHubRequested.emit(t);
+  }
+
+  onPushToGitHubComplete(): void {
+    this.pushingToGitHub = false;
+  }
+
+  unlinkFromGitHub(): void {
+    const t = this.task();
+    if (!t) return;
+    this.unlinkFromGitHubRequested.emit(t);
+  }
+
+  getIssueUrl(task: Task): string {
+    if (task.githubRepo) {
+      return `https://github.com/${task.githubRepo}/issues/${task.githubIssueNumber}`;
+    }
+    return '#';
   }
 }

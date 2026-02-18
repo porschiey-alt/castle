@@ -235,6 +235,19 @@ export class WebSocketAPI implements ElectronAPI {
       this.on(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, callback),
   };
 
+  githubIssues = {
+    check: (): Promise<{ available: boolean; repo: string | null }> =>
+      this.invoke(IPC_CHANNELS.GITHUB_ISSUES_CHECK),
+    list: (state?: 'open' | 'closed' | 'all'): Promise<{ number: number; title: string; body: string; state: string; labels: string[]; url: string }[]> =>
+      this.invoke(IPC_CHANNELS.GITHUB_ISSUES_LIST, { state }),
+    push: (taskId: string): Promise<Task> =>
+      this.invoke(IPC_CHANNELS.GITHUB_ISSUES_PUSH, { taskId }),
+    import: (issueNumbers: number[]): Promise<Task[]> =>
+      this.invoke(IPC_CHANNELS.GITHUB_ISSUES_IMPORT, { issueNumbers }),
+    unlink: (taskId: string): Promise<Task> =>
+      this.invoke(IPC_CHANNELS.GITHUB_ISSUES_UNLINK, { taskId }),
+  };
+
   sync = {
     onTasksChanged: (callback: (data: { action: string; task?: any; taskId?: string }) => void): (() => void) =>
       this.on(IPC_CHANNELS.SYNC_TASKS_CHANGED, callback),

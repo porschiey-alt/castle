@@ -308,6 +308,30 @@
 
     <mat-divider />
 
+    <!-- GitHub Issues Section -->
+    <section class="settings-section">
+      <h3>
+        <mat-icon>code</mat-icon>
+        GitHub Issues
+      </h3>
+      <p class="section-description">
+        Sync tasks with GitHub Issues when the project has a GitHub remote. Requires the <code>gh</code> CLI to be installed and authenticated.
+      </p>
+
+      <div class="setting-row">
+        <div class="setting-label">
+          <span>Enable GitHub Issue sync</span>
+          <span class="setting-hint">Automatically push task changes to linked GitHub Issues when tasks are updated</span>
+        </div>
+        <mat-slide-toggle
+          [(ngModel)]="githubIssueSyncEnabled"
+          (change)="saveGitHubSettings()">
+        </mat-slide-toggle>
+      </div>
+    </section>
+
+    <mat-divider />
+
     <!-- Permissions Section -->
     <section class="settings-section">
       <h3>

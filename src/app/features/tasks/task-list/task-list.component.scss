@@ -185,6 +185,19 @@
   }
 }
 
+.github-badge {
+  color: #58a6ff;
+  background-color: #58a6ff22;
+  border-color: #58a6ff44;
+
+  .badge-icon {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+    margin-right: 3px;
+  }
+}
+
 .task-card-meta {
   flex-shrink: 0;
   text-align: right;

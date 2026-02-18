@@ -17,6 +17,7 @@
         [researchRunning]="taskService.isResearchRunning(task.id)"
         [implementRunning]="taskService.isImplementRunning(task.id)"
         [reviewRunning]="taskService.isReviewRunning(task.id)"
+        [githubAvailable]="githubAvailable"
         (saved)="onSave(task.id, $event)"
         (deleteRequested)="deleteTask($event)"
         (stateChanged)="onStateChange($event)"
@@ -25,6 +26,8 @@
         (createPRRequested)="onCreatePR($event)"
         (diffLoadRequested)="onDiffLoadRequested($event)"
         (reviewSubmitted)="onReviewSubmitted($event)"
+        (pushToGitHubRequested)="onPushToGitHub($event)"
+        (unlinkFromGitHubRequested)="onUnlinkFromGitHub($event)"
         (goToResearcher)="goToAgent.emit($event)"
         (goToImplementer)="goToAgent.emit($event)"
         (closed)="deselectTask()"
@@ -40,6 +43,11 @@
         <mat-icon>add</mat-icon>
         New Task
       </button>
+      @if (githubAvailable) {
+        <button mat-icon-button matTooltip="Import from GitHub Issues" (click)="openImportDialog()">
+          <mat-icon>cloud_download</mat-icon>
+        </button>
+      }
     </div>
 
     <!-- State filter chips -->
@@ -105,7 +113,7 @@
             </div>
             <div class="task-card-body">
               <div class="task-card-title">{{ task.title }}</div>
-              @if (task.labels.length > 0 || task.researchContent) {
+              @if (task.labels.length > 0 || task.researchContent || task.githubIssueNumber) {
                 <div class="task-card-labels">
                   @if (task.researchContent) {
                     <span class="mini-label research-badge">
@@ -123,6 +131,12 @@
                     <span class="mini-label pr-badge">
                       <mat-icon class="badge-icon">merge</mat-icon>
                       PR #{{ task.prNumber || '' }}
+                    </span>
+                  }
+                  @if (task.githubIssueNumber) {
+                    <span class="mini-label github-badge">
+                      <mat-icon class="badge-icon">link</mat-icon>
+                      #{{ task.githubIssueNumber }}
                     </span>
                   }
                   @for (label of task.labels; track label.id) {

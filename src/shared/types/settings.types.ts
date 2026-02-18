@@ -29,6 +29,8 @@ export interface AppSettings {
   worktreeDraftPR: boolean;
   worktreeMaxConcurrent: number;
   worktreeAutoInstallDeps: boolean;
+  // GitHub Issues sync
+  githubIssueSyncEnabled: boolean;
   // Logging
   logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
@@ -78,6 +80,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   worktreeDraftPR: false,
   worktreeMaxConcurrent: 5,
   worktreeAutoInstallDeps: true,
+  githubIssueSyncEnabled: false,
   logLevel: 'info',
 };
 

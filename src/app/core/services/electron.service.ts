@@ -316,6 +316,28 @@ export class ElectronService {
     return this.api.tasks.onDiagnosisFileCleanup(callback);
   }
 
+  // ============ GitHub Issues Methods ============
+
+  async checkGitHubIssues(): Promise<{ available: boolean; repo: string | null }> {
+    return this.api.githubIssues.check();
+  }
+
+  async listGitHubIssues(state?: 'open' | 'closed' | 'all'): Promise<{ number: number; title: string; body: string; state: string; labels: string[]; url: string }[]> {
+    return this.api.githubIssues.list(state);
+  }
+
+  async pushToGitHub(taskId: string): Promise<Task> {
+    return this.api.githubIssues.push(taskId);
+  }
+
+  async importFromGitHub(issueNumbers: number[]): Promise<Task[]> {
+    return this.api.githubIssues.import(issueNumbers);
+  }
+
+  async unlinkFromGitHub(taskId: string): Promise<Task> {
+    return this.api.githubIssues.unlink(taskId);
+  }
+
   // ============ Conversation Methods ============
 
   async getConversations(agentId: string): Promise<Conversation[]> {
