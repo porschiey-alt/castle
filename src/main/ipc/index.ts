@@ -652,6 +652,18 @@ export function registerIpcHandlers(services: IpcServices): void {
       onComplete(message);
     });
 
+    // Save the research prompt as a user message so it appears in the conversation
+    if (conversationId) {
+      const userMessage = await databaseService.saveMessage({
+        agentId,
+        conversationId,
+        role: 'user',
+        content: researchPrompt,
+        timestamp: new Date(),
+      });
+      broadcaster.send(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, userMessage);
+    }
+
     // Tell all clients to associate streaming with this conversation
     broadcaster.send(IPC_CHANNELS.SYNC_STREAMING_STARTED, { agentId, conversationId });
 
@@ -868,6 +880,18 @@ export function registerIpcHandlers(services: IpcServices): void {
         timestamp: new Date(),
       });
     });
+
+    // Save the implementation prompt as a user message so it appears in the conversation
+    if (conversationId) {
+      const userMessage = await databaseService.saveMessage({
+        agentId,
+        conversationId,
+        role: 'user',
+        content: prompt,
+        timestamp: new Date(),
+      });
+      broadcaster.send(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, userMessage);
+    }
 
     // Tell all clients to associate streaming with this conversation
     broadcaster.send(IPC_CHANNELS.SYNC_STREAMING_STARTED, { agentId, conversationId });
