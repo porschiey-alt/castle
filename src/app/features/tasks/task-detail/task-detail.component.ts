@@ -339,6 +339,7 @@ export class TaskDetailComponent implements OnInit {
       case 'creating_worktree': return 'Creating worktree...';
       case 'installing_deps': return 'Installing dependencies...';
       case 'implementing': return 'Implementation in progress...';
+      case 'evaluating': return 'Self-evaluating work...';
       case 'committing': return 'Committing changes...';
       case 'creating_pr': return 'Creating pull request...';
       default: return '';

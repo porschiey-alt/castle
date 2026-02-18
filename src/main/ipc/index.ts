@@ -820,22 +820,89 @@ export function registerIpcHandlers(services: IpcServices): void {
       const currentTask = await databaseService.getTask(taskId);
       if (!currentTask) return;
 
+      // Self-evaluation: if there's research/diagnosis content, prompt the agent to check its work
+      if (currentTask.researchContent) {
+        sendLifecycle('evaluating');
+
+        const evalPrompt = [
+          `You have just finished implementing the task "${currentTask.title}". Before we finalize, please evaluate your work against the original requirements.`,
+          ``,
+          `---BEGIN TASK DESCRIPTION---`,
+          currentTask.description || '(none)',
+          `---END TASK DESCRIPTION---`,
+          ``,
+          `---BEGIN ${currentTask.kind === 'bug' ? 'DIAGNOSIS' : 'RESEARCH'} DOCUMENT---`,
+          currentTask.researchContent,
+          `---END ${currentTask.kind === 'bug' ? 'DIAGNOSIS' : 'RESEARCH'} DOCUMENT---`,
+          ``,
+          `Please do the following:`,
+          `1. Review every requirement and acceptance criterion from the description and ${currentTask.kind === 'bug' ? 'diagnosis' : 'research'} document.`,
+          `2. Check your implementation against each one — did you miss anything? Are there any issues?`,
+          `3. If you find anything you missed or could improve, fix it now.`,
+          `4. After fixing any issues, produce a brief report summarizing:`,
+          `   - What was implemented`,
+          `   - What was fixed during this evaluation`,
+          `   - Any known limitations or follow-up items`,
+          ``,
+          `Be thorough but concise. Fix any gaps before writing your report.`,
+        ].join('\n');
+
+        // Save the evaluation prompt as a user message
+        if (conversationId) {
+          const evalMessage = await databaseService.saveMessage({
+            agentId,
+            conversationId,
+            role: 'user',
+            content: evalPrompt,
+            timestamp: new Date(),
+          });
+          broadcaster.send(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, evalMessage);
+        }
+
+        // Listen for the evaluation completion, then proceed to commit/PR
+        const unsubscribeEval = processManagerService.onComplete(sessionProcess.session.id, async () => {
+          unsubscribeEval();
+          await finalizeImplementation(currentTask, taskId, agentId, sendLifecycle, conversationId);
+        });
+
+        processManagerService.sendMessage(sessionProcess.session.id, evalPrompt).catch((error) => {
+          log.error(`Self-evaluation prompt error for task ${taskId}`, error);
+          // Fall through to finalize even if evaluation fails
+          finalizeImplementation(currentTask, taskId, agentId, sendLifecycle, conversationId);
+        });
+      } else {
+        // No research content — skip evaluation, go straight to finalize
+        await finalizeImplementation(currentTask, taskId, agentId, sendLifecycle, conversationId);
+      }
+    });
+
+    /** Finalize implementation: commit, create PR, update task state */
+    async function finalizeImplementation(
+      currentTask: Task,
+      taskId: string,
+      agentId: string,
+      sendLifecycle: (phase: string, message?: string) => void,
+      conversationId?: string
+    ) {
+      // Re-fetch task in case evaluation made changes
+      const latestTask = await databaseService.getTask(taskId) || currentTask;
+
       // Auto-commit changes if we have a worktree
-      if (currentTask.worktreePath) {
+      if (latestTask.worktreePath) {
         try {
           sendLifecycle('committing');
           const committed = await gitWorktreeService.commitChanges(
-            currentTask.worktreePath,
-            `feat: ${currentTask.title}\n\nImplemented by Castle agent.`
+            latestTask.worktreePath,
+            `feat: ${latestTask.title}\n\nImplemented by Castle agent.`
           );
 
           // Push and create PR if there are new commits (either ours or the agent's own)
-          const shouldCreatePR = committed || await gitWorktreeService.hasCommitsAhead(currentTask.worktreePath);
+          const shouldCreatePR = committed || await gitWorktreeService.hasCommitsAhead(latestTask.worktreePath);
           if (shouldCreatePR) {
             sendLifecycle('creating_pr');
-            const prResult = await gitWorktreeService.pushAndCreatePR(currentTask.worktreePath, {
-              title: currentTask.title,
-              body: `## ${currentTask.title}\n\n${currentTask.description || ''}\n\n---\n*Implemented by Castle agent*`,
+            const prResult = await gitWorktreeService.pushAndCreatePR(latestTask.worktreePath, {
+              title: latestTask.title,
+              body: `## ${latestTask.title}\n\n${latestTask.description || ''}\n\n---\n*Implemented by Castle agent*`,
               draft: settings.worktreeDraftPR || false,
             });
 
@@ -856,10 +923,12 @@ export function registerIpcHandlers(services: IpcServices): void {
         }
       }
 
-      // Auto-transition task to done
-      if (currentTask.state !== 'done') {
-        const updates: { state: 'done'; closeReason?: 'fixed' } = { state: 'done' };
-        if (currentTask.kind === 'bug') {
+      // Determine final state: ready_for_review if a PR was created, otherwise done
+      const finalTask = await databaseService.getTask(taskId) || latestTask;
+      const finalState = finalTask.prUrl ? 'ready_for_review' : 'done';
+      if (finalTask.state !== 'done' && finalTask.state !== 'ready_for_review') {
+        const updates: { state: typeof finalState; closeReason?: 'fixed' } = { state: finalState };
+        if (finalTask.kind === 'bug' && finalState === 'done') {
           updates.closeReason = 'fixed';
         }
         await databaseService.updateTask(taskId, updates);
@@ -879,7 +948,7 @@ export function registerIpcHandlers(services: IpcServices): void {
         content: '',
         timestamp: new Date(),
       });
-    });
+    }
 
     // Save the implementation prompt as a user message so it appears in the conversation
     if (conversationId) {
