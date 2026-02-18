@@ -2,7 +2,7 @@
  * Main Layout Component - Discord-like layout with sidebar and chat area
  */
 
-import { Component, OnInit, OnDestroy, inject, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, ViewChild, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -81,6 +81,16 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
   nonGitBannerVisible = false;
   nonGitBannerDismissed = false;
 
+  constructor() {
+    // React to agent/conversation signal changes for title updates
+    effect(() => {
+      const agent = this.selectedAgent();
+      const conversation = this.activeConversation();
+      // Reading signals inside effect to track them; actual title set via updateWindowTitle
+      this.updateWindowTitle();
+    });
+  }
+
   async ngOnInit(): Promise<void> {
     // Listen for permission requests from Copilot
     this.permissionSub = this.electronService.permissionRequest$.subscribe((request) => {
@@ -132,6 +142,21 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     this.permissionSub?.unsubscribe();
     this.permissionRespondedSub?.unsubscribe();
     this.confirmSub?.unsubscribe();
+  }
+
+  private updateWindowTitle(): void {
+    if (this.activeView === 'tasks') {
+      document.title = 'Castle: Tasks';
+    } else if (this.activeView === 'settings') {
+      document.title = 'Castle: Settings';
+    } else {
+      const agent = this.selectedAgent();
+      if (agent) {
+        document.title = `Castle: ${agent.name}`;
+      } else {
+        document.title = 'Castle';
+      }
+    }
   }
 
   private showPermissionDialog(request: any): void {
@@ -186,6 +211,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     if (directory) {
       this.currentDirectory = directory;
       this.activeView = 'chat';
+      this.updateWindowTitle();
       this.nonGitBannerDismissed = false;
       await this.agentService.discoverAgents(directory);
       // Load conversations for the auto-selected agent and select the most recent
@@ -210,6 +236,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     await this.electronService.setCurrentDirectory(dirPath);
     this.currentDirectory = dirPath;
     this.activeView = 'chat';
+    this.updateWindowTitle();
     this.nonGitBannerDismissed = false;
     await this.agentService.discoverAgents(dirPath);
     // Load conversations for the auto-selected agent and select the most recent
@@ -235,11 +262,13 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   showSettings(): void {
     this.activeView = 'settings';
+    this.updateWindowTitle();
     this.closeSidebar();
   }
 
   backToLanding(): void {
     this.activeView = 'chat';
+    this.updateWindowTitle();
   }
 
   addAgent(): void {
@@ -308,6 +337,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   showTasks(): void {
     this.activeView = 'tasks';
+    this.updateWindowTitle();
     this.closeSidebar();
     // Load tasks when switching to view
     this.taskService.loadTasks();
@@ -320,6 +350,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
 
   showChat(): void {
     this.activeView = 'chat';
+    this.updateWindowTitle();
     this.closeSidebar();
     // Load conversations for the selected agent and auto-select the most recent
     const agentId = this.agentService.selectedAgentId();
@@ -355,6 +386,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
       }
     });
     this.activeView = 'chat';
+    this.updateWindowTitle();
     this.closeSidebar();
   }
 
@@ -363,6 +395,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     await this.conversationService.loadConversations(event.agentId);
     await this.conversationService.createConversation(event.agentId, event.title);
     this.activeView = 'chat';
+    this.updateWindowTitle();
     this.closeSidebar();
   }
 
