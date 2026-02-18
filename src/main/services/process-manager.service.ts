@@ -5,6 +5,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { Readable, Writable } from 'stream';
 import { EventEmitter } from 'events';
+import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent, AgentSession } from '../../shared/types/agent.types';
 import { StreamingMessage, ToolCall, TodoItem, MessageSegment } from '../../shared/types/message.types';
@@ -648,6 +649,20 @@ export class ProcessManagerService {
     }
 
     this.sessions.delete(sessionId);
+  }
+
+  /**
+   * Stop all sessions whose working directory starts with the given path.
+   * Must be called before deleting a worktree directory on Windows.
+   */
+  async stopSessionsByWorkDir(workDirPrefix: string): Promise<void> {
+    const normalized = path.normalize(workDirPrefix);
+    for (const [sessionId, sp] of this.sessions) {
+      if (path.normalize(sp.session.workingDirectory).startsWith(normalized)) {
+        log.info(`Stopping session ${sessionId} (cwd: ${sp.session.workingDirectory}) before worktree removal`);
+        await this.stopSession(sessionId);
+      }
+    }
   }
 
   /**
