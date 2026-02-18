@@ -388,6 +388,20 @@ export class DatabaseService {
     }
   }
 
+  /** Return the on-disk path of the castle.db file. */
+  getDatabasePath(): string {
+    return this.dbPath;
+  }
+
+  /** Flush any pending writes to disk immediately. */
+  flushToFile(): void {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+    this.saveDatabaseSync();
+  }
+
   // ============ Settings Methods ============
 
   async getSettings(): Promise<AppSettings> {

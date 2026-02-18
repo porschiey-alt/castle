@@ -136,6 +136,9 @@ export function registerIpcHandlers(services: IpcServices): void {
       }
     }
 
+    // Flush database to disk so the castle-tasks MCP server reads fresh data
+    databaseService.flushToFile();
+
     const session = await processManagerService.startSession(agent, workingDirectory, acpSessionIdToResume);
     subscribeToSession(session.id, agentId);
     log.info(`Session started for agent ${agentId}: sessionId=${session.id}, status=${session.status}`);
@@ -192,10 +195,22 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     processManagerService.onPermissionRequest(sessionId, async (data) => {
       log.info(`Permission request from agent ${agentId}: tool=${data.toolCall?.kind || 'unknown'}`);
+
+      // Auto-approve Castle internal read-only tools
+      const toolKind = data.toolCall?.kind;
+      if (toolKind && toolKind.startsWith('castle_')) {
+        const allowOption = data.options.find((o: any) => o.kind === 'allow_always')
+                         || data.options.find((o: any) => o.kind === 'allow_once');
+        if (allowOption) {
+          log.info(`Permission auto-approved for Castle tool: ${toolKind}`);
+          processManagerService.respondToPermission(agentId, data.requestId, allowOption.optionId);
+          return;
+        }
+      }
+
       // Check for persisted scoped grants before prompting the user
       try {
         const projectPath = directoryService.getCurrentDirectory();
-        const toolKind = data.toolCall?.kind;
         if (projectPath && toolKind) {
           const grants = await databaseService.getPermissionGrantsByToolKind(projectPath, toolKind);
           const match = findMatchingGrant(grants, toolKind, data.toolCall?.locations, data.toolCall?.rawInput, projectPath);
