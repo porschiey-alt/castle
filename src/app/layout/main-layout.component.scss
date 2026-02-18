@@ -44,6 +44,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .agent-icon {
@@ -53,6 +55,9 @@
 .agent-name {
   font-weight: 500;
   font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-status {
@@ -60,6 +65,7 @@
   padding: 2px 8px;
   border-radius: 12px;
   text-transform: capitalize;
+  flex-shrink: 0;
 }
 
 .status-ready {
@@ -91,6 +97,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .window-controls {
