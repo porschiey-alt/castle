@@ -132,6 +132,41 @@
   margin-left: auto;
 }
 
+.github-issue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: rgba(56, 132, 255, 0.12);
+  color: #58a6ff;
+  text-decoration: none;
+  border: 1px solid rgba(56, 132, 255, 0.25);
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background: rgba(56, 132, 255, 0.2);
+  }
+}
+
+.unlink-btn {
+  opacity: 0.5;
+  &:hover { opacity: 1; }
+}
+
+.push-github-btn {
+  font-size: 12px;
+  height: 30px;
+  line-height: 30px;
+}
+
 // Tabs
 .task-tabs {
   flex: 1;

@@ -227,4 +227,41 @@ export class TaskService {
   async submitResearchReview(taskId: string, comments: ResearchComment[], researchSnapshot: string): Promise<void> {
     await this.electronService.submitResearchReview(taskId, comments, researchSnapshot);
   }
+
+  // ============ GitHub Issues Methods ============
+
+  async checkGitHubAvailable(): Promise<{ available: boolean; repo: string | null }> {
+    return this.electronService.checkGitHubIssues();
+  }
+
+  async pushToGitHub(taskId: string): Promise<Task | null> {
+    const task = await this.electronService.pushToGitHub(taskId);
+    if (task) {
+      this.tasksSignal.update(tasks => tasks.map(t => t.id === taskId ? task : t));
+    }
+    return task;
+  }
+
+  async importFromGitHub(issueNumbers: number[]): Promise<Task[]> {
+    const tasks = await this.electronService.importFromGitHub(issueNumbers);
+    if (tasks?.length) {
+      this.tasksSignal.update(existing => {
+        const newTasks = tasks.filter(t => !existing.some(e => e.id === t.id));
+        return [...newTasks, ...existing];
+      });
+    }
+    return tasks || [];
+  }
+
+  async unlinkFromGitHub(taskId: string): Promise<Task | null> {
+    const task = await this.electronService.unlinkFromGitHub(taskId);
+    if (task) {
+      this.tasksSignal.update(tasks => tasks.map(t => t.id === taskId ? task : t));
+    }
+    return task;
+  }
+
+  async listGitHubIssues(state?: 'open' | 'closed' | 'all'): Promise<{ number: number; title: string; body: string; state: string; labels: string[]; url: string }[]> {
+    return this.electronService.listGitHubIssues(state);
+  }
 }

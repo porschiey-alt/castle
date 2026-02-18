@@ -17,6 +17,7 @@ import { AgentService } from '../../../core/services/agent.service';
 import { ElectronService } from '../../../core/services/electron.service';
 import { ConversationService } from '../../../core/services/conversation.service';
 import { ConfirmDialogComponent, type ConfirmDialogData } from '../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { GitHubImportDialogComponent } from '../github-import-dialog/github-import-dialog.component';
 import { TaskDetailComponent, type TaskSaveEvent, type TaskResearchEvent, type TaskImplementEvent, type TaskCreatePREvent, type TaskReviewSubmitEvent } from '../task-detail/task-detail.component';
 import { TASK_STATES, TASK_KINDS, type Task, type TaskState, type TaskKind, type BugCloseReason } from '../../../../shared/types/task.types';
 
@@ -53,6 +54,7 @@ export class TaskListComponent implements OnInit, OnDestroy {
   filterKind = this.taskService.filterKind;
 
   creating = false;
+  githubAvailable = false;
 
   @ViewChild(TaskDetailComponent) taskDetailComponent?: TaskDetailComponent;
 
@@ -67,6 +69,11 @@ export class TaskListComponent implements OnInit, OnDestroy {
       this.taskService.loadTasks(),
       this.taskService.loadLabels(),
     ]);
+
+    // Check if GitHub Issues is available for this repo
+    this.taskService.checkGitHubAvailable().then(result => {
+      this.githubAvailable = result.available;
+    }).catch(() => { /* gh CLI not available */ });
 
     // Listen for diagnosis file cleanup prompts
     this.diagnosisCleanupUnsub = this.electronService.onDiagnosisFileCleanup(async (data) => {
@@ -204,6 +211,38 @@ export class TaskListComponent implements OnInit, OnDestroy {
   async onDiffLoadRequested(worktreePath: string): Promise<void> {
     const result = await this.electronService.getWorktreeDiff(worktreePath);
     this.taskDetailComponent?.onDiffLoaded(result);
+  }
+
+  async onPushToGitHub(task: Task): Promise<void> {
+    try {
+      await this.taskService.pushToGitHub(task.id);
+    } catch (err) {
+      // show error in console but don't crash
+      console.error('Failed to push to GitHub', err);
+    }
+    this.taskDetailComponent?.onPushToGitHubComplete();
+  }
+
+  async onUnlinkFromGitHub(task: Task): Promise<void> {
+    const confirmed = await this.openConfirmDialog({
+      title: 'Unlink from GitHub Issue',
+      message: `Unlink task "${task.title}" from GitHub Issue #${task.githubIssueNumber}? The issue will not be deleted.`,
+      confirmText: 'Unlink',
+    });
+    if (confirmed) {
+      await this.taskService.unlinkFromGitHub(task.id);
+    }
+  }
+
+  async openImportDialog(): Promise<void> {
+    const dialogRef = this.dialog.open(GitHubImportDialogComponent, {
+      width: '600px',
+      data: { existingIssueNumbers: this.taskService.tasks().filter(t => t.githubIssueNumber).map(t => t.githubIssueNumber) },
+    });
+    const result = await firstValueFrom(dialogRef.afterClosed());
+    if (result?.length) {
+      await this.taskService.importFromGitHub(result);
+    }
   }
 
   private openConfirmDialog(data: ConfirmDialogData): Promise<boolean> {

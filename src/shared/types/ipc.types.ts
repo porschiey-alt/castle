@@ -74,6 +74,13 @@ export const IPC_CHANNELS = {
   TASKS_DIAGNOSIS_FILE_CLEANUP: 'tasks:diagnosisFileCleanup',
   TASKS_DELETE_DIAGNOSIS_FILE: 'tasks:deleteDiagnosisFile',
 
+  // GitHub Issue operations
+  GITHUB_ISSUES_CHECK: 'github:issues:check',
+  GITHUB_ISSUES_LIST: 'github:issues:list',
+  GITHUB_ISSUES_PUSH: 'github:issues:push',
+  GITHUB_ISSUES_IMPORT: 'github:issues:import',
+  GITHUB_ISSUES_UNLINK: 'github:issues:unlink',
+
   // Worktree operations
   WORKTREE_CREATE: 'worktree:create',
   WORKTREE_REMOVE: 'worktree:remove',
@@ -262,6 +269,28 @@ export interface IPCPayloads {
   [IPC_CHANNELS.TASKS_SUBMIT_RESEARCH_REVIEW]: {
     request: { taskId: string; comments: ResearchComment[]; researchSnapshot: string };
     response: { reviewId: string };
+  };
+
+  // GitHub Issues
+  [IPC_CHANNELS.GITHUB_ISSUES_CHECK]: {
+    request: void;
+    response: { available: boolean; repo: string | null };
+  };
+  [IPC_CHANNELS.GITHUB_ISSUES_LIST]: {
+    request: { state?: 'open' | 'closed' | 'all' };
+    response: { number: number; title: string; body: string; state: string; labels: string[]; url: string }[];
+  };
+  [IPC_CHANNELS.GITHUB_ISSUES_PUSH]: {
+    request: { taskId: string };
+    response: Task;
+  };
+  [IPC_CHANNELS.GITHUB_ISSUES_IMPORT]: {
+    request: { issueNumbers: number[] };
+    response: Task[];
+  };
+  [IPC_CHANNELS.GITHUB_ISSUES_UNLINK]: {
+    request: { taskId: string };
+    response: Task;
   };
 
   // Conversations

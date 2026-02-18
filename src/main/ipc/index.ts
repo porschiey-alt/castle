@@ -10,6 +10,7 @@ import { AgentDiscoveryService } from '../services/agent-discovery.service';
 import { ProcessManagerService } from '../services/process-manager.service';
 import { DirectoryService } from '../services/directory.service';
 import { GitWorktreeService } from '../services/git-worktree.service';
+import { GitHubIssueService } from '../services/github-issue.service';
 import { EventBroadcaster } from '../services/event-broadcaster';
 import { IPC_CHANNELS } from '../../shared/types/ipc.types';
 import { findMatchingGrant } from '../../shared/utils/permission-matcher';
@@ -42,6 +43,9 @@ const activeConversationIds = new Map<string, string>();
 
 // Pending confirm dialog requests (main → renderer → main)
 const pendingConfirms = new Map<string, (confirmed: boolean) => void>();
+
+// Shared GitHub issue service instance
+const githubIssueService = new GitHubIssueService();
 
 export function registerIpcHandlers(services: IpcServices): void {
   const {
@@ -546,6 +550,34 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'updated', task: updatedTask });
 
+    // Auto-sync to GitHub when issue sync is enabled and task is linked
+    if (updatedTask?.githubIssueNumber) {
+      try {
+        const settings = await databaseService.getSettings();
+        if (settings?.githubIssueSyncEnabled) {
+          const cwd = directoryService.getCurrentDirectory();
+          if (cwd) {
+            if (updates.title || updates.description) {
+              await githubIssueService.updateIssue(cwd, updatedTask.githubIssueNumber, {
+                title: updates.title,
+                body: updates.description,
+              });
+            }
+            if (updates.state === 'done') {
+              await githubIssueService.closeIssue(cwd, updatedTask.githubIssueNumber);
+            } else if (updates.state && updates.state !== 'done') {
+              const issue = await githubIssueService.getIssue(cwd, updatedTask.githubIssueNumber);
+              if (issue?.state === 'closed') {
+                await githubIssueService.reopenIssue(cwd, updatedTask.githubIssueNumber);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        log.warn('GitHub issue auto-sync failed (non-fatal)', err);
+      }
+    }
+
     return updatedTask;
   });
 
@@ -566,6 +598,102 @@ export function registerIpcHandlers(services: IpcServices): void {
       log.error(`Failed to delete diagnosis file: ${filePath}`, error);
     }
     return { deleted: false };
+  });
+
+  // ============ GitHub Issue Handlers ============
+
+  handle(IPC_CHANNELS.GITHUB_ISSUES_CHECK, async () => {
+    const cwd = directoryService.getCurrentDirectory();
+    if (!cwd) return { available: false, repo: null };
+    const available = await githubIssueService.isAvailable(cwd);
+    const repo = available ? await githubIssueService.getRepoSlug(cwd) : null;
+    return { available, repo };
+  });
+
+  handle(IPC_CHANNELS.GITHUB_ISSUES_LIST, async (_event, payload) => {
+    const cwd = directoryService.getCurrentDirectory();
+    if (!cwd) return [];
+    return githubIssueService.listIssues(cwd, payload?.state || 'open');
+  });
+
+  handle(IPC_CHANNELS.GITHUB_ISSUES_PUSH, async (_event, { taskId }) => {
+    const cwd = directoryService.getCurrentDirectory();
+    if (!cwd) throw new Error('No project directory set');
+    const task = await databaseService.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+
+    if (task.githubIssueNumber) {
+      // Update existing issue
+      await githubIssueService.updateIssue(cwd, task.githubIssueNumber, {
+        title: task.title,
+        body: task.description,
+      });
+      // Sync state
+      if (task.state === 'done') {
+        await githubIssueService.closeIssue(cwd, task.githubIssueNumber);
+      } else {
+        const issue = await githubIssueService.getIssue(cwd, task.githubIssueNumber);
+        if (issue?.state === 'closed') {
+          await githubIssueService.reopenIssue(cwd, task.githubIssueNumber);
+        }
+      }
+      return task;
+    } else {
+      // Create new issue
+      const labels = [`kind:${task.kind}`];
+      if (task.state === 'blocked') labels.push('blocked');
+      const issue = await githubIssueService.createIssue(cwd, task.title, task.description || '', labels);
+      const repo = await githubIssueService.getRepoSlug(cwd);
+      const updatedTask = await databaseService.updateTask(taskId, {
+        githubIssueNumber: issue.number,
+        githubRepo: repo || undefined,
+      });
+      broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'updated', task: updatedTask });
+      return updatedTask;
+    }
+  });
+
+  handle(IPC_CHANNELS.GITHUB_ISSUES_IMPORT, async (_event, { issueNumbers }) => {
+    const cwd = directoryService.getCurrentDirectory();
+    if (!cwd) throw new Error('No project directory set');
+    const projectPath = cwd;
+    const repo = await githubIssueService.getRepoSlug(cwd);
+    const tasks: Task[] = [];
+
+    for (const num of issueNumbers) {
+      const issue = await githubIssueService.getIssue(cwd, num);
+      if (!issue) continue;
+
+      // Determine kind from labels
+      let kind: 'feature' | 'bug' | 'chore' | 'spike' = 'feature';
+      for (const label of issue.labels) {
+        if (label === 'kind:bug' || label === 'bug') kind = 'bug';
+        else if (label === 'kind:chore' || label === 'chore') kind = 'chore';
+        else if (label === 'kind:spike' || label === 'spike') kind = 'spike';
+      }
+
+      const state = issue.state === 'closed' ? 'done' : 'new';
+      const task = await databaseService.createTask({
+        title: issue.title,
+        description: issue.body,
+        state,
+        kind,
+        githubIssueNumber: issue.number,
+        githubRepo: repo || undefined,
+      }, projectPath);
+      tasks.push(task);
+      broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'created', task });
+    }
+    return tasks;
+  });
+
+  handle(IPC_CHANNELS.GITHUB_ISSUES_UNLINK, async (_event, { taskId }) => {
+    const updatedTask = await databaseService.updateTask(taskId, {
+      githubIssueNumber: 0,
+      githubRepo: '',
+    });
+    broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, { action: 'updated', task: updatedTask });
+    return updatedTask;
   });
 
   handle(IPC_CHANNELS.TASKS_LABELS_GET_ALL, async () => {

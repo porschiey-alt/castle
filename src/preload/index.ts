@@ -98,6 +98,15 @@ export interface ElectronAPI {
     onDiagnosisFileCleanup: (callback: (data: { taskId: string; filePath: string }) => void) => () => void;
   };
 
+  // GitHub Issues operations
+  githubIssues: {
+    check: () => Promise<{ available: boolean; repo: string | null }>;
+    list: (state?: 'open' | 'closed' | 'all') => Promise<{ number: number; title: string; body: string; state: string; labels: string[]; url: string }[]>;
+    push: (taskId: string) => Promise<Task>;
+    import: (issueNumbers: number[]) => Promise<Task[]>;
+    unlink: (taskId: string) => Promise<Task>;
+  };
+
   // Cross-device sync events
   sync: {
     onTasksChanged: (callback: (data: { action: string; task?: Task; taskId?: string }) => void) => () => void;
@@ -267,6 +276,19 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TASKS_DIAGNOSIS_FILE_CLEANUP, handler);
     },
+  },
+
+  githubIssues: {
+    check: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.GITHUB_ISSUES_CHECK),
+    list: (state?: 'open' | 'closed' | 'all') =>
+      ipcRenderer.invoke(IPC_CHANNELS.GITHUB_ISSUES_LIST, { state }),
+    push: (taskId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.GITHUB_ISSUES_PUSH, { taskId }),
+    import: (issueNumbers: number[]) =>
+      ipcRenderer.invoke(IPC_CHANNELS.GITHUB_ISSUES_IMPORT, { issueNumbers }),
+    unlink: (taskId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.GITHUB_ISSUES_UNLINK, { taskId }),
   },
 
   sync: {
