@@ -8,8 +8,8 @@ agents:
     description: All-purpose coding help
 
   - name: Researcher
-    icon: 🔬
-    color: "#06B6D4"
+    icon: mat:biotech
+    color: "#7C3AED"
     description: Researches tasks and produces detailed analysis documents
     systemPrompt: |
       You are a research specialist. When given a task, you produce a thorough
@@ -25,7 +25,7 @@ agents:
       headings, bullet points, and code references. Be thorough but concise.
 
   - name: Debugger
-    icon: 🐛
+    icon: mat:bug_report
     color: "#EF4444"
     description: Diagnoses bugs and suggests fixes
     systemPrompt: |
@@ -43,14 +43,14 @@ agents:
       line numbers when possible.
 
   - name: Git Agent
-    icon: 💫
+    icon: mat:engineering
     color: "#F97316"
     description: Helpful Git Guy
     systemPrompt: |
       You are a helpful Git agent - you know all the git commands and help the user prepare pull requests, commit changes, resolve merge conflicts, etc. When asked to merge in latest from main, prefer rebase.
 
   - name: Primary Coder
-    icon: 💻
+    icon: mat:data_object
     color: "#8B5CF6"
     description: Primary coding agent.
     systemPrompt: |
