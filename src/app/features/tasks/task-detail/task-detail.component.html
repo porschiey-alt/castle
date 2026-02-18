@@ -314,20 +314,23 @@
               }
               @if (lifecyclePhase) {
                 <div class="lifecycle-steps">
-                  <span class="step" [class.active]="lifecyclePhase === 'creating_worktree'" [class.done]="lifecyclePhase !== 'creating_worktree'">
-                    <mat-icon>{{ lifecyclePhase === 'creating_worktree' ? 'sync' : 'check_circle' }}</mat-icon> Worktree
+                  <span class="step" [class.active]="lifecyclePhase === 'creating_worktree'" [class.done]="isPhaseAfter('creating_worktree')">
+                    <mat-icon>{{ phaseIcon('creating_worktree') }}</mat-icon> Worktree
                   </span>
-                  <span class="step" [class.active]="lifecyclePhase === 'installing_deps'" [class.done]="lifecyclePhase === 'implementing' || lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr'">
-                    <mat-icon>{{ lifecyclePhase === 'installing_deps' ? 'sync' : (lifecyclePhase === 'implementing' || lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr' ? 'check_circle' : 'radio_button_unchecked') }}</mat-icon> Deps
+                  <span class="step" [class.active]="lifecyclePhase === 'installing_deps'" [class.done]="isPhaseAfter('installing_deps')">
+                    <mat-icon>{{ phaseIcon('installing_deps') }}</mat-icon> Deps
                   </span>
-                  <span class="step" [class.active]="lifecyclePhase === 'implementing'" [class.done]="lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr'">
-                    <mat-icon>{{ lifecyclePhase === 'implementing' ? 'sync' : (lifecyclePhase === 'committing' || lifecyclePhase === 'creating_pr' ? 'check_circle' : 'radio_button_unchecked') }}</mat-icon> Implement
+                  <span class="step" [class.active]="lifecyclePhase === 'implementing'" [class.done]="isPhaseAfter('implementing')">
+                    <mat-icon>{{ phaseIcon('implementing') }}</mat-icon> Implement
                   </span>
-                  <span class="step" [class.active]="lifecyclePhase === 'committing'" [class.done]="lifecyclePhase === 'creating_pr'">
-                    <mat-icon>{{ lifecyclePhase === 'committing' ? 'sync' : (lifecyclePhase === 'creating_pr' ? 'check_circle' : 'radio_button_unchecked') }}</mat-icon> Commit
+                  <span class="step" [class.active]="lifecyclePhase === 'evaluating'" [class.done]="isPhaseAfter('evaluating')">
+                    <mat-icon>{{ phaseIcon('evaluating') }}</mat-icon> Evaluate
+                  </span>
+                  <span class="step" [class.active]="lifecyclePhase === 'committing'" [class.done]="isPhaseAfter('committing')">
+                    <mat-icon>{{ phaseIcon('committing') }}</mat-icon> Commit
                   </span>
                   <span class="step" [class.active]="lifecyclePhase === 'creating_pr'">
-                    <mat-icon>{{ lifecyclePhase === 'creating_pr' ? 'sync' : 'radio_button_unchecked' }}</mat-icon> PR
+                    <mat-icon>{{ phaseIcon('creating_pr') }}</mat-icon> PR
                   </span>
                 </div>
               }
@@ -336,11 +339,17 @@
                 Take me to the Agent
               </button>
             </div>
-          } @else if (task()!.state === 'done' && task()!.implementAgentId) {
+          } @else if ((task()!.state === 'done' || task()!.state === 'review') && task()!.implementAgentId) {
             <div class="implementation-complete">
-              <mat-icon class="complete-icon">check_circle</mat-icon>
-              <h3>Implementation Complete</h3>
-              <p>The agent has finished implementing this task.</p>
+              @if (task()!.state === 'review') {
+                <mat-icon class="complete-icon" style="color: #06b6d4">rate_review</mat-icon>
+                <h3>Ready for Review</h3>
+                <p>The agent has implemented and self-evaluated this task. Please review the PR.</p>
+              } @else {
+                <mat-icon class="complete-icon">check_circle</mat-icon>
+                <h3>Implementation Complete</h3>
+                <p>The agent has finished implementing this task.</p>
+              }
 
               @if (task()!.branchName) {
                 <div class="branch-info">
@@ -387,6 +396,13 @@
                   <mat-icon>replay</mat-icon>
                   Request Revision
                 </button>
+
+                @if (task()!.state === 'review') {
+                  <button mat-flat-button color="primary" (click)="markDone()">
+                    <mat-icon>check_circle</mat-icon>
+                    Approve &amp; Mark Done
+                  </button>
+                }
               </div>
 
               <!-- Diff preview panel -->

@@ -434,6 +434,51 @@ export function registerIpcHandlers(services: IpcServices): void {
     return path.join(workingDirectory, subDir, `${safeTitle}.md`);
   }
 
+  function buildFeatureEvaluationPrompt(task: Task, researchContent: string): string {
+    return [
+      `You have completed the initial implementation. Now evaluate your work against the original requirements.`,
+      ``,
+      `## Original Task`,
+      `Title: ${task.title}`,
+      `Description: ${task.description || '(none)'}`,
+      ``,
+      `## Research Document`,
+      researchContent,
+      ``,
+      `## Instructions`,
+      `1. Review your implementation against every requirement and recommendation in the research document above`,
+      `2. Run any relevant tests or verification steps mentioned in the research`,
+      `3. Fix any issues or gaps you find — make the changes directly, do not just describe them`,
+      `4. After fixing any issues, produce a brief evaluation report summarizing:`,
+      `   - What was implemented correctly`,
+      `   - What issues were found and fixed during this evaluation`,
+      `   - Any remaining items that could not be addressed automatically`,
+      ``,
+      `Be thorough but focused. Fix real issues, don't just describe them.`,
+    ].join('\n');
+  }
+
+  function buildBugEvaluationPrompt(task: Task, researchContent: string): string {
+    return [
+      `You have completed the initial bug fix. Now verify your work against the diagnosis document.`,
+      ``,
+      `## Bug: ${task.title}`,
+      `Description: ${task.description || '(none)'}`,
+      ``,
+      `## Diagnosis Document`,
+      researchContent,
+      ``,
+      `## Instructions`,
+      `1. Follow the verification steps from the diagnosis document`,
+      `2. Confirm the root cause identified in the diagnosis has been addressed`,
+      `3. Check for any regressions or edge cases mentioned in the diagnosis`,
+      `4. Fix any remaining issues you find — make the changes directly`,
+      `5. Produce a brief verification report summarizing what you checked and the results`,
+      ``,
+      `Be thorough. If any verification step fails, fix the issue before reporting.`,
+    ].join('\n');
+  }
+
   /** Read research content from the on-disk file. If the file is missing, clear stale DB values. */
   function hydrateResearchFromFile(task: Task, workingDirectory: string | null): Task {
     if (!workingDirectory) return task;
@@ -794,8 +839,9 @@ export function registerIpcHandlers(services: IpcServices): void {
 
     // Build implementation prompt
     let prompt = `Implement the following task:\n\nTitle: ${task.title}\n\nDescription:\n${task.description || '(none)'}`;
-    if (task.researchContent) {
-      prompt += `\n\nResearch Analysis:\n${task.researchContent}`;
+    const researchFilePath = getResearchFilePath(task, workingDirectory);
+    if (fs.existsSync(researchFilePath)) {
+      prompt += `\n\nA research/analysis document has been prepared for this task. Read it before starting implementation:\n${researchFilePath}`;
     }
     prompt += `\n\nPlease implement the changes described above.`;
     if (branchName) {
@@ -814,71 +860,137 @@ export function registerIpcHandlers(services: IpcServices): void {
     }
 
     // Listen for completion
-    const unsubscribeImpl = processManagerService.onComplete(sessionProcess.session.id, async () => {
+    const unsubscribeImpl = processManagerService.onComplete(sessionProcess.session.id, async (message) => {
       unsubscribeImpl();
 
       const currentTask = await databaseService.getTask(taskId);
       if (!currentTask) return;
 
-      // Auto-commit changes if we have a worktree
+      // Intermediate commit before evaluation (so evaluation sees committed code)
+      let hasChanges = false;
       if (currentTask.worktreePath) {
         try {
           sendLifecycle('committing');
-          const committed = await gitWorktreeService.commitChanges(
+          hasChanges = await gitWorktreeService.commitChanges(
             currentTask.worktreePath,
-            `feat: ${currentTask.title}\n\nImplemented by Castle agent.`
+            `wip: ${currentTask.title}\n\nInitial implementation by Castle agent.`
           );
-
-          // Push and create PR if there are new commits (either ours or the agent's own)
-          const shouldCreatePR = committed || await gitWorktreeService.hasCommitsAhead(currentTask.worktreePath);
-          if (shouldCreatePR) {
-            sendLifecycle('creating_pr');
-            const prResult = await gitWorktreeService.pushAndCreatePR(currentTask.worktreePath, {
-              title: currentTask.title,
-              body: `## ${currentTask.title}\n\n${currentTask.description || ''}\n\n---\n*Implemented by Castle agent*`,
-              draft: settings.worktreeDraftPR || false,
-            });
-
-            if (prResult.success) {
-              await databaseService.updateTask(taskId, {
-                prUrl: prResult.url,
-                prNumber: prResult.prNumber,
-                prState: settings.worktreeDraftPR ? 'draft' : 'open',
-              });
-              log.info(`PR created for task ${taskId}: ${prResult.url}`);
-            } else {
-              log.warn(`PR creation failed for task ${taskId}: ${prResult.error}`);
-              sendLifecycle('warning', `Auto-PR failed: ${prResult.error}. You can create one manually.`);
-            }
-          }
         } catch (commitError) {
-          log.warn('Implementation auto-commit/PR failed', commitError);
+          log.warn('Intermediate commit failed', commitError);
         }
       }
 
-      // Auto-transition task to done
-      if (currentTask.state !== 'done') {
-        const updates: { state: 'done'; closeReason?: 'fixed' } = { state: 'done' };
-        if (currentTask.kind === 'bug') {
-          updates.closeReason = 'fixed';
+      // Finalize: commit evaluation fixes, create PR, transition state
+      const proceedToFinalize = async (evaluationReport?: string) => {
+        // Commit any additional fixes from evaluation
+        if (currentTask.worktreePath) {
+          try {
+            const additionalCommit = await gitWorktreeService.commitChanges(
+              currentTask.worktreePath,
+              `fix: address evaluation findings for ${currentTask.title}`
+            );
+            if (additionalCommit) {
+              log.info(`Evaluation produced additional commits for task ${taskId}`);
+            }
+          } catch (e) {
+            log.warn('Evaluation commit failed', e);
+          }
         }
-        await databaseService.updateTask(taskId, updates);
+
+        // Create PR
+        if (currentTask.worktreePath) {
+          try {
+            const shouldCreatePR = hasChanges
+              || await gitWorktreeService.hasCommitsAhead(currentTask.worktreePath);
+            if (shouldCreatePR) {
+              sendLifecycle('creating_pr');
+
+              // Build PR body, including evaluation report if available
+              let prBody = `## ${currentTask.title}\n\n${currentTask.description || ''}`;
+              if (evaluationReport) {
+                prBody += `\n\n---\n\n## Self-Evaluation Report\n\n${evaluationReport}`;
+              }
+              prBody += `\n\n---\n*Implemented and verified by Castle agent*`;
+
+              const prResult = await gitWorktreeService.pushAndCreatePR(currentTask.worktreePath, {
+                title: currentTask.title,
+                body: prBody,
+                draft: settings.worktreeDraftPR || false,
+              });
+
+              if (prResult.success) {
+                await databaseService.updateTask(taskId, {
+                  prUrl: prResult.url,
+                  prNumber: prResult.prNumber,
+                  prState: settings.worktreeDraftPR ? 'draft' : 'open',
+                });
+                log.info(`PR created for task ${taskId}: ${prResult.url}`);
+              } else {
+                log.warn(`PR creation failed for task ${taskId}: ${prResult.error}`);
+                sendLifecycle('warning', `Auto-PR failed: ${prResult.error}. You can create one manually.`);
+              }
+            }
+          } catch (e) {
+            log.warn('PR creation failed', e);
+          }
+        }
+
+        // Transition to 'review' instead of 'done'
+        if (currentTask.state !== 'done' && currentTask.state !== 'review') {
+          await databaseService.updateTask(taskId, { state: 'review' });
+        }
+
+        sendLifecycle('done');
+        broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, {
+          action: 'updated',
+          task: await databaseService.getTask(taskId),
+        });
+        broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
+          id: taskId,
+          agentId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+        });
+      };
+
+      // Self-evaluation step: re-prompt agent if research/diagnosis exists
+      const researchContent = hydrateResearchFromFile(currentTask, workingDirectory).researchContent;
+
+      if (researchContent) {
+        // Self-evaluation phase
+        sendLifecycle('evaluating');
+
+        const isBug = currentTask.kind === 'bug';
+        const evalPrompt = isBug
+          ? buildBugEvaluationPrompt(currentTask, researchContent)
+          : buildFeatureEvaluationPrompt(currentTask, researchContent);
+
+        // Save evaluation prompt as user message in conversation
+        if (conversationId) {
+          const evalMessage = await databaseService.saveMessage({
+            agentId, conversationId, role: 'user',
+            content: evalPrompt, timestamp: new Date(),
+          });
+          broadcaster.send(IPC_CHANNELS.SYNC_CHAT_MESSAGE_ADDED, evalMessage);
+        }
+
+        // Subscribe to evaluation completion
+        const unsubEval = processManagerService.onComplete(sessionProcess.session.id, async (evalMsg) => {
+          unsubEval();
+          await proceedToFinalize(evalMsg.content);
+        });
+
+        // Send evaluation prompt
+        processManagerService.sendMessage(sessionProcess.session.id, evalPrompt).catch((error) => {
+          log.error(`Self-evaluation prompt error for task ${taskId}`, error);
+          unsubEval();
+          proceedToFinalize();
+        });
+      } else {
+        // No research doc — skip evaluation, go straight to finalize
+        await proceedToFinalize();
       }
-
-      sendLifecycle('done');
-      broadcaster.send(IPC_CHANNELS.SYNC_TASKS_CHANGED, {
-        action: 'updated',
-        task: await databaseService.getTask(taskId),
-      });
-
-      // Notify renderer that implementation is complete
-      broadcaster.send(IPC_CHANNELS.CHAT_STREAM_COMPLETE, {
-        id: taskId,
-        agentId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-      });
     });
 
     // Save the implementation prompt as a user message so it appears in the conversation
