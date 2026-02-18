@@ -726,6 +726,10 @@ export function registerIpcHandlers(services: IpcServices): void {
                   });
                 });
                 if (confirmed) {
+                  // Stop any agent sessions whose cwd is inside the worktrees being removed
+                  for (const wt of lru) {
+                    await processManagerService.stopSessionsByWorkDir(wt.path);
+                  }
                   await gitWorktreeService.cleanupWorktrees(lru);
                   worktreeResult = await gitWorktreeService.createWorktree(workingDirectory, task.title, taskId, task.kind, baseBranch);
                 }
@@ -1004,6 +1008,7 @@ export function registerIpcHandlers(services: IpcServices): void {
   });
 
   handle(IPC_CHANNELS.WORKTREE_REMOVE, async (_event, { worktreePath, deleteBranch }: { worktreePath: string; deleteBranch?: boolean }) => {
+    await processManagerService.stopSessionsByWorkDir(worktreePath);
     await gitWorktreeService.removeWorktree(worktreePath, deleteBranch);
   });
 

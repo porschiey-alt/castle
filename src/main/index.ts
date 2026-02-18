@@ -201,6 +201,13 @@ app.whenReady().then(async () => {
             .filter(t => t.worktreePath && t.state !== 'done')
             .map(t => t.id)
         );
+        // Stop any agent sessions whose cwd is inside orphan worktrees before removing them
+        const orphanWorktrees = await gitWorktreeService.listCastleWorktrees(currentDir);
+        for (const wt of orphanWorktrees) {
+          if (!activeTaskIds.has(path.basename(wt.path))) {
+            await processManagerService.stopSessionsByWorkDir(wt.path);
+          }
+        }
         await gitWorktreeService.cleanupOrphans(currentDir, activeTaskIds);
       }
     } catch (error) {
