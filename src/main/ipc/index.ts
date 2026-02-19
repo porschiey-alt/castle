@@ -460,7 +460,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     return path.join(workingDirectory, subDir, `${safeTitle}.md`);
   }
 
-  function buildFeatureEvaluationPrompt(task: Task, researchContent: string): string {
+  function buildFeatureEvaluationPrompt(task: Task, researchFilePath: string): string {
     return [
       `You have completed the initial implementation. Now evaluate your work against the original requirements.`,
       ``,
@@ -469,13 +469,15 @@ export function registerIpcHandlers(services: IpcServices): void {
       `Description: ${task.description || '(none)'}`,
       ``,
       `## Research Document`,
-      researchContent,
+      `The research document is located at: ${researchFilePath}`,
+      `Read this file to review the requirements and recommendations.`,
       ``,
       `## Instructions`,
-      `1. Review your implementation against every requirement and recommendation in the research document above`,
-      `2. Run any relevant tests or verification steps mentioned in the research`,
-      `3. Fix any issues or gaps you find — make the changes directly, do not just describe them`,
-      `4. After fixing any issues, produce a brief evaluation report summarizing:`,
+      `1. Read the research document at the path above`,
+      `2. Review your implementation against every requirement and recommendation in the research document`,
+      `3. Run any relevant tests or verification steps mentioned in the research`,
+      `4. Fix any issues or gaps you find — make the changes directly, do not just describe them`,
+      `5. After fixing any issues, produce a brief evaluation report summarizing:`,
       `   - What was implemented correctly`,
       `   - What issues were found and fixed during this evaluation`,
       `   - Any remaining items that could not be addressed automatically`,
@@ -484,7 +486,7 @@ export function registerIpcHandlers(services: IpcServices): void {
     ].join('\n');
   }
 
-  function buildBugEvaluationPrompt(task: Task, researchContent: string): string {
+  function buildBugEvaluationPrompt(task: Task, researchFilePath: string): string {
     return [
       `You have completed the initial bug fix. Now verify your work against the diagnosis document.`,
       ``,
@@ -492,14 +494,16 @@ export function registerIpcHandlers(services: IpcServices): void {
       `Description: ${task.description || '(none)'}`,
       ``,
       `## Diagnosis Document`,
-      researchContent,
+      `The diagnosis document is located at: ${researchFilePath}`,
+      `Read this file to review the diagnosis and verification steps.`,
       ``,
       `## Instructions`,
-      `1. Follow the verification steps from the diagnosis document`,
-      `2. Confirm the root cause identified in the diagnosis has been addressed`,
-      `3. Check for any regressions or edge cases mentioned in the diagnosis`,
-      `4. Fix any remaining issues you find — make the changes directly`,
-      `5. Produce a brief verification report summarizing what you checked and the results`,
+      `1. Read the diagnosis document at the path above`,
+      `2. Follow the verification steps from the diagnosis document`,
+      `3. Confirm the root cause identified in the diagnosis has been addressed`,
+      `4. Check for any regressions or edge cases mentioned in the diagnosis`,
+      `5. Fix any remaining issues you find — make the changes directly`,
+      `6. Produce a brief verification report summarizing what you checked and the results`,
       ``,
       `Be thorough. If any verification step fails, fix the issue before reporting.`,
     ].join('\n');
@@ -1116,9 +1120,10 @@ export function registerIpcHandlers(services: IpcServices): void {
         sendLifecycle('evaluating');
 
         const isBug = currentTask.kind === 'bug';
+        const researchFilePath = workingDirectory ? getResearchFilePath(currentTask, workingDirectory) : null;
         const evalPrompt = isBug
-          ? buildBugEvaluationPrompt(currentTask, researchContent)
-          : buildFeatureEvaluationPrompt(currentTask, researchContent);
+          ? buildBugEvaluationPrompt(currentTask, researchFilePath!)
+          : buildFeatureEvaluationPrompt(currentTask, researchFilePath!);
 
         // Save evaluation prompt as user message in conversation
         if (conversationId) {
