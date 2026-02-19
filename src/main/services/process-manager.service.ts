@@ -59,6 +59,44 @@ export class ProcessManagerService {
   setDatabasePath(dbPath: string): void {
     log.info(`setDatabasePath called with: ${dbPath}`);
     this.databasePath = dbPath;
+    this.writeMcpConfig();
+  }
+
+  /**
+   * Write Castle's MCP server config to ~/.copilot/mcp.json so the Copilot CLI
+   * picks it up automatically without needing --additional-mcp-config.
+   */
+  private writeMcpConfig(): void {
+    if (!this.databasePath) return;
+    try {
+      const fs = require('fs');
+      const os = require('os');
+      const mcpDir = path.join(os.homedir(), '.copilot');
+      const mcpFile = path.join(mcpDir, 'mcp.json');
+      const serverScript = path.join(__dirname, '..', 'mcp', 'castle-tasks-server.js');
+
+      // Read existing config to preserve other MCP servers
+      let existing: any = {};
+      if (fs.existsSync(mcpFile)) {
+        try { existing = JSON.parse(fs.readFileSync(mcpFile, 'utf-8')); } catch { /* ignore */ }
+      }
+
+      const mcpServers = existing.mcpServers || {};
+      mcpServers['castle-tasks'] = {
+        type: 'stdio',
+        command: 'node',
+        args: [serverScript],
+        env: {
+          CASTLE_DB_PATH: this.databasePath,
+        },
+      };
+
+      fs.mkdirSync(mcpDir, { recursive: true });
+      fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers }, null, 2), 'utf-8');
+      log.info(`MCP config written to ${mcpFile}`);
+    } catch (err) {
+      log.error('Failed to write MCP config', err);
+    }
   }
 
   /** Return MCP server configs for Castle built-in tools. */
@@ -142,41 +180,13 @@ export class ProcessManagerService {
       args.push('--model', bestModel);
     }
 
-    // Pass MCP servers via --additional-mcp-config CLI flag
-    // (Copilot CLI only supports MCP config via CLI flags, not via ACP newSession)
-    const builtinMcpServers = this.getCastleBuiltinMcpServers(workingDirectory);
-    const agentMcpServers = (agent.mcpServers || []).map(s => ({
-      name: s.name,
-      command: s.command,
-      args: s.args || [],
-      env: s.env || {}
-    }));
-    const allCliMcpServers = [...agentMcpServers, ...builtinMcpServers];
-    if (allCliMcpServers.length > 0) {
-      const mcpConfig: Record<string, any> = {};
-      for (const s of allCliMcpServers) {
-        const envObj: Record<string, string> = {};
-        if (Array.isArray(s.env)) {
-          for (const e of s.env) { envObj[e.name] = e.value; }
-        } else if (s.env && typeof s.env === 'object') {
-          Object.assign(envObj, s.env);
-        }
-        mcpConfig[s.name] = { command: s.command, args: s.args || [], env: envObj };
-      }
-      const configJson = JSON.stringify({ mcpServers: mcpConfig });
-      log.info(`MCP config JSON: ${configJson}`);
-      args.push('--additional-mcp-config', configJson);
-      log.info(`Passing ${allCliMcpServers.length} MCP server(s) via CLI: [${allCliMcpServers.map(s => s.name).join(', ')}]`);
-    }
+    // MCP servers are configured via ~/.copilot/mcp.json (written at app startup)
+    // rather than --additional-mcp-config CLI flag (which has Windows shell escaping issues)
 
     // Spawn copilot in ACP mode
-    // Use cmd.exe /c with shell:false to preserve JSON in --additional-mcp-config
-    // (shell:true causes cmd.exe to strip quotes from JSON args)
-    const spawnCmd = process.platform === 'win32' ? 'cmd.exe' : 'copilot';
-    const spawnArgs = process.platform === 'win32' ? ['/c', 'copilot', ...args] : args;
-    const childProcess = spawn(spawnCmd, spawnArgs, {
+    const childProcess = spawn('copilot', args, {
       cwd: workingDirectory,
-      shell: false,
+      shell: true,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe']
     });
