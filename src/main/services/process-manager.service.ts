@@ -180,8 +180,35 @@ export class ProcessManagerService {
       args.push('--model', bestModel);
     }
 
-    // MCP servers are configured via ~/.copilot/mcp.json (written at app startup)
-    // rather than --additional-mcp-config CLI flag (which has Windows shell escaping issues)
+    // Pass MCP servers via --additional-mcp-config @filepath
+    // (using @filepath avoids shell escaping issues with inline JSON on Windows)
+    const builtinMcpServers = this.getCastleBuiltinMcpServers(workingDirectory);
+    const agentMcpServers = (agent.mcpServers || []).map(s => ({
+      name: s.name,
+      command: s.command,
+      args: s.args || [],
+      env: s.env || {}
+    }));
+    const allCliMcpServers = [...agentMcpServers, ...builtinMcpServers];
+    let mcpConfigFile: string | null = null;
+    if (allCliMcpServers.length > 0) {
+      const mcpConfig: Record<string, any> = {};
+      for (const s of allCliMcpServers) {
+        const envObj: Record<string, string> = {};
+        if (Array.isArray(s.env)) {
+          for (const e of s.env) { envObj[e.name] = e.value; }
+        } else if (s.env && typeof s.env === 'object') {
+          Object.assign(envObj, s.env);
+        }
+        mcpConfig[s.name] = { type: 'stdio', command: s.command, args: s.args || [], env: envObj };
+      }
+      const fs = require('fs');
+      const os = require('os');
+      mcpConfigFile = path.join(os.tmpdir(), `castle-mcp-${sessionId}.json`);
+      fs.writeFileSync(mcpConfigFile, JSON.stringify({ mcpServers: mcpConfig }), 'utf-8');
+      args.push('--additional-mcp-config', `@${mcpConfigFile}`);
+      log.info(`Passing ${allCliMcpServers.length} MCP server(s) via @${mcpConfigFile}: [${allCliMcpServers.map(s => s.name).join(', ')}]`);
+    }
 
     // Spawn copilot in ACP mode
     const childProcess = spawn('copilot', args, {
@@ -212,6 +239,9 @@ export class ProcessManagerService {
 
     childProcess.on('exit', (code, signal) => {
       log.info(`Agent "${agent.name}" process exited: code=${code}, signal=${signal}`);
+      if (mcpConfigFile) {
+        try { require('fs').unlinkSync(mcpConfigFile); } catch { /* ignore */ }
+      }
       sessionProcess.session.status = 'stopped';
       eventEmitter.emit('exit', { code, signal });
       this.sessions.delete(sessionId);
