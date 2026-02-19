@@ -59,44 +59,6 @@ export class ProcessManagerService {
   setDatabasePath(dbPath: string): void {
     log.info(`setDatabasePath called with: ${dbPath}`);
     this.databasePath = dbPath;
-    this.writeMcpConfig();
-  }
-
-  /**
-   * Write Castle's MCP server config to ~/.copilot/mcp.json so the Copilot CLI
-   * picks it up automatically without needing --additional-mcp-config.
-   */
-  private writeMcpConfig(): void {
-    if (!this.databasePath) return;
-    try {
-      const fs = require('fs');
-      const os = require('os');
-      const mcpDir = path.join(os.homedir(), '.copilot');
-      const mcpFile = path.join(mcpDir, 'mcp-config.json');
-      const serverScript = path.join(__dirname, '..', 'mcp', 'castle-tasks-server.js');
-
-      // Read existing config to preserve other MCP servers
-      let existing: any = {};
-      if (fs.existsSync(mcpFile)) {
-        try { existing = JSON.parse(fs.readFileSync(mcpFile, 'utf-8')); } catch { /* ignore */ }
-      }
-
-      const mcpServers = existing.mcpServers || {};
-      mcpServers['castle-tasks'] = {
-        type: 'stdio',
-        command: 'node',
-        args: [serverScript],
-        env: {
-          CASTLE_DB_PATH: this.databasePath,
-        },
-      };
-
-      fs.mkdirSync(mcpDir, { recursive: true });
-      fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers }, null, 2), 'utf-8');
-      log.info(`MCP config written to ${mcpFile}`);
-    } catch (err) {
-      log.error('Failed to write MCP config', err);
-    }
   }
 
   /** Return MCP server configs for Castle built-in tools. */

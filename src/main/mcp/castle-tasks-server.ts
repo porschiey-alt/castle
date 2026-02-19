@@ -393,61 +393,35 @@ async function handleRequest(request: JsonRpcRequest): Promise<string> {
   }
 }
 
-// ── stdio transport ────────────────────────────────────────────────────────────
+// ── stdio transport (newline-delimited JSON) ───────────────────────────────────
 
 function startServer() {
-  let buffer = Buffer.alloc(0);
-  let processing = false;
+  let lineBuffer = '';
 
   process.stderr.write('[castle-tasks-server] Server started, listening on stdin\n');
 
-  async function processBuffer() {
-    if (processing) return;
-    processing = true;
+  process.stdin.setEncoding('utf-8');
+  process.stdin.on('data', (chunk: string) => {
+    lineBuffer += chunk;
+    const lines = lineBuffer.split('\n');
+    lineBuffer = lines.pop()!; // keep incomplete line in buffer
 
-    try {
-      while (true) {
-        // Find header/body separator
-        const separatorIndex = buffer.indexOf('\r\n\r\n');
-        if (separatorIndex === -1) break;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
 
-        const header = buffer.subarray(0, separatorIndex).toString('utf-8');
-        const contentLengthMatch = header.match(/Content-Length:\s*(\d+)/i);
-        if (!contentLengthMatch) {
-          // Skip malformed header
-          buffer = buffer.subarray(separatorIndex + 4);
-          continue;
-        }
-
-        const contentLength = parseInt(contentLengthMatch[1], 10);
-        const bodyStart = separatorIndex + 4;
-
-        if (buffer.length < bodyStart + contentLength) break; // wait for more data
-
-        const body = buffer.subarray(bodyStart, bodyStart + contentLength).toString('utf-8');
-        buffer = buffer.subarray(bodyStart + contentLength);
-
-        try {
-          const request = JSON.parse(body) as JsonRpcRequest;
-          const response = await handleRequest(request);
+      try {
+        const request = JSON.parse(trimmed) as JsonRpcRequest;
+        handleRequest(request).then((response) => {
           if (response) {
-            const responseBytes = Buffer.byteLength(response, 'utf-8');
-            process.stdout.write(`Content-Length: ${responseBytes}\r\n\r\n${response}`);
+            process.stdout.write(response + '\n');
           }
-        } catch (err: any) {
-          const errResponse = jsonRpcError(null, -32700, `Parse error: ${err.message}`);
-          const errBytes = Buffer.byteLength(errResponse, 'utf-8');
-          process.stdout.write(`Content-Length: ${errBytes}\r\n\r\n${errResponse}`);
-        }
+        });
+      } catch (err: any) {
+        const errResponse = jsonRpcError(null, -32700, `Parse error: ${err.message}`);
+        process.stdout.write(errResponse + '\n');
       }
-    } finally {
-      processing = false;
     }
-  }
-
-  process.stdin.on('data', (chunk: Buffer) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    processBuffer();
   });
 
   process.stdin.on('end', () => {
