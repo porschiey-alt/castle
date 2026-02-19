@@ -142,13 +142,41 @@ export class ProcessManagerService {
       args.push('--model', bestModel);
     }
 
-    // MCP servers are passed via the ACP newSession/resumeSession calls,
-    // not via --additional-mcp-config (which has shell escaping issues on Windows)
+    // Pass MCP servers via --additional-mcp-config CLI flag
+    // (Copilot CLI only supports MCP config via CLI flags, not via ACP newSession)
+    const builtinMcpServers = this.getCastleBuiltinMcpServers(workingDirectory);
+    const agentMcpServers = (agent.mcpServers || []).map(s => ({
+      name: s.name,
+      command: s.command,
+      args: s.args || [],
+      env: s.env || {}
+    }));
+    const allCliMcpServers = [...agentMcpServers, ...builtinMcpServers];
+    if (allCliMcpServers.length > 0) {
+      const mcpConfig: Record<string, any> = {};
+      for (const s of allCliMcpServers) {
+        const envObj: Record<string, string> = {};
+        if (Array.isArray(s.env)) {
+          for (const e of s.env) { envObj[e.name] = e.value; }
+        } else if (s.env && typeof s.env === 'object') {
+          Object.assign(envObj, s.env);
+        }
+        mcpConfig[s.name] = { command: s.command, args: s.args || [], env: envObj };
+      }
+      const configJson = JSON.stringify({ mcpServers: mcpConfig });
+      log.info(`MCP config JSON: ${configJson}`);
+      args.push('--additional-mcp-config', configJson);
+      log.info(`Passing ${allCliMcpServers.length} MCP server(s) via CLI: [${allCliMcpServers.map(s => s.name).join(', ')}]`);
+    }
 
     // Spawn copilot in ACP mode
-    const childProcess = spawn('copilot', args, {
+    // Use cmd.exe /c with shell:false to preserve JSON in --additional-mcp-config
+    // (shell:true causes cmd.exe to strip quotes from JSON args)
+    const spawnCmd = process.platform === 'win32' ? 'cmd.exe' : 'copilot';
+    const spawnArgs = process.platform === 'win32' ? ['/c', 'copilot', ...args] : args;
+    const childProcess = spawn(spawnCmd, spawnArgs, {
       cwd: workingDirectory,
-      shell: true,
+      shell: false,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe']
     });
