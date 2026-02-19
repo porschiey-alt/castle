@@ -56,8 +56,10 @@ interface JsonRpcRequest {
 const DB_PATH = process.env.CASTLE_DB_PATH;
 const DEFAULT_PROJECT_PATH = process.env.CASTLE_PROJECT_PATH;
 
+process.stderr.write(`[castle-tasks-server] Starting. DB_PATH=${DB_PATH}, PROJECT_PATH=${DEFAULT_PROJECT_PATH}\n`);
+
 if (!DB_PATH) {
-  process.stderr.write('CASTLE_DB_PATH environment variable is required\n');
+  process.stderr.write('[castle-tasks-server] CASTLE_DB_PATH environment variable is required\n');
   process.exit(1);
 }
 
@@ -331,6 +333,7 @@ function jsonRpcError(id: number | string | null, code: number, message: string)
 
 async function handleRequest(request: JsonRpcRequest): Promise<string> {
   const { id, method, params } = request;
+  process.stderr.write(`[castle-tasks-server] Received: method=${method}, id=${id}\n`);
 
   switch (method) {
     case 'initialize':
@@ -396,6 +399,8 @@ function startServer() {
   let buffer = Buffer.alloc(0);
   let processing = false;
 
+  process.stderr.write('[castle-tasks-server] Server started, listening on stdin\n');
+
   async function processBuffer() {
     if (processing) return;
     processing = true;
@@ -446,8 +451,17 @@ function startServer() {
   });
 
   process.stdin.on('end', () => {
+    process.stderr.write('[castle-tasks-server] stdin ended, shutting down\n');
     cachedDb?.close();
     process.exit(0);
+  });
+
+  process.on('uncaughtException', (err) => {
+    process.stderr.write(`[castle-tasks-server] Uncaught exception: ${err.message}\n${err.stack}\n`);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    process.stderr.write(`[castle-tasks-server] Unhandled rejection: ${reason}\n`);
   });
 }
 

@@ -130,15 +130,9 @@ export function registerIpcHandlers(services: IpcServices): void {
       throw new Error(`Agent ${agentId} not found`);
     }
 
-    // Try to find an ACP session ID to resume from the most recent conversation
+    // Only resume an ACP session if an explicit session ID was provided (e.g. reopening an existing conversation).
+    // New conversations should always start a fresh ACP session.
     let acpSessionIdToResume = resumeSessionId || undefined;
-    if (!acpSessionIdToResume) {
-      const conversations = await databaseService.getConversations(agentId);
-      const withSession = conversations.find(c => c.acpSessionId);
-      if (withSession?.acpSessionId) {
-        acpSessionIdToResume = withSession.acpSessionId;
-      }
-    }
 
     // Flush database to disk so the castle-tasks MCP server reads fresh data
     databaseService.flushToFile();
