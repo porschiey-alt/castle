@@ -5,8 +5,6 @@
 import { spawn, execFile, ChildProcess } from 'child_process';
 import { Readable, Writable } from 'stream';
 import { EventEmitter } from 'events';
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent, AgentSession } from '../../shared/types/agent.types';
@@ -164,17 +162,17 @@ export class ProcessManagerService {
         }
         mcpConfig[s.name] = { command: s.command, args: s.args || [], env: envObj };
       }
-      // Write to temp file to avoid shell escaping issues on Windows
-      const configFile = path.join(os.tmpdir(), `castle-mcp-${sessionId}.json`);
-      fs.writeFileSync(configFile, JSON.stringify({ mcpServers: mcpConfig }), 'utf-8');
-      args.push('--additional-mcp-config', configFile);
-      log.info(`Passing ${allCliMcpServers.length} MCP server(s) via config file: [${allCliMcpServers.map(s => s.name).join(', ')}]`);
+      const configJson = JSON.stringify({ mcpServers: mcpConfig });
+      args.push('--additional-mcp-config', configJson);
+      log.info(`Passing ${allCliMcpServers.length} MCP server(s) via CLI: [${allCliMcpServers.map(s => s.name).join(', ')}]`);
     }
 
     // Spawn copilot in ACP mode
-    const childProcess = spawn('copilot', args, {
+    // On Windows, use shell: false with .cmd extension to avoid JSON argument mangling
+    const copilotCmd = process.platform === 'win32' ? 'copilot.cmd' : 'copilot';
+    const childProcess = spawn(copilotCmd, args, {
       cwd: workingDirectory,
-      shell: true,
+      shell: false,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe']
     });
@@ -200,9 +198,6 @@ export class ProcessManagerService {
 
     childProcess.on('exit', (code, signal) => {
       log.info(`Agent "${agent.name}" process exited: code=${code}, signal=${signal}`);
-      // Clean up temp MCP config file
-      const configFile = path.join(os.tmpdir(), `castle-mcp-${sessionId}.json`);
-      fs.unlink(configFile, () => {});
       sessionProcess.session.status = 'stopped';
       eventEmitter.emit('exit', { code, signal });
       this.sessions.delete(sessionId);
