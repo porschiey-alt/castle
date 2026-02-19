@@ -508,8 +508,9 @@
 }
 
 .app-logo {
-  font-size: 36px;
-  line-height: 1;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
 .about-info {

@@ -10,7 +10,9 @@
   margin-bottom: 24px;
 
   .app-logo {
-    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
     margin-bottom: 8px;
   }
 
