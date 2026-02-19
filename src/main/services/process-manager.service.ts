@@ -72,7 +72,7 @@ export class ProcessManagerService {
       const fs = require('fs');
       const os = require('os');
       const mcpDir = path.join(os.homedir(), '.copilot');
-      const mcpFile = path.join(mcpDir, 'mcp.json');
+      const mcpFile = path.join(mcpDir, 'mcp-config.json');
       const serverScript = path.join(__dirname, '..', 'mcp', 'castle-tasks-server.js');
 
       // Read existing config to preserve other MCP servers
