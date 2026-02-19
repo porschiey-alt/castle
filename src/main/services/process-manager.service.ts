@@ -57,14 +57,21 @@ export class ProcessManagerService {
 
   /** Set the castle.db file path so built-in MCP servers can be injected. */
   setDatabasePath(dbPath: string): void {
+    log.info(`setDatabasePath called with: ${dbPath}`);
     this.databasePath = dbPath;
   }
 
   /** Return MCP server configs for Castle built-in tools. */
   private getCastleBuiltinMcpServers(workingDirectory: string): Array<{ name: string; command: string; args: string[]; env: Array<{ name: string; value: string }> }> {
-    if (!this.databasePath) return [];
+    if (!this.databasePath) {
+      log.warn('getCastleBuiltinMcpServers: databasePath is not set, skipping castle-tasks MCP server');
+      return [];
+    }
 
     const serverScript = path.join(__dirname, '..', 'mcp', 'castle-tasks-server.js');
+    const exists = require('fs').existsSync(serverScript);
+    log.info(`getCastleBuiltinMcpServers: serverScript=${serverScript}, exists=${exists}, databasePath=${this.databasePath}, workingDirectory=${workingDirectory}`);
+
     return [{
       name: 'castle-tasks',
       command: 'node',
@@ -133,6 +140,31 @@ export class ProcessManagerService {
     const bestModel = await this.resolveBestModel();
     if (bestModel) {
       args.push('--model', bestModel);
+    }
+
+    // Pass MCP servers via --additional-mcp-config CLI flag
+    const builtinMcpServers = this.getCastleBuiltinMcpServers(workingDirectory);
+    const agentMcpServers = (agent.mcpServers || []).map(s => ({
+      name: s.name,
+      command: s.command,
+      args: s.args || [],
+      env: s.env || {}
+    }));
+    const allCliMcpServers = [...agentMcpServers, ...builtinMcpServers];
+    if (allCliMcpServers.length > 0) {
+      const mcpConfig: Record<string, any> = {};
+      for (const s of allCliMcpServers) {
+        const envObj: Record<string, string> = {};
+        if (Array.isArray(s.env)) {
+          for (const e of s.env) { envObj[e.name] = e.value; }
+        } else if (s.env && typeof s.env === 'object') {
+          Object.assign(envObj, s.env);
+        }
+        mcpConfig[s.name] = { command: s.command, args: s.args || [], env: envObj };
+      }
+      const configJson = JSON.stringify({ mcpServers: mcpConfig });
+      args.push('--additional-mcp-config', configJson);
+      log.info(`Passing ${allCliMcpServers.length} MCP server(s) via CLI: [${allCliMcpServers.map(s => s.name).join(', ')}]`);
     }
 
     // Spawn copilot in ACP mode
@@ -361,9 +393,11 @@ export class ProcessManagerService {
         args: s.args || [],
         env: Object.entries(s.env || {}).map(([name, value]) => ({ name, value }))
       }));
+      log.info(`Agent "${agent.name}" has ${mcpServers.length} agent-configured MCP server(s)`);
 
       // Auto-inject Castle built-in MCP servers
       mcpServers.push(...this.getCastleBuiltinMcpServers(workingDirectory));
+      log.info(`Total MCP servers to register: ${mcpServers.length} — [${mcpServers.map(s => s.name).join(', ')}]`);
 
       let acpSessionId: string | null = null;
 
@@ -372,6 +406,7 @@ export class ProcessManagerService {
         if (sessionProcess.capabilities.canResumeSession) {
           try {
             sessionProcess.currentOperation = 'unstable_resumeSession';
+            log.info(`unstable_resumeSession: passing ${mcpServers.length} MCP server(s) with sessionId=${acpSessionIdToResume}`);
             const resumed = await connection.unstable_resumeSession({
               sessionId: acpSessionIdToResume,
               cwd: workingDirectory,
@@ -387,6 +422,7 @@ export class ProcessManagerService {
         if (!acpSessionId && sessionProcess.capabilities.canLoadSession) {
           try {
             sessionProcess.currentOperation = 'loadSession';
+            log.info(`loadSession: passing ${mcpServers.length} MCP server(s) with sessionId=${acpSessionIdToResume}`);
             const loaded = await connection.loadSession({
               sessionId: acpSessionIdToResume,
               cwd: workingDirectory,
@@ -403,6 +439,7 @@ export class ProcessManagerService {
       // Fall back to new session
       if (!acpSessionId) {
         sessionProcess.currentOperation = 'newSession';
+        log.info(`newSession: passing ${mcpServers.length} MCP server(s), mcpServers=${JSON.stringify(mcpServers.map(s => ({ name: s.name, command: s.command, args: s.args })))}`);
         const acpSession = await connection.newSession({
           cwd: workingDirectory,
           mcpServers
