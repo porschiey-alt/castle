@@ -296,8 +296,9 @@
 }
 
 .landing-logo {
-  font-size: 80px;
-  line-height: 1;
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
 }
 
 .landing-title {
