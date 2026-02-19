@@ -142,37 +142,13 @@ export class ProcessManagerService {
       args.push('--model', bestModel);
     }
 
-    // Pass MCP servers via --additional-mcp-config CLI flag
-    const builtinMcpServers = this.getCastleBuiltinMcpServers(workingDirectory);
-    const agentMcpServers = (agent.mcpServers || []).map(s => ({
-      name: s.name,
-      command: s.command,
-      args: s.args || [],
-      env: s.env || {}
-    }));
-    const allCliMcpServers = [...agentMcpServers, ...builtinMcpServers];
-    if (allCliMcpServers.length > 0) {
-      const mcpConfig: Record<string, any> = {};
-      for (const s of allCliMcpServers) {
-        const envObj: Record<string, string> = {};
-        if (Array.isArray(s.env)) {
-          for (const e of s.env) { envObj[e.name] = e.value; }
-        } else if (s.env && typeof s.env === 'object') {
-          Object.assign(envObj, s.env);
-        }
-        mcpConfig[s.name] = { command: s.command, args: s.args || [], env: envObj };
-      }
-      const configJson = JSON.stringify({ mcpServers: mcpConfig });
-      args.push('--additional-mcp-config', configJson);
-      log.info(`Passing ${allCliMcpServers.length} MCP server(s) via CLI: [${allCliMcpServers.map(s => s.name).join(', ')}]`);
-    }
+    // MCP servers are passed via the ACP newSession/resumeSession calls,
+    // not via --additional-mcp-config (which has shell escaping issues on Windows)
 
     // Spawn copilot in ACP mode
-    // On Windows, use shell: false with .cmd extension to avoid JSON argument mangling
-    const copilotCmd = process.platform === 'win32' ? 'copilot.cmd' : 'copilot';
-    const childProcess = spawn(copilotCmd, args, {
+    const childProcess = spawn('copilot', args, {
       cwd: workingDirectory,
-      shell: false,
+      shell: true,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe']
     });
