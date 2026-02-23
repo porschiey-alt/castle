@@ -120,6 +120,26 @@ export class ThemeService {
       gradientEnabled: true,
       gradientEndColor: '#050510',
       gradientDirection: 'to bottom right'
+    },
+    {
+      id: 'emerald-dusk',
+      name: 'Emerald Dusk',
+      mode: 'dark',
+      primary: '#10b981',
+      accent: '#f59e0b',
+      secondaryAccent: '#06b6d4',
+      warn: '#ef4444',
+      bgPrimary: '#0a120e',
+      bgSecondary: '#0f1a14',
+      bgTertiary: '#162019',
+      bgHover: '#1e2a22',
+      textPrimary: '#d1fae5',
+      textSecondary: '#6ee7b7',
+      textMuted: '#4a7c68',
+      borderColor: '#1e3a2c',
+      gradientEnabled: true,
+      gradientEndColor: '#061210',
+      gradientDirection: 'to bottom right'
     }
   ];
 
