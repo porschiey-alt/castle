@@ -49,7 +49,7 @@ Remote clients are automatically restricted from sensitive operations like windo
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 22+ 
 - npm or pnpm
 - GitHub Copilot subscription
 - GitHub Copilot CLI installed (`npm install -g @github/copilot`)
